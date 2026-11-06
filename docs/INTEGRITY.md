@@ -7,21 +7,21 @@
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  e92b5c9551102e762a6e6c07917e53337ca51d4827142bff5ea748410383a44c  ║
-║  files 138 · bytes 1292212 · base 571c181 · dirty                        ║
+║  root  88b42d0c24d2bc6a3c840646efb300c9e1a82b0f0a7f1296bd4394b8d246a94b  ║
+║  files 138 · bytes 1292217 · base 5827652 · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
 | Field | Value |
 |---|---|
 | Schema | `zombiecoder-integrity/v1` |
-| Generated (UTC) | `2026-11-06T21:21:41.942Z` |
-| Base commit | `571c181` |
+| Generated (UTC) | `2026-11-06T21:27:05.611Z` |
+| Base commit | `5827652` |
 | Branch | `main` |
 | Code tree | `dirty` |
 | Files | 138 |
-| Bytes | 1292212 |
-| Root SHA-256 | `e92b5c9551102e762a6e6c07917e53337ca51d4827142bff5ea748410383a44c` |
+| Bytes | 1292217 |
+| Root SHA-256 | `88b42d0c24d2bc6a3c840646efb300c9e1a82b0f0a7f1296bd4394b8d246a94b` |
 
 ## Scope
 
@@ -47,7 +47,7 @@ npm run integrity:check
 
 | Path | Bytes | SHA-256 |
 |---|---:|---|
-| `bin/install.mjs` | 86583 | `3f9d9074f8c72f87ba4ba60b5dfb0c05576fe831abaaac3428d888a9f0a73690` |
+| `bin/install.mjs` | 86588 | `fb8a8878cc2a329fbd2819bbbba69db14964a6c2265c64423e19f75f50b1637d` |
 | `bin/quick-install.mjs` | 5641 | `c6847f6d2dae8c70dfb2f03d665784e2f382884585a1f6e140b232dc8432bfcc` |
 | `docs/skills/bootstrap.md` | 574 | `0580d9dff2bf4a466597b5dcb41792ba7bba22175e37ff95dfa716acb057e51c` |
 | `docs/skills/cpanel.md` | 1867 | `f056fa581f9a0fa268556d8769fc2c5389a864fbd552e90b1692efde0c003537` |

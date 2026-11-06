@@ -2,7 +2,7 @@
 
 একজন নতুন agent-এর জন্য এক পাতা: কোথা থেকে শুরু, কোন ফাইল কী করে, আর কোথায় হাত দিলে কী বদলায়। প্রতিটি `file:line` এই repo-তে `grep -n` দিয়ে যাচাই করা; না পারলে `UNVERIFIED` লেখা আছে।
 
-> Snapshot: commit `9933ed7` (পুরোনো ZombieCoder repo, branch `murubbi`)। এখনকার repo `https://github.com/azurebluezone/adapter` (`main`); line anchor code বদলালে সরে যেতে পারে — কাজ শুরুর আগে `grep -n` দিয়ে আবার মিলিয়ে নাও। Mermaid render এই environment-এ `NOT_TESTED` (block শুধু syntax-checked)।
+> Repo: `https://github.com/azurebluezone/adapter` (`main`)। Line anchor code বদলালে সরে যেতে পারে — কাজ শুরুর আগে `grep -n` দিয়ে আবার মিলিয়ে নাও। Mermaid render এই environment-এ `NOT_TESTED` (block শুধু syntax-checked)।
 
 ## ১. Runtime chain
 
