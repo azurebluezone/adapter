@@ -181,13 +181,29 @@ evidence presence যাচাই করে, বাস্তব সত্য ন
 - **Circuit breaker** — গেট আটকালে উত্তরটি শুধু replace হয়ে থেমে যায় না:
   failure-এর কারণ ও context (`agent/breaker/<sessionID>`) storage-এ লেখা হয়, user
   UI-তে synthetic status message যায়, এবং **একই agent** একটি queued prompt দিয়ে
-  প্রমাণসহ আবার চেষ্টা করে (`src/zombie/circuitBreaker.ts`)। কোনো `switchAgent`,
-  model switch বা অন্য agent-এ delegation নেই — দায়িত্ব একই agent-এর।
+  প্রমাণসহ আবার চেষ্টা করে (`src/zombie/circuitBreaker.ts`)। কোনো `switchAgent`
+  বা model switch নেই — failure-এর দায়িত্ব **একই agent**-এর। আলাদা কাজ ভাগ
+  করার জন্য chair (`zombiecoder`) আর architect (`manu`) ইচ্ছাকৃতভাবে সর্বোচ্চ ৪ জন
+  roster specialist parallel-এ launch করতে পারে; specialist নিজে আর কাউকে
+  launch করে না, আর final দায়িত্ব launcher-এর।
   `goal_contract` close FAIL, contract rewrite block, response-gate block আর
   documentation consistency fail একই session counter-এ যায়। ৩টি failure হলে
   breaker খুলে user-কে স্পষ্ট unresolved message দেয় — শেষ কারণ কী, কী কী চেষ্টা
   হয়েছে, আর এখন কী করা যায় (প্রমাণ দিন / কাজ ছোট করুন / নতুন নির্দেশ / gate বন্ধ
   করে diagnosis)।
+- **Persona lock + hardened contract** — প্রতিটি agent-এর system prompt-এ
+  `## ZombieCoder Shared Rules` marker থাকতে হয়; না থাকলে context hook persona
+  inject করে, আর যে agent-এর কোনো persona নেই তার mutate/subagent call fail-closed
+  block হয় (`src/roster.ts`, `src/plugin.ts`)। `goal_contract` এখন session-এ একটাই
+  open রাখে এবং open-এ check একবার baseline হিসেবে চালায় — baseline pass করলে
+  contract লেখাই হয় না, কারণ কাজের আগেই pass করা check কোনো প্রমাণ নয়। v3
+  contract-এর `goal/open/<id>` storage marker ছাড়া close হয় না, আর
+  `.zombiecoder/syllabus.md`/`SSOT.md`-এ shell write block।
+- **Working-directory memory** — session transcript
+  `<working-dir>/.zombiecoder/memory/<session>.jsonl`-এ append-only থাকে; RAM-এ
+  newest 10, বাকিটা archive। Context pack RAM-এর ১০টি দেখায় আর archive path দেয়,
+  তাই পুরো repo বা পুরো history পাঠাতে হয় না (`src/zombie/memory.ts`,
+  `src/zombie/context.ts`)।
 - **Evidence path policy** — agent যেকোনো ফাইল পড়তে পারে, তাই gate path-কে
   sandbox করে না; শুধু যাচাই করে cited ফাইলটি সত্যিই আছে কি না। resolution order:
   working directory → OpenCode config/data root (`$XDG_CONFIG_HOME/opencode`,
@@ -595,8 +611,10 @@ Checklist:
   `Context: SSOT … | Syllabus … | Memory … | Contract …`।
 - নতুন project-এ প্রথম input-এ `project_onboarding` চলে; docs আর code-এর gap
   syllabus-এ লেখা হয়।
-- কোনো write-এর আগে `goal_contract` open; close নিজে check command চালায় —
-  agent নিজে PASS বলে না।
+- কোনো write-এর আগে `goal_contract` open; এক session-এ একটাই contract খোলা
+  থাকে, আর open-এ check একবার baseline হিসেবে চলে (আগেই pass করলে contract
+  লেখাই হয় না)। close নিজে check command চালায় — agent নিজে PASS বলে না;
+  v3 contract-এর `goal/open/<id>` marker ছাড়া close হয় না।
 - evidence path/command/exit code ছাড়া "হয়ে গেছে" নেই।
 
 Folder-এর নিজের প্রমাণ: `<folder>/.zombiecoder/{SSOT.md,syllabus.md,memory/,.state/audit.jsonl}`।
@@ -944,7 +962,10 @@ Installer নতুন agent-এর markdown ও `opencode.json` entry তৈর
 - ব্যবহারকারীকে বলার ছোট disclaimer
 
 Persona inject না হলে model generic উত্তর দেবে — এটা model-এর দোষ নয়, handoff-এর
-ঘাটতি। তাই প্রথমে handoff, তারপর code।
+ঘাটতি। তাই প্রথমে handoff, তারপর code। প্লাগিন নিজেও এটা enforce করে: roster বা
+builtin agent-এর system prompt-এ `## ZombieCoder Shared Rules` marker না থাকলে
+context hook full persona inject করে, আর যার কোনো persona নেই তার mutate/subagent
+call fail-closed block করে।
 
 ### ৮.৭ VS Code ACP client — একই project-এ editor থেকে chat
 
@@ -1017,7 +1038,7 @@ VS Code-এ OpenCode session দেখতে [`formulahendry.acp-client`](https:
 | `zombiecoder.append_syllabus` | নতুন lesson append করা |
 | `zombiecoder.syntax_check` | Syntax fallback (LSP নয়): JSON, JS, TS, Python, Bash, PHP |
 | `zombiecoder.skill_catalog` | Native/legacy skill list, install, auto; named skill gate/git থেকে নামিয়ে install root-এ রাখে |
-| `zombiecoder.goal_contract` | কাজের আগে observable expected + check command সহ contract খোলা/বন্ধ; close নিজেই check চালায় |
+| `zombiecoder.goal_contract` | কাজের আগে observable expected + check command সহ contract খোলা/বন্ধ; session-এ একটাই open, open-এ baseline check, v3 marker ছাড়া close নেই; close নিজেই check চালায় |
 | `zombiecoder.project_onboarding` | প্রথম input-এ docs/tests/audit/skill evidence পড়ে gap syllabus-এ লেখে |
 | `zombiecoder.verify_real` | আসল input ও artifact-এর sha256 রেকর্ড; stand-in হলে `NOT_TESTED` |
 | `zombiecoder.design_sketch` | Code-এর আগে Stitch-style `sketch.md` + `design.json` |
@@ -1078,8 +1099,10 @@ VS Code-এ OpenCode session দেখতে [`formulahendry.acp-client`](https:
 - Automatic backup বা rollback নেই। Apply-এর আগে `git status` দেখুন, দরকারে
   backup/copy নিন; apply-এর পরে `git diff` ও targeted test চালান।
 - Plugin-এর ledger guard `patchText`-এর ভিতরের target scan করে। কোনো
-  Add/Update/Delete/Move target `.zombiecoder/syllabus.md` হলে পুরো patch
-  block হয়—ledger লিখতে `append_syllabus` বা `goal_contract` ব্যবহার করুন।
+  Add/Update/Delete/Move target `.zombiecoder/syllabus.md`
+  বা `.zombiecoder/SSOT.md` হলে পুরো patch block হয়—ledger লিখতে
+  `append_syllabus` বা `goal_contract` ব্যবহার করুন। Shell command-ও একইভাবে
+  parse হয়ে ledger write ধরলে block হয় (`src/zombie/shellGuard.ts`)।
 - এক ফাইলে exact string বদলাতে `patch_preview` dry-run প্রথমে চালান; apply
   করলে সেটি `.zombiecoder/.state/backups`-এ copy রাখে। তবে এটি single-file,
   multi-file `patch`-এর বিকল্প নয়।
@@ -1492,8 +1515,8 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  88b42d0c24d2bc6a3c840646efb300c9e1a82b0f0a7f1296bd4394b8d246a94b  ║
-║  files 138 · bytes 1292217 · base 5827652 · dirty                        ║
+║  root  2d056d0a3ff1a20143ebba719ead51bc7875373c161cdd21163e641fb1fd1e85  ║
+║  files 140 · bytes 1330881 · base bec677c · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -1501,7 +1524,7 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-06T21:27:05.611Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-06T22:42:21.539Z
 
 </div>
 <!-- INTEGRITY:END -->

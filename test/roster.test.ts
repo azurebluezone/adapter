@@ -26,18 +26,37 @@ test("mergeAgentPersona gives every builtin runner the full shared persona", () 
   assert.equal(mergeAgentPersona("my-custom-agent").kind, "shared");
 });
 
-test("roster agents are not duplicated; hidden builtins get nothing", () => {
+test("roster agents expose their full prompt; hidden builtins get nothing", () => {
   for (const agent of ROSTER) {
     const persona = mergeAgentPersona(agent.id);
-    assert.equal(persona.kind, "roster", `${agent.id}: roster markdown already has the rules`);
-    assert.equal(persona.text, "");
-    assert.equal(persona.bytes, 0);
+    assert.equal(persona.kind, "roster", `${agent.id}: roster markdown owns the rules`);
+    // The text is returned so the runtime can repair a stale agent file, but the
+    // plugin pushes it only when the live system prompt lacks PERSONA_MARKER.
+    assert.ok(persona.text.includes(SHARED_RULES), `${agent.id}: shared rules missing`);
+    assert.equal(persona.bytes, Buffer.byteLength(persona.text, "utf8"));
   }
   for (const id of ["title", "summary", "compaction", "unknown", "", "   "]) {
     const persona = mergeAgentPersona(id);
     assert.equal(persona.kind, "none", `${JSON.stringify(id)} must stay on the short contract`);
     assert.equal(persona.bytes, 0);
   }
+});
+
+test("only the chair and the architect may launch specialists", async () => {
+  const { agentPermissions, canDelegate, MAX_PARALLEL_SPECIALISTS, PERSONA_MARKER } = await import(
+    "../src/roster.ts"
+  );
+  assert.equal(canDelegate("zombiecoder"), true);
+  assert.equal(canDelegate("manu"), true);
+  assert.equal(canDelegate("jarin"), false);
+  assert.equal(MAX_PARALLEL_SPECIALISTS, 4);
+  for (const agent of ROSTER) {
+    const rules = agentPermissions(agent);
+    const expected = canDelegate(agent.id) ? "allow" : "deny";
+    assert.equal(rules[0].action, "subagent");
+    assert.equal(rules[0].effect, expected, `${agent.id}: subagent must be ${expected}`);
+  }
+  assert.ok(SHARED_RULES.includes(PERSONA_MARKER));
 });
 
 test("the roster markdown embeds the shared rules exactly once", () => {

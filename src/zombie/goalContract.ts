@@ -97,6 +97,32 @@ export function validateExpected(expected: string, mode: MatchMode): string | nu
   return null;
 }
 
+/**
+ * A check that cannot distinguish "before" from "after" is not a check.
+ * Printing a constant, sleeping or exiting 0 passes before any work is done,
+ * which is exactly the self-approved PASS this gate must refuse.
+ */
+export function validateCheck(check: string): string | null {
+  const value = normalizeCommand(check);
+  if (!value) return "check must not be empty";
+  if (value.length < 4) return "check is too short to verify anything";
+  if (/^(?:true|false|:|exit\s+0)$/i.test(value)) return "check must run a real verification, not a no-op";
+  if (/^(?:echo|printf|sleep)\b/i.test(value)) {
+    return "check must verify the outcome, not print a constant or sleep";
+  }
+  return null;
+}
+
+/** Status words are not observable values; a mock can satisfy them. */
+export function trivialExpected(expected: string, mode: MatchMode): string | null {
+  const value = String(expected ?? "").trim();
+  if (value.length < 2) return "expected is too short to be observable";
+  if (mode !== "json" && /^(?:ok|done|yes|no|true|false|pass|passed|success|green)$/i.test(value)) {
+    return "expected must name an observable value, not a status word";
+  }
+  return null;
+}
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

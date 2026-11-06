@@ -109,7 +109,17 @@ const entrypoint = has(path.join(installDir, "plugins", "zombiecoder.ts"));
 const skillsDir = path.join(installDir, "zombiecoder", "skills");
 const catalogDir = path.join(installDir, "zombiecoder", "skills-catalog");
 const countMd = (dir) => (has(dir) ? fs.readdirSync(dir).filter((name) => name.endsWith(".md")).length : 0);
+// OpenCode discovers `<config>/skills/<name>/SKILL.md`, not the legacy flat
+// store. Count the door that actually loads, and label the old one separately.
+const nativeSkillsRoot = path.join(installDir, "skills");
+const countNative = (dir) =>
+  has(dir)
+    ? fs.readdirSync(dir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() && has(path.join(dir, entry.name, "SKILL.md")))
+        .length
+    : 0;
 const skills = countMd(skillsDir);
+const nativeSkills = countNative(nativeSkillsRoot);
 const catalog = countMd(catalogDir);
 const model = config.model ?? "(unset)";
 
@@ -118,7 +128,8 @@ const summary = [
   `lsp=${lspOk}/${lsp.length}`,
   `mcp=${mcp.length}`,
   `entrypoint=${entrypoint ? "ok" : "missing"}`,
-  `skills=${skills}`,
+  `skills=${nativeSkills} native`,
+  `legacy=${skills}`,
   `model=${model}`,
 ];
 console.log(`config=${configDir} install=${installDir}`);
@@ -131,7 +142,9 @@ for (const entry of lsp) {
 for (const server of mcp) {
   console.log(`mcp.${server.name}=${server.ok ? "ok" : "MISSING"} ${server.type} ${server.target ?? ""}`.trim());
 }
-console.log(`skills_detail=${skills} installed, ${catalog} in catalog`);
+console.log(
+  `skills_detail=${nativeSkills} native (${nativeSkillsRoot}), ${skills} legacy flat, ${catalog} in catalog`,
+);
 
 const problems = [];
 if (agents.length === 0) problems.push("no agents");

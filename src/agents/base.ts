@@ -65,7 +65,7 @@ export function renderAgentPrompt(profile: AgentProfile): string {
     "",
     "**Decision Rule:** " + profile.rule,
     "",
-    "**Focus:** your persona and this role. You finish the work yourself; there is no handoff to another agent.",
+    "**Focus:** your persona and this role. Finish your own slice; do not hand the whole task away. Only `zombiecoder` (chair) and `manu` (architect) may launch roster specialists — at most 4 in parallel — and the caller keeps final responsibility.",
     "",
     SHARED_RULES,
     "",

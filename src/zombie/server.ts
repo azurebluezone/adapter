@@ -25,9 +25,13 @@ import {
   contractStatus,
   failedExpectedRewrite,
   matches,
+  normalizeCommand,
   normalizeMatch,
+  openContracts,
   parseContract,
   runCheck,
+  trivialExpected,
+  validateCheck,
   validateExpected,
 } from "./goalContract.ts";
 import { isStandInPath } from "./responseGate.ts";
@@ -45,7 +49,14 @@ import { AGENT_MODES, BUILTIN_AGENTS, MODE_REGISTRY, applyModeOverrides, planMod
 export const RPC_ID = "zombiecoder";
 /** Safety cap for the real check command close runs. Not a work budget. */
 const CHECK_TIMEOUT_MS = 120_000;
+/** The baseline is a quick "does this already pass?" probe, not a work budget. */
+const BASELINE_TIMEOUT_MS = 60_000;
 export const TOOL_NAMESPACE = { name: "zombiecoder", description: "ZombieCoder project control surface" };
+
+/** One line for the append-only ledger; a newline would break field parsing. */
+function oneLine(value: string, limit = 500): string {
+  return String(value ?? "").replace(/\r?\n/g, " ⏎ ").slice(0, limit);
+}
 
 export type RpcLike = {
   register: (definition: any, handlers: any) => Promise<{ dispose: () => Promise<void>; events?: { emit: (...a: any[]) => Promise<void> } }>;
@@ -420,7 +431,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
     {
       name: "goal_contract",
       description:
-        "Pre-register a task's expected outcome in the append-only syllabus BEFORE writing code, with the user's explicit consent. open needs the real user input, an observable expected output (not 'tests pass'), the check command, pass criteria and a match mode (contains|equals|regex|json); it shows a Bengali preview card in the session UI, then asks the user through the native permission door. In that dialog Allow once approves this goal, Allow always approves later opens in this project, and Reject writes nothing and returns status=rejected. close shows its own preview and asks again (per contract), then RUNS the recorded check command in the project root (120s cap) and matches the real output against the recorded expected value; PASS only when the exit code is 0 and the output matches. close proposes no saved pattern, so Allow always cannot skip the next close. Agent-supplied observed/exitCode are saved as a claim and never trusted. A mismatch, empty output or failed command is FAIL, so a mock cannot be tuned to the expected result afterwards. After a FAIL, a new contract may reuse the same check only with the same expected; a different expected is rejected as a rewrite (v2 contracts enforce this again at close). A FAIL result is fed into the same-agent circuit breaker; there is no delegation. Without an approval the tool writes and runs nothing; the agent must hand over instead of self-closing.",
+        "Pre-register a task's expected outcome in the append-only syllabus BEFORE writing code, with the user's explicit consent. open refuses a second contract while one is open in this session, rejects a no-op check or a status-word expected, and runs the check once as a baseline after consent; a baseline that already passes writes no contract, because a check that passes before the work proves nothing. open needs the real user input, an observable expected output (not 'tests pass'), the check command, pass criteria and a match mode (contains|equals|regex|json); it shows a Bengali preview card in the session UI, then asks the user through the native permission door. In that dialog Allow once approves this goal, Allow always approves later opens in this project, and Reject writes nothing and returns status=rejected. close shows its own preview and asks again (per contract), then RUNS the recorded check command in the project root (120s cap) and matches the real output against the recorded expected value; PASS only when the exit code is 0 and the output matches. close proposes no saved pattern, so Allow always cannot skip the next close. Agent-supplied observed/exitCode are saved as a claim and never trusted. A mismatch, empty output or failed command is FAIL, so a mock cannot be tuned to the expected result afterwards. After a FAIL, a new contract may reuse the same check only with the same expected; a different expected is rejected as a rewrite (v2 contracts enforce this again at close). A FAIL result is fed into the same-agent circuit breaker; there is no delegation. Without an approval the tool writes and runs nothing; the agent must hand over instead of self-closing.",
       input: {
         type: "object" as const,
         properties: {
@@ -478,7 +489,30 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           const mode = normalizeMatch(text("match"));
           const expectedError = validateExpected(expected, mode);
           if (expectedError) throw new Error(expectedError);
+          const outcomeError = trivialExpected(expected, mode);
+          if (outcomeError) throw new Error(outcomeError);
+          const checkError = validateCheck(check);
+          if (checkError) throw new Error(checkError);
+          const sessionID = String(context?.sessionID ?? "").trim();
           const currentSyllabus = readSyllabus(projectRoot) ?? "";
+          // One open contract per session. A second open is how an agent would
+          // otherwise keep a fresh expectation ready for whatever the check prints.
+          if (sessionID) {
+            const active = (await deps.storage.get(`goal/active/${sessionID}`)) as { id?: string } | null | undefined;
+            const alreadyOpen = active?.id || openContracts(currentSyllabus, sessionID)[0]?.id;
+            if (alreadyOpen) {
+              audit(projectRoot, "goal_contract", {
+                kind: "goal_contract.duplicate_open",
+                status: "rejected",
+                sessionID,
+                open: alreadyOpen,
+                goal,
+              });
+              throw new Error(
+                `goal_contract ${alreadyOpen} is already open for this session; close it with its recorded check before opening a new one`,
+              );
+            }
+          }
           const rewrite = failedExpectedRewrite(currentSyllabus, { check, expected, match: mode });
           if (rewrite) {
             audit(projectRoot, "goal_contract", {
@@ -506,10 +540,10 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             `যাচাই: \`${check}\` → ${pass}`,
             `মিলানোর নিয়ম: ${mode}`,
             "",
+            "খোলার আগে একবার baseline চালাব। ওটা pass করে ফেললে contract খুলব না — আগেই pass করা check কোনো কাজের প্রমাণ নয়।",
             "👍 permission dialog-এ: Allow once = শুধু এইবার; Allow always = এই প্রজেক্টে পরেরবার আর জিজ্ঞেস করব না; Reject = কিছুই লেখা হবে না।",
             "✋ ভুল মনে হলে Reject দাও; কোনো ফাইল লেখা হবে না, নতুন করে বলব।",
           ].join("\n");
-          const sessionID = String(context?.sessionID ?? "").trim();
           let uiShown = false;
           if (context?.sessionID && deps.synthetic) {
             try {
@@ -565,7 +599,61 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
               ].join(" "),
             };
           }
+          // A contract whose check already passes proves nothing: the agent
+          // could open it after the fact and "close" without doing the work.
+          // The baseline runs only after consent, and a passing baseline writes
+          // no contract at all.
+          const baseline = await runCheck(projectRoot, check, { timeoutMs: BASELINE_TIMEOUT_MS });
+          const baselineOutput = baseline.stdout.trim() || baseline.stderr.trim();
+          const baselinePasses =
+            !baseline.timedOut &&
+            !baseline.error &&
+            baseline.exitCode === 0 &&
+            baselineOutput.length > 0 &&
+            matches(baselineOutput, expected, mode);
+          if (baselinePasses) {
+            audit(projectRoot, "goal_contract", {
+              kind: "goal_contract.baseline_block",
+              status: "rejected",
+              goal,
+              check,
+              expected,
+              exitCode: baseline.exitCode,
+            });
+            if (sessionID && deps.synthetic) {
+              try {
+                await deps.synthetic({
+                  sessionID,
+                  description: "goal contract baseline blocked",
+                  text: [
+                    "⛔ Ανακτήθηκε এই check আগেই pass করে",
+                    "",
+                    `চেক: \`${check}\``,
+                    `পেলাম: ${oneLine(baselineOutput) || "(empty)"}`,
+                    "",
+                    "কাজ শুরুর আগেই প্রত্যাশা মিলে গেছে — এটা কোনো কাজের প্রমাণ নয়, তাই contract খোলা হয়নি।",
+                    "আসল পরিবর্তনের পর যে check fail করে, সেটাই contract-এ দাও।",
+                  ].join("\n"),
+                });
+              } catch {
+                // The card is a courtesy; the refusal below is the gate.
+              }
+            }
+            return {
+              id: null,
+              status: "already-passing",
+              wrote: false,
+              approved: true,
+              ran: true,
+              exitCode: baseline.exitCode,
+              observed: baselineOutput,
+              reason: "the check already passes before any work; a contract cannot prove a change it did not cause",
+              next: "Tell the user the check already passes. Make the real change first, then open a contract with a check that fails now.",
+            };
+          }
+
           const id = `gc-${Date.now().toString(36)}`;
+          const openedAt = new Date().toISOString();
           const summary = [
             `- status: open`,
             ...(sessionID ? [`- session: ${sessionID}`] : []),
@@ -576,16 +664,50 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             `- check: \`${check}\``,
             `- pass: ${pass}`,
             `- match: ${mode}`,
-            `- guard: v2`,
+            `- guard: v3`,
+            `- baseline: failed (exit ${baseline.exitCode === null ? "none" : baseline.exitCode})`,
+            `- baselineObserved: ${oneLine(baselineOutput) || "(empty)"}`,
           ].join("\n");
           const written = appendSyllabus(projectRoot, `Goal Contract ${id}`, summary, auditFile(projectRoot));
+          // Storage is the short-lived marker: close refuses a v3 contract that
+          // has no open marker, so a hand-written ledger block cannot become a
+          // contract after the fact.
+          await deps.storage.set(`goal/open/${id}`, {
+            id,
+            session: sessionID,
+            goal,
+            input: realInput,
+            expected,
+            check,
+            pass,
+            match: mode,
+            guard: "v3",
+            openedAt,
+            baseline: {
+              exitCode: baseline.exitCode,
+              timedOut: baseline.timedOut,
+              observed: oneLine(baselineOutput, 2000),
+            },
+          });
+          if (sessionID) {
+            await deps.storage.set(`goal/active/${sessionID}`, { id, goal, check, openedAt });
+          }
           audit(projectRoot, "goal_contract", {
             kind: "goal_contract.open",
             status: "approved",
             id,
             goal,
+            baselineExitCode: baseline.exitCode,
           });
-          return { id, file: written.file, status: "open", approved: true, uiShown, preview };
+          return {
+            id,
+            file: written.file,
+            status: "open",
+            approved: true,
+            uiShown,
+            preview,
+            baseline: { exitCode: baseline.exitCode, observed: baselineOutput },
+          };
         }
 
         if (action === "close") {
@@ -612,9 +734,43 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             };
           }
           const sessionID = String(context?.sessionID ?? "").trim();
-          // Defense in depth for v2 contracts: even if an open block predates
-          // the open guard, a post-FAIL expected rewrite cannot be closed PASS.
-          const rewrite = contract.guard === "v2"
+          // The open marker is the proof that this contract went through the
+          // preview and the permission door. A ledger block written by hand is
+          // not a contract; v2 blocks predate the marker and stay closable.
+          const stored = (await deps.storage.get(`goal/open/${id}`)) as
+            | { session?: string; check?: string; guard?: string; openedAt?: string }
+            | null
+            | undefined;
+          if (contract.guard === "v3" && !stored) {
+            audit(projectRoot, "goal_contract", {
+              kind: "goal_contract.marker_block",
+              status: "blocked",
+              id,
+              sessionID,
+              reason: "no open marker",
+            });
+            throw new Error(
+              `goal_contract ${id} has no open marker; it was not opened through the preview and permission door. Reopen it.`,
+            );
+          }
+          if (stored?.session && sessionID && stored.session !== sessionID) {
+            throw new Error(`goal_contract ${id} belongs to another session; open your own contract`);
+          }
+          if (stored?.check && normalizeCommand(stored.check) !== normalizeCommand(contract.check)) {
+            audit(projectRoot, "goal_contract", {
+              kind: "goal_contract.check_rewrite_block",
+              status: "blocked",
+              id,
+              stored: stored.check,
+              ledger: contract.check,
+            });
+            throw new Error(
+              `goal_contract ${id} check changed after open; the recorded check is the only one close may run`,
+            );
+          }
+          // Defense in depth: even if an open block predates the open guard, a
+          // post-FAIL expected rewrite cannot be closed PASS.
+          const rewrite = contract.guard
             ? failedExpectedRewrite(syllabus, {
                 id,
                 check: contract.check,
@@ -670,6 +826,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             `যাচাই চলবে: \`${contract.check}\``,
             `প্রত্যাশা: ${contract.expected}`,
             `মিলানোর নিয়ম: ${mode}`,
+            ...(stored?.openedAt ? [`খোলার সময়: ${stored.openedAt}`] : []),
             "",
             "👍 permission dialog-এ: Allow once = চেক চালাও; Allow always চাপলেও close-এর জন্য কিছু সেভ হয় না, পরের close-এ আবার জিজ্ঞেস করব; Reject = চেক চলবে না।",
             "✋ Reject দিলে contract খোলাই থাকবে, ফল লেখা হবে না।",
@@ -751,21 +908,42 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             text("observed") ? `claimObserved: ${text("observed").slice(0, 300)}` : "",
             typeof input?.exitCode === "number" ? `claimExitCode: ${input.exitCode}` : "",
           ].filter(Boolean);
-          const singleLine = (value: string) => value.replace(/\r?\n/g, " ⏎ ").slice(0, 500);
           const artifact = text("artifact");
           const summary = [
             `- status: ${status}`,
             `- consent: approved (goal_contract.close)`,
             `- command: \`${contract.check}\``,
             `- exitCode: ${run.exitCode === null ? "none" : run.exitCode}`,
-            `- observed: ${singleLine(output) || "(empty)"}`,
+            `- observed: ${oneLine(output) || "(empty)"}`,
             `- expected: ${contract.expected}`,
             `- match: ${mode}`,
             ...(reason ? [`- reason: ${reason}`] : []),
+            ...(stored ? [] : ["- legacy: true (v2 block without open marker)"]),
             ...claimed,
             ...(artifact ? [`- artifact: ${artifact}`] : []),
           ].join("\n");
           const written = appendSyllabus(projectRoot, `Goal Contract ${id} — result`, summary, auditFile(projectRoot));
+          // The verdict is stored, not just written into a text file an agent
+          // could later edit. The active marker clears only for this id.
+          await deps.storage.set(`goal/result/${id}`, {
+            id,
+            status,
+            exitCode: run.exitCode,
+            observed: oneLine(output, 4000),
+            expected: contract.expected,
+            match: mode,
+            reason: reason || undefined,
+            legacy: !stored,
+            closedAt: new Date().toISOString(),
+          });
+          if (sessionID) {
+            const active = (await deps.storage.get(`goal/active/${sessionID}`)) as { id?: string } | null | undefined;
+            // Real OpenCode storage rejects a null value (SQLite NOT NULL); write
+            // a cleared marker without an id instead. open only reads `.id`.
+            if (!active || active.id === id) {
+              await deps.storage.set(`goal/active/${sessionID}`, { clearedAt: new Date().toISOString() });
+            }
+          }
 
           // The UI must show the verdict too, not only the file.
           let uiShown = false;
@@ -779,7 +957,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
                   "",
                   `চেক: \`${contract.check}\` → exit ${run.exitCode === null ? "none" : run.exitCode}`,
                   `expected: ${contract.expected}`,
-                  `পেলাম: ${singleLine(output) || "(কোনো output নেই)"}`,
+                  `পেলাম: ${oneLine(output) || "(কোনো output নেই)"}`,
                   ...(reason ? [`কারণ: ${reason}`] : []),
                   "",
                   status === "PASS"

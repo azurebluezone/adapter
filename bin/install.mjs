@@ -727,7 +727,10 @@ function linkSelfContainedGlobal() {
   // `plugins` is deliberately not linked: OpenCode scans both config roots, so a
   // plugins symlink makes it discover the same file twice and fail the second with
   // "Duplicate plugin ID". The self-contained root keeps the only plugin entry.
-  const items = ["opencode.json", "agents", "zombiecoder", "node_modules", "package.json"];
+  // `skills` is one root: the stale ~/.config/opencode copy is moved to
+  // .backups and the documented global path points at the install root. Two
+  // real skill trees made the audit count and the loaded set disagree.
+  const items = ["opencode.json", "agents", "skills", "zombiecoder", "node_modules", "package.json"];
   const linked = [];
   const modes = [];
   const backups = path.join(globalDir, ".backups");

@@ -57,14 +57,41 @@ export const LEGACY_AGENT_IDS = ["kobir"] as const;
 
 
 // Internal OpenCode sessions are not user-facing agents. They keep the short
-// contract but must not pay for the full ~7KB persona on every call.
-const HIDDEN_BUILTIN_AGENTS = new Set(["compaction", "title", "summary"]);
+// contract but must not pay for the full persona on every call.
+const INTERNAL_AGENT_IDS = new Set(["compaction", "title", "summary"]);
+
+/** First line of every shared persona block. Presence is the enforcement check. */
+export const PERSONA_MARKER = "## ZombieCoder Shared Rules (bound by plugin — do not remove)";
+
+/** Title/summary/compaction are host internals, not user-facing agents. */
+export function isInternalAgent(agentID: string): boolean {
+  return INTERNAL_AGENT_IDS.has(String(agentID ?? "").trim().toLowerCase());
+}
+
+/**
+ * Only the chair and the architect may start roster specialists. A specialist
+ * that can start more specialists turns one task into an unbounded tree.
+ */
+export const DELEGATOR_IDS = ["zombiecoder", "manu"] as const;
+/** Hard cap for one parallel batch; the host starts them together. */
+export const MAX_PARALLEL_SPECIALISTS = 4;
+
+export function canDelegate(agentID: string): boolean {
+  return (DELEGATOR_IDS as readonly string[]).includes(String(agentID ?? "").trim());
+}
+
+export function isRosterAgent(agentID: string): boolean {
+  return ROSTER.some((agent) => agent.id === String(agentID ?? "").trim());
+}
 
 export type PersonaKind = "roster" | "shared" | "none";
 
 export interface AgentPersona {
   kind: PersonaKind;
-  /** Text to push into the system block. Empty for roster/none by design. */
+  /**
+   * Full persona text. The caller pushes it only when the live system prompt
+   * lacks PERSONA_MARKER; a roster prompt already carries it.
+   */
   text: string;
   /** UTF-8 bytes of `text`, for the audit trail. */
   bytes: number;
@@ -73,21 +100,24 @@ export interface AgentPersona {
 /**
  * Merge the ZombieCoder persona with whichever OpenCode agent is running.
  *
- * - roster agent: its generated markdown already embeds SHARED_RULES +
- *   SHARED_EXECUTION + SHARED_EXPERTISE, so nothing is pushed here. Returning
- *   the text again would double a 13KB prompt on every request.
+ * - roster agent: its generated markdown embeds SHARED_RULES +
+ *   SHARED_EXECUTION + SHARED_EXPERTISE. The text is returned so a stale or
+ *   missing agent file can still be fixed at runtime — the caller checks the
+ *   marker before pushing and never doubles the prompt.
  * - builtin/subagent (build, plan, general, explore, custom): no roster entry,
  *   so the identity header + the full shared persona are pushed. The builtin
  *   name describes the tool surface, not the persona.
- * - hidden builtin (title, summary, compaction) or unknown: none.
+ * - internal host agent (title, summary, compaction) or unknown: none.
  */
 export function mergeAgentPersona(agentID: string): AgentPersona {
   const id = String(agentID ?? "").trim() || "unknown";
-  if (id === "unknown" || HIDDEN_BUILTIN_AGENTS.has(id)) {
+  if (id === "unknown" || isInternalAgent(id)) {
     return { kind: "none", text: "", bytes: 0 };
   }
-  if (ROSTER.some((agent) => agent.id === id)) {
-    return { kind: "roster", text: "", bytes: 0 };
+  const def = ROSTER.find((agent) => agent.id === id);
+  if (def) {
+    const text = agentSystemPrompt(def);
+    return { kind: "roster", text, bytes: Buffer.byteLength(text, "utf8") };
   }
   const text = [
     `## ZombieCoder identity (builtin runner: ${id})`,
@@ -101,9 +131,11 @@ export function mergeAgentPersona(agentID: string): AgentPersona {
   return { kind: "shared", text, bytes: Buffer.byteLength(text, "utf8") };
 }
 
-// Delegation is a denied capability, not a prompt preference: a specialist that
-// can hand the task away will hand it away. Each agent finishes its own work.
-export function agentPermissions(_a: AgentDef): PermissionRule[] {
+// Delegation is a capability, not a prompt preference. The chair and architect
+// may start up to MAX_PARALLEL_SPECIALISTS roster specialists; every specialist
+// keeps "subagent * deny" so a nested tree cannot form.
+export function agentPermissions(a: AgentDef): PermissionRule[] {
+  if (canDelegate(a.id)) return [{ action: "subagent", resource: "*", effect: "allow" }];
   return [{ action: "subagent", resource: "*", effect: "deny" }];
 }
 
@@ -135,7 +167,7 @@ function legacyAgentSystemPrompt(a: AgentDef): string {
     "",
     "**Decision Rule:** " + a.rule,
     "",
-    "**Focus:** your persona and this role. You finish the work yourself; there is no handoff to another agent.",
+    "**Focus:** your persona and this role. Finish your own slice; do not hand the whole task away. Only `zombiecoder` (chair) and `manu` (architect) may launch roster specialists — at most 4 in parallel — and the caller keeps final responsibility.",
     "",
     SHARED_RULES,
     "",

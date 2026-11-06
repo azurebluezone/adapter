@@ -9,9 +9,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { readText, sha256 } from "./io.ts";
-import { readIndex, type MemoryMessage } from "./memory.ts";
+import { KEEP_RECENT, readIndex, type MemoryMessage } from "./memory.ts";
 import { readSyllabus } from "./syllabus.ts";
-import { memoryIndexFile, ssotFile, syllabusFile } from "./paths.ts";
+import { memoryArchiveFile, memoryDir, memoryIndexFile, ssotFile, syllabusFile } from "./paths.ts";
 import { FOCUS_LIMITS, listProjectFiles, resolveFocus, type FocusPlan } from "./focus.ts";
 import { openContracts } from "./goalContract.ts";
 
@@ -387,8 +387,15 @@ export function buildContextPack(
     ...gate,
     "",
     ...(focusBody ? [`### Focus files — from the user's message (${Buffer.byteLength(focusBody, "utf8")}B)`, focusBody, ""] : []),
-    `### Session memory (${memory.recent} recent, ${memory.archives} archives) — owner: ${CONTEXT_OWNERS.memory.agent}`,
+    `### Session memory (${memory.recent} in RAM, newest ${KEEP_RECENT} kept; ${memory.archives} archives) — owner: ${CONTEXT_OWNERS.memory.agent}`,
     memorySummary(recent),
+    ...(memory.recent > 0
+      ? [
+          `- Older turns: the full session is append-only at \`${
+            sessionID ? memoryArchiveFile(projectRoot, sessionID) : memoryDir(projectRoot)
+          }\` — read it when the kept turns are not enough.`,
+        ]
+      : []),
     "",
     "### Context ownership (visible in the UI)",
     `- SSOT → ${CONTEXT_OWNERS.ssot.agent} (${CONTEXT_OWNERS.ssot.role})`,

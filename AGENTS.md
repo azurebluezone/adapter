@@ -20,11 +20,28 @@ node --check scripts/integrity.mjs
 Do not claim a command passed without its exit code and, for tests, the final
 pass/fail line. A missing command is `NOT_TESTED`, not `PASS`.
 
+## Agent boundary
+
+- Every agent must carry the ZombieCoder persona. `mergeAgentPersona` returns the
+  roster prompt; the context hook pushes it only when the live system prompt
+  lacks `PERSONA_MARKER`. An unknown agent (or one with no persona) cannot use
+  mutating tools or launch a subagent.
+- Only `zombiecoder` (chair) and `manu` (architect) may launch roster
+  specialists: at most 4 in one parallel batch, roster ids only. Specialists keep
+  `subagent * deny`; the launcher keeps final responsibility.
+- `goal_contract` is one-open-per-session. open runs the check once as a
+  baseline; a baseline that already passes writes no contract. A v3 contract
+  without its `goal/open/<id>` storage marker cannot be closed, and shell writes
+  to `.zombiecoder/syllabus.md` or `.zombiecoder/SSOT.md` are blocked.
+- Session memory lives in `<working-dir>/.zombiecoder/memory/`; the RAM cache
+  keeps the newest 10 turns and the full transcript stays in the append-only
+  JSONL archive.
+
 ## LSP
 
 OpenCode V2.1.1 supports LSP through the `lsp` config. This repository's local
-setup has four servers (`typescript`, `python`, `bash`, `json`) and a direct
-initialize probe:
+setup has seven servers (`typescript`, `python`, `bash`, `json`, `css`, `html`,
+`markdown`) and a direct initialize probe:
 
 ```bash
 npm run lsp:probe -- --root "$PWD"
@@ -78,8 +95,8 @@ scope, so their footer can be regenerated without changing the code root. Regene
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  88b42d0c24d2bc6a3c840646efb300c9e1a82b0f0a7f1296bd4394b8d246a94b  ║
-║  files 138 · bytes 1292217 · base 5827652 · dirty                        ║
+║  root  2d056d0a3ff1a20143ebba719ead51bc7875373c161cdd21163e641fb1fd1e85  ║
+║  files 140 · bytes 1330881 · base bec677c · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -87,7 +104,7 @@ scope, so their footer can be regenerated without changing the code root. Regene
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-06T21:27:05.611Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-06T22:42:21.539Z
 
 </div>
 <!-- INTEGRITY:END -->

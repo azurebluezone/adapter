@@ -11,7 +11,7 @@ flowchart TD
   RT["OpenCode runtime V2"] --> P["src/plugin.ts<br/>Plugin.define (1690)<br/>setup() (581)"]
 
   P --> T["TOOLS surface<br/>registerTools call (1011)"]
-  T --> TS["src/zombie/server.ts<br/>toolSpecs() (290)<br/>registerTools() (1164)"]
+  T --> TS["src/zombie/server.ts<br/>toolSpecs() (320)<br/>registerTools() (1700)"]
   TS --> RPC["RPC surface<br/>registerRpc() (178)"]
 
   P --> H["HOOKS / CONTEXT surface"]
@@ -39,43 +39,46 @@ flowchart TD
   PROBE --> LSPDOC["docs/LSP.md (176)"]
 ```
 
-নোট: `src/generate.ts` persona বানায় না — এটি `doc/Identity Specification.md`, `doc/Agent Architecture.md` ইত্যাদি markdown generator (`src/generate.ts:94`, `package.json:17`)। Persona-র সত্যিকারের source `src/roster.ts`; runtime agent markdown লেখে `src/roster.ts:516` (`agentMarkdown`) আর `src/plugin.ts:581` (`setup`). LSP config-এর default path `~/.config/opencode/opencode.json` (`scripts/lsp-probe.mjs:41-46`); installer ওখানেই `lsp` block merge করে (`bin/install.mjs:1302`).
+নোট: `src/generate.ts` persona বানায় না — এটি `doc/Identity Specification.md`, `doc/Agent Architecture.md` ইত্যাদি markdown generator (`src/generate.ts:94`, `package.json:17`)। Persona-র সত্যিকারের source `src/roster.ts`; runtime agent markdown লেখে `src/roster.ts:247` (`agentMarkdown`) আর `src/plugin.ts:683` (`setup`). LSP config-এর default path `~/.config/opencode/opencode.json` (`scripts/lsp-probe.mjs:41-46`); installer ওখানেই `lsp` block merge করে (`bin/install.mjs:1302`).
 
 `install.sh` install logic duplicate করে না: এটি source staging, integrity, দুই installer pass আর inline verifier চালায়; আসল pipeline সবসময় `bin/install.mjs`। Proof-এর ১৭টি check হলো integrity, staging budget, config JSON, entrypoint, source hash fidelity, single loader, ৯ agent, consent `ask`, dependencies, audit, LSP config, LSP initialize, live `/api/plugin`, live MCP connectivity (`/api/mcp`), idempotence `H1 === H2`, space delta এবং staging cleanup।
 
-## ২. Tool map — ১৮টি tool
+## ২. Tool map — ২১টি tool
 
-গণনা প্রমাণ: `toolSpecs()` runtime-এ `count=18` দেয় এবং `test/plugin.test.ts:272` `assert.equal(fake.tools.length, 18)` করে। নিচের প্রতিটি নাম `src/zombie/server.ts`-এর `name:` লাইন থেকে নেওয়া। Test column-এ `:139` = test "setup scaffolds .zombiecoder…", `:521` = test "context hook resolves…"; বাকি `file:line`-ও test declaration।
+গণনা প্রমাণ: `toolSpecs()` runtime-এ ২১টি spec দেয় এবং `test/plugin.test.ts:300` `assert.equal(fake.tools.length, 21)` করে। নিচের প্রতিটি নাম `src/zombie/server.ts`-এর `name:` লাইন থেকে নেওয়া। Test column-এ `:161` = test "setup scaffolds .zombiecoder…", `:697` = test "context hook resolves…"; বাকি `file:line`-ও test declaration।
 
 | # | Tool | কাজ (এক লাইন) | Impl `file:line` | Test | `plugin.ts` dep |
 |---|---|---|---|---|---|
-| 1 | `get_working_directory` | project root ও `.zombiecoder` layout দেখায় | `src/zombie/server.ts:295` | `test/plugin.test.ts:521` "context hook resolves…" | `projectRoot` |
-| 2 | `read_ssot` | generated SSOT markdown পড়ে | `src/zombie/server.ts:310` | `test/plugin.test.ts:521` "context hook resolves…" | `projectRoot` |
-| 3 | `read_syllabus` | append-only syllabus পড়ে | `src/zombie/server.ts:322` | `test/footprint.test.ts:20` (module only); tool call `UNVERIFIED` | `projectRoot` |
-| 4 | `append_syllabus` | নতুন lesson append করে | `src/zombie/server.ts:334` | `test/plugin.test.ts:139` (indirect via goal_contract); tool call `UNVERIFIED` | `projectRoot` |
-| 5 | `goal_contract` | কাজের আগে expected outcome লিখে রাখে; close-এ নিজেই check চালায় | `src/zombie/server.ts:349` | `test/plugin.test.ts:139`, `test/goalContract.test.ts:38` | `projectRoot` + optional `synthetic` |
-| 6 | `project_fingerprint` | live project scan, কোনো file লেখে না | `src/zombie/server.ts:545` | `test/plugin.test.ts:139` | `projectRoot` |
-| 7 | `context_status` | SSOT/syllabus/memory/focus pack-এর `uiLine` দেয় | `src/zombie/server.ts:551` | `test/plugin.test.ts:139`, `test/plugin.test.ts:521` | `projectRoot` + `storage` |
-| 8 | `evidence_gate` | Python gate চালিয়ে claim PASS/FAIL যাচাই করে | `src/zombie/server.ts:587` | `test/plugin.test.ts:139` | `projectRoot` |
-| 9 | `verify_real` | real input+artifact hash করে provenance লেখে | `src/zombie/server.ts:673` | `test/plugin.test.ts:139` | `projectRoot` |
-| 10 | `memory_archive` | archived session message পড়ে | `src/zombie/server.ts:801` | `test/plugin.test.ts:139` (existence only); execution `UNVERIFIED` | `projectRoot` |
-| 11 | `syntax_check` | LSP-shaped syntax fallback (LSP নয়) | `src/zombie/server.ts:823` | `test/lsp.test.ts:6` (module), `test/plugin.test.ts:139` (existence) | `—` |
-| 12 | `skill_catalog` | shared skill list/install/auto | `src/zombie/server.ts:845` | `test/plugin.test.ts:139` (existence), `test/skillCatalog.test.ts:113` | `installRoot` + `reloadSkills` |
-| 13 | `agent_modes` | V2 mode list + validated switch plan | `src/zombie/server.ts:877` | `test/plugin.test.ts:139` | `—` |
-| 14 | `reload` | agents/skills/providers/tools door reload | `src/zombie/server.ts:904` | `test/tools.test.ts:54` | `reloadAgents/Skills/Providers/Tools` |
-| 15 | `http_probe` | HTTP status/header/body hash, secret redact | `src/zombie/server.ts:941` | `test/tools.test.ts:68` | `—` |
-| 16 | `patch_preview` | one exact-string replace dry-run; apply-এ backup | `src/zombie/server.ts:1006` | `test/tools.test.ts:89` | `projectRoot` |
-| 17 | `env_get` | env var আছে কিনা, value ছাড়া | `src/zombie/server.ts:1065` | `test/tools.test.ts:125` | `—` |
-| 18 | `service_probe` | TCP connect বা HTTP GET probe | `src/zombie/server.ts:1089` | `test/tools.test.ts:141` | `—` |
+| 1 | `get_working_directory` | project root ও `.zombiecoder` layout দেখায় | `src/zombie/server.ts:362` | `test/plugin.test.ts:697` "context hook resolves…" | `projectRoot` |
+| 2 | `read_ssot` | generated SSOT markdown পড়ে | `src/zombie/server.ts:377` | `test/plugin.test.ts:697` | `projectRoot` |
+| 3 | `read_syllabus` | append-only syllabus পড়ে | `src/zombie/server.ts:389` | `test/footprint.test.ts:20` (module only); tool call `UNVERIFIED` | `projectRoot` |
+| 4 | `append_syllabus` | নতুন lesson append করে | `src/zombie/server.ts:401` | `test/plugin.test.ts:1058` (ledger guard); tool call via `goal_contract` | `projectRoot` |
+| 5 | `goal_contract` | expected outcome লিখে রাখে; এক session-এ একটাই open, open-এ baseline check; close-এ নিজেই check চালায় | `src/zombie/server.ts:432` | `test/plugin.test.ts:161`, `test/goalContract.test.ts:38` | `projectRoot` + optional `synthetic` |
+| 6 | `project_fingerprint` | live project scan, কোনো file লেখে না | `src/zombie/server.ts:987` | `test/plugin.test.ts:161` | `projectRoot` |
+| 7 | `design_sketch` | code-এর আগে `sketch.md` + `design.json` লেখে | `src/zombie/server.ts:993` | `test/design.test.ts:12` | `projectRoot` |
+| 8 | `design_review` | markup/CSS-এ `file:line` a11y finding | `src/zombie/server.ts:1011` | `test/design.test.ts:66` | `projectRoot` |
+| 9 | `project_onboarding` | প্রথম input-এ docs/code gap syllabus-এ লেখে | `src/zombie/server.ts:1024` | `test/plugin.test.ts:338` | `projectRoot` |
+| 10 | `context_status` | SSOT/syllabus/memory/focus pack-এর `uiLine` দেয় | `src/zombie/server.ts:1046` | `test/plugin.test.ts:697` | `projectRoot` + `storage` |
+| 11 | `evidence_gate` | Python gate চালিয়ে claim PASS/FAIL যাচাই করে | `src/zombie/server.ts:1094` | `test/plugin.test.ts:161` | `projectRoot` |
+| 12 | `verify_real` | real input+artifact hash করে provenance লেখে | `src/zombie/server.ts:1180` | `test/plugin.test.ts:161` | `projectRoot` |
+| 13 | `memory_archive` | archived session message পড়ে | `src/zombie/server.ts:1308` | `test/plugin.test.ts:161` (existence only); execution `UNVERIFIED` | `projectRoot` |
+| 14 | `syntax_check` | LSP-shaped syntax fallback (LSP নয়) | `src/zombie/server.ts:1330` | `test/lsp.test.ts:6` (module), `test/plugin.test.ts:161` (existence) | `—` |
+| 15 | `skill_catalog` | shared skill list/install/auto | `src/zombie/server.ts:1352` | `test/plugin.test.ts:161` (existence), `test/skillCatalog.test.ts:113` | `installRoot` + `reloadSkills` |
+| 16 | `agent_modes` | V2 mode list + validated switch plan | `src/zombie/server.ts:1384` | `test/plugin.test.ts:769` | `—` |
+| 17 | `reload` | agents/skills/providers/tools door reload | `src/zombie/server.ts:1440` | `test/tools.test.ts:54` | `reloadAgents/Skills/Providers/Tools` |
+| 18 | `http_probe` | HTTP status/header/body hash, secret redact | `src/zombie/server.ts:1477` | `test/tools.test.ts:68` | `—` |
+| 19 | `patch_preview` | one exact-string replace dry-run; apply-এ backup | `src/zombie/server.ts:1542` | `test/tools.test.ts:89` | `projectRoot` |
+| 20 | `env_get` | env var আছে কিনা, value ছাড়া | `src/zombie/server.ts:1601` | `test/tools.test.ts:125` | `—` |
+| 21 | `service_probe` | TCP connect বা HTTP GET probe | `src/zombie/server.ts:1625` | `test/tools.test.ts:141` | `—` |
 
 ## ৩. কোথায় কী এডিট করব
 
 | চাই | ফাইল | Anchor | কেন |
 |---|---|---|---|
-| Persona, shared rules, voice | `src/roster.ts` | `SHARED_RULES:36`, `SHARED_PERSONA:188` | সব agent-এর common instruction এখান থেকেই আসে |
-| Agent-এর persona merge | `src/roster.ts` | `mergeAgentPersona:215` | agent-specific + shared block জোড়ে |
-| Agent markdown render | `src/roster.ts` | `agentMarkdown:516` | runtime `.md` persona-র আসল generator |
-| Agent config render | `src/roster.ts` | `renderAgentsConfig:303` | `opencode.json` agent block |
+| Persona, shared rules, voice | `src/roster.ts` | `SHARED_RULES:5`, `SHARED_PERSONA:170` | সব agent-এর common instruction এখান থেকেই আসে |
+| Agent-এর persona merge | `src/roster.ts` | `mergeAgentPersona:112` | agent-specific + shared block জোড়ে |
+| Agent markdown render | `src/roster.ts` | `agentMarkdown:247` | runtime `.md` persona-র আসল generator |
+| Agent config render | `src/roster.ts` | `renderAgentsConfig:209` | `opencode.json` agent block |
 | Doc markdown generator | `src/generate.ts` | `main:94` | `doc/*.md` build artifact; persona নয় |
 | SSOT | `src/zombie/ssot.ts` | `writeSsot:196` | live scan → `SSOT.md` |
 | Syllabus | `src/zombie/syllabus.ts` | `appendSyllabus:180` | append-only lesson |
@@ -83,8 +86,11 @@ flowchart TD
 | Context pack | `src/zombie/context.ts` | `buildContextPack:244` | bounded SSOT+syllabus+focus+memory |
 | Focus file resolution | `src/zombie/focus.ts` | `resolveFocus:203` | user message → target files |
 | Goal contract | `src/zombie/goalContract.ts` | `runCheck:215` | contract parse/match/check |
-| Tools | `src/zombie/server.ts` | `toolSpecs:290` | ১৮টি tool-এর একমাত্র registry |
-| Plugin wiring / hooks | `src/plugin.ts` | `setup:581`, `export default:1690` | surface registration ও hook lifecycle |
+| Contract hardening | `src/zombie/goalContract.ts` | `validateCheck`, `trivialExpected` | no-op check আর status-word expected reject করে |
+| Shell write/ledger guard | `src/zombie/shellGuard.ts` | `analyzeShell:209`, `ledgerTarget:220` | quoted text বাদ দিয়ে redirect/write verb parse করে ledger রক্ষা করে |
+| Persona enforcement + delegation | `src/plugin.ts` | `mergeAgentPersona` call, `execute.before` guard | persona marker check, unknown agent fail-closed, সর্বোচ্চ ৪ specialist |
+| Tools | `src/zombie/server.ts` | `toolSpecs:320` | ২১টি tool-এর একমাত্র registry |
+| Plugin wiring / hooks | `src/plugin.ts` | `setup:683`, `export default:2204` | surface registration ও hook lifecycle |
 | Bootstrap / update / proof | `install.sh` | staging + two installer passes + inline verifier | `PROOF PASS`/`PROOF FAIL`, `$TARGET/zombiecoder/install-proof.json` |
 | Setup / install | `bin/install.mjs` | `renderAgentsConfig` call `:1224`, LSP sync `:1302`, `retireLegacyDuplicateEntry:734` | global/project install; duplicate loader retire with backup |
 | Project configure | `scripts/configure.mjs` | direct build `:196-206` | OpenCode বন্ধ থাকলেও SSOT+syllabus |
@@ -101,15 +107,15 @@ flowchart TD
 3. **Memory** — দরকার হলে `memory_archive`; পুরো history টানো নিষেধ।
 4. **Focus** — `context_status`-এ `message` দাও; `src/zombie/focus.ts:203` target file list দেয়।
 5. **Act** — নির্দিষ্ট file/symbol পড়ে smallest correct diff; irreversible কাজের আগে backup (`patch_preview:1006`)।
-6. **Verify** — আসল command/output; `evidence_gate:587` বা `verify_real:673`; `goal_contract close:349` নিজেই check চালায়, agent-এর exitCode claim বিশ্বাস করে না।
+6. **Verify** — আসল command/output; `evidence_gate:587` বা `verify_real:673`; `goal_contract close:432` নিজেই check চালায়, agent-এর exitCode claim বিশ্বাস করে না।
 
 | Gate | কোথায় | কখন |
 |---|---|---|
-| `goal_contract` | `src/zombie/server.ts:349` | প্রথম write/edit-এর আগে `open`; শেষে `close` |
+| `goal_contract` | `src/zombie/server.ts:432` | প্রথম write/edit-এর আগে `open`; শেষে `close` |
 | `context_status` | `src/zombie/server.ts:551` | substantive কাজের শুরুর দৃশ্যমান লাইন |
 | Pre-work gate text | `src/zombie/context.ts:322` | pack-এ inject হওয়া gate instruction |
-| Response gate | `src/plugin.ts:1429` | `http.response` hook, unproven claim আটকায় |
-| Tool failure breaker | `src/plugin.ts:1558` | `execute.after`, তিন failure-এ escalation |
+| Response gate | `src/plugin.ts:1701` | `http.response` hook, unproven claim আটকায় |
+| Tool failure breaker | `src/plugin.ts:2031` | `execute.after`, তিন failure-এ escalation |
 
 ## ৫. Known boundaries
 
@@ -130,7 +136,7 @@ tools:
   read_ssot:             { impl: "src/zombie/server.ts:310", tests: ["test/plugin.test.ts:521"], docs: ["README.md:821"] }
   read_syllabus:         { impl: "src/zombie/server.ts:322", tests: ["test/footprint.test.ts:20"], docs: ["README.md:822"] }
   append_syllabus:       { impl: "src/zombie/server.ts:334", tests: ["test/plugin.test.ts:139"], docs: ["README.md:828"] }
-  goal_contract:         { impl: "src/zombie/server.ts:349", tests: ["test/plugin.test.ts:139", "test/goalContract.test.ts:38"], docs: ["docs/AGENT-HANDOFF.md:23"] }
+  goal_contract:         { impl: "src/zombie/server.ts:432", tests: ["test/plugin.test.ts:161", "test/goalContract.test.ts:38"], docs: ["docs/AGENT-HANDOFF.md:23"] }
   project_fingerprint:   { impl: "src/zombie/server.ts:545", tests: ["test/plugin.test.ts:139"], docs: ["README.md:824"] }
   context_status:        { impl: "src/zombie/server.ts:551", tests: ["test/plugin.test.ts:139", "test/plugin.test.ts:521"], docs: ["README.md:825"] }
   evidence_gate:         { impl: "src/zombie/server.ts:587", tests: ["test/plugin.test.ts:139"], docs: ["README.md:826"] }

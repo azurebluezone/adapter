@@ -21,11 +21,17 @@ import {
   GLOBAL_PERMISSIONS,
   LEGACY_AGENT_IDS,
   BASELINE_MODEL,
+  PERSONA_MARKER,
+  MAX_PARALLEL_SPECIALISTS,
+  canDelegate,
+  isInternalAgent,
+  isRosterAgent,
   mergeAgentPersona,
   agentMarkdown,
   renderAgentsConfig,
   type AgentDef,
 } from "./roster.ts";
+import { analyzeShell, ledgerTarget, likelyMutatesShell } from "./zombie/shellGuard.ts";
 import { bootstrapDirs, configFile, setupReportFile } from "./zombie/paths.ts";
 import {
   ensureDir,
@@ -108,12 +114,14 @@ export const TRANSFORM_APPLY_TIMEOUT_MS = 15000;
 // goal contract; a write may not.
 const MUTATING_TOOLS = new Set(["edit", "write", "patch", "multiedit", "apply_patch", "shell", "bash", "command"]);
 
-const MUTATING_COMMAND = /(?:^|[;&|]\s*|\n\s*)(?:sudo\s+)?(?:tee|cp|mv|install|overwrite|truncate)\b|\b(?:sed|perl|awk|python3?|node|bash|sh|zsh)\b.*\b(?:-i|--in-place|-e\s|exec|spawn)[^\n]*|>\s*[^\s>|&]|>>\s*[^\s>|&]|2>\s*>/;
-
-function likelyMutatesShell(command: string): boolean {
-  const cmd = String(command ?? "").trim();
-  if (!cmd) return false;
-  return MUTATING_COMMAND.test(cmd);
+// The host starts a batch of children from one call; cap the batch so "a few
+// specialists" cannot become a tree. Cross-turn counting is not claimed.
+function requestedChildren(input: Record<string, unknown>): number {
+  const batches = [input.tasks, input.agents, input.subagents];
+  for (const batch of batches) {
+    if (Array.isArray(batch) && batch.length > 0) return batch.length;
+  }
+  return 1;
 }
 
 // `patch` carries its file list inside patchText, not in filePath. The ledger
@@ -1301,17 +1309,23 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           }
         }
 
-        // One merge point for every agent. Roster agents already carry the
-        // shared rules in their markdown; builtin runners (build/plan/general/
-        // explore) do not, so they get the identity header + full persona here.
+        // One merge point for every agent. A roster prompt already carries the
+        // shared rules; if the marker is missing (stale or hand-edited agent
+        // file) the full persona is pushed at runtime instead of trusting the
+        // file. Builtin runners get the identity header + full persona.
         const persona = mergeAgentPersona(agentID);
+        const systemText = Array.isArray(event?.system)
+          ? event.system.map((part: any) => (typeof part?.text === "string" ? part.text : "")).join("\n")
+          : "";
+        const systemHasPersona = systemText.includes(PERSONA_MARKER);
+        const personaText = systemHasPersona ? "" : persona.text;
         if (Array.isArray(event?.system) && typeof event.system.push === "function") {
           event.system.push({
             type: "text",
             text: [
               pack.text,
               "",
-              ...(persona.text ? [persona.text, ""] : []),
+              ...(personaText ? [personaText, ""] : []),
               "### Agent contract",
               def
                 ? `Decision rule: ${def.rule}`
@@ -1330,7 +1344,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
                 : []),
               'Start every response with "ভাইয়া". Chat in Bengali; code and shortcuts in English.',
               "Read SSOT and syllabus before acting. The footprint lives inside syllabus.md — never create a separate footprint file.",
-              "Finish the work yourself in this session; never hand the task to another agent or ask for a delegation.",
+              "Finish your own slice. Only zombiecoder (chair) and manu (architect) may launch roster specialists — at most 4 in parallel — and the launcher keeps final responsibility.",
               "Evidence before confidence. No evidence means no verified answer.",
               `Context ownership: SSOT=${pack.owners.ssot.agent}, Syllabus=${pack.owners.syllabus.agent}, Memory=${pack.owners.memory.agent}, Skills=${pack.owners.skills.agent}, Gate=${pack.owners.gate.agent}.`,
               `Before substantive work, call \`context_status\` and show its uiLine. Make this the first visible line after \"ভাইয়া\" so the user sees who manages SSOT, syllabus and memory: ${pack.uiLine}`,
@@ -1354,7 +1368,11 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           memoryArchives: pack.memory.archives,
           uiLine: pack.uiLine,
           persona: persona.kind,
-          personaBytes: persona.bytes,
+          // Bytes actually pushed, not the persona's size: an existing prompt
+          // must stay a single copy.
+          personaBytes: Buffer.byteLength(personaText, "utf8"),
+          personaEnforced: systemHasPersona || personaText.length > 0,
+          personaSource: systemHasPersona ? "system" : personaText ? "runtime" : "none",
           runnerKind: runner.kind,
           runnerRef: runner.ref,
           runnerEvidence: runner.evidence,
@@ -1861,13 +1879,91 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
         const agentID = String(event?.agent ?? "unknown");
         const projectRoot = await resolveSessionRoot(sessionID);
         const input = (event?.input ?? {}) as Record<string, unknown>;
+        const launches = tool === "subagent" || tool === "task";
 
-        // Mode is config-level; the host enforces it, but a stale config or a
-        // host regression must not let a primary agent run as a child. Keep the
-        // guard independent of the write-contract check below.
-        if (tool === "subagent" || tool === "task") {
-          const target = String(input.agent ?? input.subagent ?? input.subagent_type ?? "").trim();
-          if (target) {
+        // Persona is a capability boundary, not a prompt hint. An unknown agent,
+        // or a roster agent whose persona could not be produced, must not change
+        // the project or start children. Hidden host agents (title/summary/
+        // compaction) are exempt because they never touch project files.
+        const persona = mergeAgentPersona(agentID);
+        const personaMissing =
+          (agentID === "unknown" || persona.kind === "none") && !isInternalAgent(agentID);
+        if (personaMissing && (launches || MUTATING_TOOLS.has(tool))) {
+          audit(projectRoot, agentID, {
+            kind: "agent.persona.block",
+            sessionID,
+            tool,
+            persona: persona.kind,
+            reason: "no ZombieCoder persona bound to this agent",
+          });
+          throw new Error(
+            `agent "${agentID}" has no ZombieCoder persona; mutating tools and subagent launches are blocked`,
+          );
+        }
+
+        // Only the chair and the architect may start a specialist, only roster
+        // ids are valid targets, and one call may not exceed the batch cap.
+        if (launches) {
+          if (!canDelegate(agentID)) {
+            audit(projectRoot, agentID, {
+              kind: "agent.delegation.block",
+              sessionID,
+              tool,
+              reason: "agent is not a delegator",
+            });
+            throw new Error(
+              "only zombiecoder (chair) and manu (architect) may launch roster specialists; finish your own slice",
+            );
+          }
+          const batch = requestedChildren(input);
+          if (batch > MAX_PARALLEL_SPECIALISTS) {
+            audit(projectRoot, agentID, {
+              kind: "agent.delegation.block",
+              sessionID,
+              tool,
+              requested: batch,
+              limit: MAX_PARALLEL_SPECIALISTS,
+            });
+            throw new Error(`at most ${MAX_PARALLEL_SPECIALISTS} specialists may run in one batch`);
+          }
+          const requested: string[] = [];
+          const single = String(input.agent ?? input.subagent ?? input.subagent_type ?? "").trim();
+          if (single) requested.push(single);
+          for (const group of [input.tasks, input.agents, input.subagents]) {
+            if (!Array.isArray(group)) continue;
+            for (const item of group) {
+              if (typeof item === "string") requested.push(item);
+              else if (item && typeof item === "object") {
+                const value = String(
+                  (item as any).agent ?? (item as any).subagent ?? (item as any).subagent_type ?? "",
+                ).trim();
+                if (value) requested.push(value);
+              }
+            }
+          }
+          const unique = [...new Set(requested)];
+          if (unique.length === 0) {
+            audit(projectRoot, agentID, {
+              kind: "agent.delegation.block",
+              sessionID,
+              tool,
+              reason: "missing target",
+            });
+            throw new Error("a subagent launch needs a roster specialist id");
+          }
+          for (const target of unique) {
+            if (!isRosterAgent(target)) {
+              audit(projectRoot, agentID, {
+                kind: "agent.delegation.block",
+                sessionID,
+                tool,
+                target,
+                reason: "target is not a roster specialist",
+              });
+              throw new Error(
+                `subagent target "${target}" is not a ZombieCoder roster specialist; builtin or unknown agents cannot be launched`,
+              );
+            }
             const verdict = subagentGuard(target, config.agentModes);
             if (!verdict.allowed) {
               audit(projectRoot, agentID, {
@@ -1889,12 +1985,15 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
         const targets = [fileTarget, ...patchTargets(input)]
           .filter((value) => value.length > 0)
           .map((value) => value.replace(/\\/g, "/"));
-        // Shell-can-mutate: a shell with a redirect, tee, sed -i, python exec
-        // etc. is a write even if no filePath is set — otherwise the pre-work
-        // contract is bypassable by one `echo > file` away.
+        // A shell with a redirect, tee, sed -i or an inline write API is a write
+        // even with no filePath, so the pre-work contract cannot be bypassed by
+        // one `echo > file`. Quoted text and /dev/null stay read-only.
         const commandText = String(input.command ?? input.cmd ?? "");
-        const shellMutates = (tool === "shell" || tool === "bash" || tool === "command") && likelyMutatesShell(commandText);
-        const ledger = targets.find((value) => /(?:^|\/)\.zombiecoder\/syllabus\.md$/i.test(value));
+        const shellWrite = analyzeShell(commandText);
+        const shellMutates = (tool === "shell" || tool === "bash" || tool === "command") && shellWrite.mutates;
+        const ledger =
+          targets.find((value) => /(?:^|\/)\.zombiecoder\/(?:syllabus\.md|SSOT\.md)$/i.test(value)) ??
+          ledgerTarget(commandText);
         if (ledger) {
           audit(projectRoot, agentID, {
             kind: "goal_contract.block",
@@ -1902,21 +2001,23 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
             tool,
             target: ledger,
             targets,
-            reason: "syllabus ledger is plugin-owned",
+            reason: "syllabus/SSOT ledger is plugin-owned",
           });
           throw new Error(
-            "syllabus.md is the append-only goal ledger; use append_syllabus or goal_contract, not edit/write/patch",
+            "syllabus.md and SSOT.md are plugin-owned; use append_syllabus or goal_contract, never edit/write/patch/shell",
           );
         }
         const syllabus = readSyllabus(projectRoot) ?? "";
         if (openContracts(syllabus, sessionID).length > 0) return;
+        const active = (await ctx.storage.get(`goal/active/${sessionID}`)) as { id?: string } | null | undefined;
+        if (active?.id) return;
         if (!shellMutates && !targets.length) return;
         audit(projectRoot, agentID, {
           kind: "goal_contract.block",
           sessionID,
           tool,
-          target: targets[0] ?? "",
-          targets,
+          target: targets[0] ?? shellWrite.targets[0] ?? "",
+          targets: targets.length ? targets : shellWrite.targets,
           reason: shellMutates ? "shell mutation without open goal contract" : "no open goal contract",
         });
         throw new Error(

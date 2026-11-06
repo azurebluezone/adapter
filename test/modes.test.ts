@@ -109,10 +109,11 @@ test("every persona keeps its frontmatter mode and carries no mode protocol", ()
     assert.doesNotMatch(prompt, /Mode protocol \(OpenCode V2\)/);
     assert.doesNotMatch(prompt, new RegExp("current mode: `" + agent.mode + "`"));
     assert.doesNotMatch(prompt, /`scout`/);
-    assert.match(prompt, /there is no handoff to another agent/);
+    assert.match(prompt, /Finish your own slice/);
     const markdown = agentMarkdown(agent);
     assert.match(markdown, new RegExp("^mode: " + agent.mode + "$", "m"));
-    assert.match(markdown, /action: subagent\s+resource: "\*"\s+effect: deny/);
+    const effect = agent.id === "zombiecoder" || agent.id === "manu" ? "allow" : "deny";
+    assert.match(markdown, new RegExp(`action: subagent\\s+resource: "\\*"\\s+effect: ${effect}`));
     assert.ok(MODE_REGISTRY[agent.mode], "agent mode must exist in the registry");
   }
   assert.match(modeProtocol("subagent"), /picker/);

@@ -20,7 +20,7 @@
 | উদ্দেশ্য | মানুষকে কাজে সাহায্য করা; শেখানো; ভুল কমানো |
 | ভাষা | chat বাংলায়; code, path, command, API name ইংরেজিতে |
 | প্রমাণ | path, command, exit code, test output — plus provenance (`live` / `real_run` / `real_file` / `simulated`)। আসল test output authentic (`real_run`); শুধু mock/fixture/demo দিয়ে "fixed" নয় — label দিলেও নয়; না থাকলে `UNVERIFIED`/`NOT_TESTED`; agent থামে, user-কে next step দেয় |
-| Goal contract | কোড শুরুর আগে `goal_contract` open: আসল input, observable expected output, check command, pass criteria; Bengali preview-র পরে native permission door-এ **Allow once / Allow always / Reject**। Allow once = এই গোল, Allow always = এই project-এর পরের open, Reject = কিছুই লেখা/চালানো হয় না; close-এ প্রতিবার সম্মতি লাগে, agent নিজে close করতে পারে না। close কোনো pattern সেভ করে না, তাই Allow always চাপলেও পরের close-এ আবার জিজ্ঞেস হয়। close নিজেই check command চালিয়ে observed vs expected মিলায় (contains/equals/regex/json); mismatch = FAIL, agent-এর exitCode claim বিশ্বাস হয় না। কোনো সময়/বাজেট প্রতিশ্রুতি নয় |
+| Goal contract | কোড শুরুর আগে `goal_contract` open: আসল input, observable expected output, check command, pass criteria; Bengali preview-র পরে native permission door-এ **Allow once / Allow always / Reject**। Allow once = এই গোল, Allow always = এই project-এর পরের open, Reject = কিছুই লেখা/চালানো হয় না; close-এ প্রতিবার সম্মতি লাগে, agent নিজে close করতে পারে না। **এক session-এ একটাই contract open থাকে**; open-এ check একবার baseline হিসেবে চলে — baseline আগেই pass করলে কোনো contract লেখা হয় না (কাজের আগে pass করা check প্রমাণ নয়)। v3 contract-এর `goal/open/<id>` storage marker ছাড়া close হয় না। close কোনো pattern সেভ করে না, তাই Allow always চাপলেও পরের close-এ আবার জিজ্ঞেস হয়। close নিজেই check command চালিয়ে observed vs expected মিলায় (contains/equals/regex/json); mismatch = FAIL, agent-এর exitCode claim বিশ্বাস হয় না। কোনো সময়/বাজেট প্রতিশ্রুতি নয় |
 | Context pack | SSOT excerpt + latest onboarding record + newest lesson + recent memory, bounded। syllabus-এ `onboarding:<hash>` থাকলে project kind, files/bytes, languages, docs/tests, logs বা `no .log files found`, gaps প্রতি turn-এ দেখা যায়—নতুন lesson সেটি ঢেকে দেয় না। |
 | VS Code ACP | `formulahendry.acp-client` extension; `acp.agents.OpenCode` = `{ command: "<opencode path>", args: ["acp"] }`; `acp.autoApprovePermissions` অবশ্যই `"ask"` (allowAll consent bypass করে)। ACP server private — saved session load করতে পারে, desktop app-এর live mirror নয়। |
 | টুল | model-এর জন্মগত অঙ্গ নয়; client/harness চালায় |
@@ -76,6 +76,8 @@
     নতুন কাজের contract।
 12. `goal_contract` open/close user-এর সম্মতি ছাড়া নয়। Allow once = এই গোল,
     Allow always = এই project-এর পরের open; Reject = থামো, user-কে কারণ জানাও।
+    এক session-এ একটাই open; open-এ baseline check চলে, baseline pass করলে
+    contract লেখা হয় না। v3 contract-এর storage marker ছাড়া close হয় না।
     close কোনো pattern সেভ করে না, তাই প্রতিবার জিজ্ঞেস হয়।
     Agent নিজে গোল ক্লোজ করতে পারবে না।
 13. user যে product-এর কথা বলে তার official documentation-ই scope; তার বাইরে
@@ -125,12 +127,25 @@ persona এখনো সম্পূর্ণ inject হয়নি।
 
 **Builtin/subagent runner:** OpenCode-এর `build`, `plan`, `general`, `explore`
 এবং যেকোনো custom agent-এর নিজের persona নেই। প্লাগিনের
-`mergeAgentPersona()` (`src/roster.ts`) roster-এ না থাকা agent-কে
-`## ZombieCoder identity (builtin runner: …)` হেডার + shared rules + execution
-doctrine + cross-domain baseline দেয়। Roster agent-এর markdown-এ এই блок আগেই
-আছে, তাই তাদের আবার push করা হয় না (prompt দ্বিগুণ নয়)। `title`, `summary`,
+`mergeAgentPersona()` (`src/roster.ts`) roster agent-এর জন্য তার নিজের prompt
+ফেরায়, আর roster-এ না থাকা agent-কে `## ZombieCoder identity (builtin runner: …)`
+হেডার + shared rules + execution doctrine + cross-domain baseline দেয়।
+Roster agent-এর markdown-এ `## ZombieCoder Shared Rules` marker আগেই আছে, তাই
+context hook তাদের আবার push করে না; marker missing (stale বা hand-edited file)
+হলে runtime-এ full persona inject করে। যে agent-এর কোনো persona-ই নেই তার
+mutating tool/subagent call **fail-closed block** হয়। `title`, `summary`,
 `compaction` শুধু ছোট contract পায়। প্রমাণ: `.zombiecoder/.state/audit.jsonl`-এ
-ওই session-এর `context` row-তে `persona: "shared"` এবং `personaBytes > 0`।
+ওই session-এর `context` row-তে `persona`, `personaBytes`, `personaEnforced`,
+`personaSource` (`system` | `runtime` | `none`) থাকে।
+
+**সমান্তরাল দল:** শুধু `zombiecoder` (chair) আর `manu` (architect) roster
+specialist launch করতে পারে — এক batch-এ সর্বোচ্চ ৪ জন, roster id ছাড়া কিছু নয়।
+Specialist-এর `subagent * deny` থাকে, তাই সে আর কাউকে ডাকতে পারে না; final
+দায়িত্ব launcher-এর। একটা কাজে বারবার fail হলে দায়িত্ব অন্য agent-এ সরানো যায় না।
+
+**Session memory:** transcript `<working-dir>/.zombiecoder/memory/<session>.jsonl`-এ
+append-only থাকে; RAM cache newest 10 turn দেখায়, বাকিটা archive থেকে পড়া যায়।
+Context pack-এ memory line আর archive path থাকে, তাই পুরো history পাঠাতে হয় না।
 
 ---
 
@@ -229,8 +244,8 @@ agent-এর প্রতিটি দাবিও স্পষ্ট।
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  88b42d0c24d2bc6a3c840646efb300c9e1a82b0f0a7f1296bd4394b8d246a94b  ║
-║  files 138 · bytes 1292217 · base 5827652 · dirty                        ║
+║  root  2d056d0a3ff1a20143ebba719ead51bc7875373c161cdd21163e641fb1fd1e85  ║
+║  files 140 · bytes 1330881 · base bec677c · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -238,7 +253,7 @@ agent-এর প্রতিটি দাবিও স্পষ্ট।
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-06T21:27:05.611Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-06T22:42:21.539Z
 
 </div>
 <!-- INTEGRITY:END -->

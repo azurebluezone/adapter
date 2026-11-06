@@ -86,7 +86,8 @@ test("context pack merges SSOT, syllabus and memory into a bounded pack", () => 
   assert.match(pack.text, /ZombieCoder Compact Context Pack/);
   assert.match(pack.text, /### SSOT/);
   assert.match(pack.text, /### Syllabus/);
-  assert.match(pack.text, /### Session memory \(2 recent, 0 archives\)/);
+  assert.match(pack.text, /### Session memory \(2 in RAM, newest 10 kept; 0 archives\)/);
+  assert.match(pack.text, /append-only at `.*\.zombiecoder\/memory/);
   assert.match(pack.text, /Allowed root: /);
   assert.ok(pack.bytes > 0, "pack must not be empty");
   assert.ok(

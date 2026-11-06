@@ -18,6 +18,8 @@ import {
   normalizeMatch,
   parseContract,
   runCheck,
+  trivialExpected,
+  validateCheck,
   validateExpected,
 } from "../src/zombie/goalContract.ts";
 
@@ -181,4 +183,26 @@ test("contractStatus reads the recorded verdict and ignores the open block", () 
   assert.equal(contractStatus(syllabus, "gc-ghi"), "FAIL");
   assert.equal(contractStatus(syllabus, "gc-def"), null, "an open contract has no verdict");
   assert.equal(contractStatus(syllabus, "gc-missing"), null);
+});
+
+test("validateCheck rejects a no-op and accepts a real verification", () => {
+  for (const command of ["true", "false", ":", "exit 0", "echo ZC_OK", "printf ok", "sleep 5", "ok"]) {
+    assert.notEqual(validateCheck(command), null, `${command} must not count as a check`);
+  }
+  for (const command of [
+    "node --test test/x.test.ts",
+    "npm test",
+    "node check-order.mjs",
+    "curl -fsS http://localhost:3000/health",
+  ]) {
+    assert.equal(validateCheck(command), null, `${command} is a real check`);
+  }
+});
+
+test("trivialExpected rejects a status word but allows a status code", () => {
+  for (const value of ["ok", "done", "green", "pass", "x"]) {
+    assert.notEqual(trivialExpected(value, "contains"), null, `${value} is not observable`);
+  }
+  assert.equal(trivialExpected("HTTP 200", "contains"), null);
+  assert.equal(trivialExpected('{"status":"ok"}', "json"), null);
 });

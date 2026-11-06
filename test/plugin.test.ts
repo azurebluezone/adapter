@@ -217,7 +217,8 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   // refused in the permission list, not described in prose.
   assert.doesNotMatch(manu, /Mode protocol \(OpenCode V2\)/);
   assert.doesNotMatch(manu, /current mode: /);
-  assert.match(manu, /there is no handoff to another agent/);
+  assert.match(manu, /Finish your own slice/);
+  assert.match(manu, /at most 4 in parallel/);
   // The provider is a third party: owner PII from identity.ts must never ride
   // along in an agent prompt or config. The persona travels, the person does not.
   for (const secret of [
@@ -268,14 +269,16 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   assert.equal(config.agents.zombiecoder.model, undefined);
   assert.equal(config.model, "opencode/big-pickle");
   assert.equal(config.agents.manu.mode, "all");
-  for (const agent of Object.values(config.agents) as any[]) {
+  const configAgents = config.agents as Record<string, any>;
+  for (const [id, agent] of Object.entries(configAgents)) {
     assert.equal(agent.mode, "all", "every agent must be a main agent, not a subagent");
-    assert.ok(
-      Array.isArray(agent.permissions) &&
-        agent.permissions.some(
-          (rule: any) => rule.action === "subagent" && rule.effect === "deny",
-        ),
-      "every agent must refuse delegation",
+    const subagentRule = (agent.permissions ?? []).find((rule: any) => rule.action === "subagent");
+    assert.ok(subagentRule, `${id}: subagent permission missing`);
+    const delegator = id === "zombiecoder" || id === "manu";
+    assert.equal(
+      subagentRule.effect,
+      delegator ? "allow" : "deny",
+      delegator ? `${id}: the chair/architect may launch specialists` : `${id}: specialists must not delegate`,
     );
   }
   assert.ok(Array.isArray(config.agents.manu.permissions));
@@ -437,10 +440,11 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   );
 
   // The contract's check is a real command; close runs it. The agent's own
-  // observed/exitCode is a claim and must never decide PASS.
+  // observed/exitCode is a claim and must never decide PASS. The file starts
+  // wrong on purpose: a check that already passes at open writes no contract.
   fs.writeFileSync(
     path.join(root, "check-order.mjs"),
-    'console.log(JSON.stringify({ id: 7, total: 42 }));\n',
+    'console.log(JSON.stringify({ id: 0, total: 0 }));\n',
   );
 
   const opened = (await goalTool.execute(
@@ -456,6 +460,8 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
     { sessionID: "ses_goal" },
   )).output;
   assert.equal(opened.status, "open");
+  assert.equal(opened.baseline.exitCode, 0, "the baseline ran");
+  assert.match(opened.baseline.observed, /"id":0/, "the baseline observed the unfixed output");
   assert.equal(opened.uiShown, true, "the preview must be pushed to the session UI");
   assert.match(opened.preview, /তুমি চাইছ/);
   assert.match(opened.preview, /\{"id":7,"total":42\}/);
@@ -481,6 +487,14 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   assert.match(syllabusAfterOpen, new RegExp(`Goal Contract ${opened.id}`));
   assert.match(syllabusAfterOpen, /expected: \{"id":7,"total":42\}/);
   assert.match(syllabusAfterOpen, /- match: json/);
+  assert.match(syllabusAfterOpen, /- guard: v3/);
+  assert.match(syllabusAfterOpen, /- baseline: failed/);
+
+  // The real work: make the output match the pre-registered expectation.
+  fs.writeFileSync(
+    path.join(root, "check-order.mjs"),
+    'console.log(JSON.stringify({ id: 7, total: 42 }));\n',
+  );
 
   // A lying claim (observed 500, exitCode 1) is recorded but ignored.
   const closed = (await goalTool.execute(
@@ -601,20 +615,25 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   assert.match(rejectedConsent, /- status: rejected/);
   assert.match(rejectedConsent, /Nothing was written/);
 
-  // A rejected close must not run the check either.
+  // A rejected close must not run the check either. The open baseline runs the
+  // command once (that is the proof it still fails); a second run would append
+  // another byte.
   fake.permissionState.mode = "allow";
+  const guardLog = path.join(root, "close-runs.txt");
+  fs.writeFileSync(guardLog, "");
   const guarded = (await goalTool.execute(
     {
       action: "open",
       goal: "close rejection guard",
       input: "check-order.mjs",
       expected: "a file appears",
-      check: 'node -e "require(\'fs\').writeFileSync(\'ran-on-close.txt\',\'x\')"',
-      pass: "file exists",
+      check: 'node -e "require(\'fs\').appendFileSync(\'close-runs.txt\',\'x\')"',
+      pass: "file grows",
     },
     { sessionID: "ses_goal" },
   )).output;
   assert.equal(guarded.status, "open");
+  assert.equal(fs.readFileSync(guardLog, "utf8").length, 1, "the open baseline ran once");
   fake.permissionState.mode = "reject";
   const rejectedClose = (await goalTool.execute(
     { action: "close", id: guarded.id },
@@ -622,7 +641,11 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   )).output;
   assert.equal(rejectedClose.status, "rejected");
   assert.equal(rejectedClose.ran, false);
-  assert.equal(fs.existsSync(path.join(root, "ran-on-close.txt")), false);
+  assert.equal(
+    fs.readFileSync(guardLog, "utf8").length,
+    1,
+    "a rejected close must not run the check again",
+  );
   const syllabusAfterCloseReject = fs.readFileSync(path.join(root, ".zombiecoder", "syllabus.md"), "utf8");
   assert.match(syllabusAfterCloseReject, new RegExp(`Goal Contract ${guarded.id} — consent`));
   fake.permissionState.mode = "allow";
@@ -935,7 +958,7 @@ test("a write without an open goal contract is blocked and audited", async () =>
       tool: "write",
       input: { filePath: ".zombiecoder/syllabus.md" },
     }),
-    /append-only goal ledger/,
+    /plugin-owned/,
     "an agent must not hand-write the goal ledger",
   );
   await before({
@@ -978,13 +1001,13 @@ test("a multi-file patch cannot hand-write the syllabus ledger", async () => {
         ].join("\n"),
       },
     }),
-    /append-only goal ledger/,
+    /plugin-owned/,
     "the patch target list must be inspected, not just filePath",
   );
   const audit = fs.readFileSync(path.join(root, ".zombiecoder", ".state", "audit.jsonl"), "utf8");
   assert.match(audit, /"tool":"patch"/);
   assert.match(audit, /"target":"\.zombiecoder\/syllabus\.md"/);
-  assert.match(audit, /"reason":"syllabus ledger is plugin-owned"/);
+  assert.match(audit, /"reason":"syllabus\/SSOT ledger is plugin-owned"/);
 
   await before({
     sessionID: "ses_patch",
@@ -1012,7 +1035,7 @@ test("a primary agent cannot be launched through the subagent tool", async () =>
   await assert.rejects(
     before({
       sessionID: "ses_mode",
-      agent: "jarin",
+      agent: "zombiecoder",
       tool: "subagent",
       input: { agent: "manu" },
     }),
@@ -1023,11 +1046,40 @@ test("a primary agent cannot be launched through the subagent tool", async () =>
   assert.match(audit, /"kind":"agent\.mode\.block"/);
   assert.match(audit, /"target":"manu"/);
 
+  // A specialist cannot launch anyone, and a delegator cannot name an agent
+  // outside the roster.
+  await assert.rejects(
+    before({
+      sessionID: "ses_mode",
+      agent: "jarin",
+      tool: "subagent",
+      input: { agent: "nila" },
+    }),
+    /only zombiecoder \(chair\) and manu \(architect\)/,
+  );
+  await assert.rejects(
+    before({
+      sessionID: "ses_mode",
+      agent: "zombiecoder",
+      tool: "task",
+      input: { subagent_type: "build" },
+    }),
+    /not a ZombieCoder roster specialist/,
+  );
+  await assert.rejects(
+    before({
+      sessionID: "ses_mode",
+      agent: "zombiecoder",
+      tool: "task",
+      input: { tasks: Array.from({ length: 5 }, () => ({ agent: "nila" })) },
+    }),
+    /at most 4 specialists/,
+  );
   await before({
     sessionID: "ses_mode",
-    agent: "jarin",
+    agent: "zombiecoder",
     tool: "subagent",
-    input: { agent: "jarin" },
+    input: { agent: "nila" },
   });
   await cleanup();
 });
@@ -1153,7 +1205,8 @@ test("context hook archives overflow without waiting for session.idle", async ()
   // which runner it is on.
   assert.doesNotMatch(injected, /### Runner identity/);
   assert.doesNotMatch(injected, /big-pickle/);
-  assert.match(injected, /Finish the work yourself/);
+  assert.match(injected, /Finish your own slice/);
+  assert.match(injected, /at most 4 in parallel/);
 
   // Builtin OpenCode agents (explore/general/build/plan) have no roster entry.
   // They must still receive the ZombieCoder identity, not a generic prompt.
@@ -1186,6 +1239,19 @@ test("context hook archives overflow without waiting for session.idle", async ()
   assert.doesNotMatch(remoteText, /anthropic\/claude/, "the model ref stays out of the prompt");
   assert.doesNotMatch(remoteText, /### Runner identity/);
 
+  // A system prompt that already carries the marker must not be doubled.
+  const withPersona = {
+    agent: "manu",
+    sessionID: "ses_persona",
+    model: { providerID: "opencode", modelID: "big-pickle" },
+    messages: [message(2)],
+    system: [{ type: "text", text: "## ZombieCoder Shared Rules (bound by plugin — do not remove)\n" }],
+  };
+  await hook(withPersona);
+  // The hook still appends the context pack; it must not append the persona.
+  const pushed = withPersona.system.slice(1).map((part) => part.text).join("\n");
+  assert.doesNotMatch(pushed, /(^|\n)# Manu — The Builder/, "an existing persona must not be pushed again");
+
   // The audit must record which merge branch ran, not just "context".
   const auditRows = fs
     .readFileSync(path.join(root, ".zombiecoder", ".state", "audit.jsonl"), "utf8")
@@ -1194,8 +1260,15 @@ test("context hook archives overflow without waiting for session.idle", async ()
     .map((line) => JSON.parse(line));
   const rosterAudit = auditRows.find((row) => row.sessionID === "ses_ctx" && row.kind === "context");
   const builtinAudit = auditRows.find((row) => row.sessionID === "ses_builtin" && row.kind === "context");
+  const personaAudit = auditRows.find((row) => row.sessionID === "ses_persona" && row.kind === "context");
   assert.equal(rosterAudit.persona, "roster", "roster agents keep their own markdown");
-  assert.equal(rosterAudit.personaBytes, 0, "roster persona must not be pushed twice");
+  // An empty system prompt means the agent file went missing: repair it at
+  // runtime instead of letting the agent run without its persona.
+  assert.ok(rosterAudit.personaBytes > 0, "a missing roster persona must be injected");
+  assert.equal(rosterAudit.personaEnforced, true);
+  assert.equal(rosterAudit.personaSource, "runtime");
+  assert.equal(personaAudit.personaBytes, 0, "an existing persona must not be pushed twice");
+  assert.equal(personaAudit.personaSource, "system");
   assert.equal(builtinAudit.persona, "shared", "builtin runner uses the merged persona");
   assert.ok(builtinAudit.personaBytes > 5000, "the merged persona is the full block");
   assert.equal(rosterAudit.runnerKind, "free");
@@ -1846,6 +1919,126 @@ test("route gate blocks a substantive answer until goal_contract PASS", async ()
     const allowedText = await allowed.response.text();
     assert.doesNotMatch(allowedText, /UNVERIFIED/, "contract PASS must release the answer");
     assert.match(allowedText, /এটি একটি ব্যাখ্যা/);
+  } finally {
+    await cleanup();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("goal_contract refuses a check that already passes and a second open", async () => {
+  const root = tempProject();
+  const fake = makeContext(root);
+  const cleanup = await setup(fake.ctx);
+  try {
+    // Tool registration is a deferred transform (5ms); wait before reading it.
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const goalTool = fake.tools.find((tool) => tool.name === "goal_contract");
+    assert.ok(goalTool, "goal_contract tool missing");
+    const sessionID = "ses_hard";
+
+    // A check that prints the expected value before any work is not a contract:
+    // otherwise an agent can "prove" a fix it never made.
+    const already = (await goalTool.execute(
+      {
+        action: "open",
+        goal: "already green",
+        input: "package.json",
+        expected: "ZC_ALREADY_OK",
+        check: 'node -e "console.log(\'ZC_ALREADY_OK\')"',
+        pass: "token printed",
+      },
+      { sessionID },
+    )).output;
+    assert.equal(already.status, "already-passing");
+    assert.equal(already.wrote, false);
+    const ledger = fs.readFileSync(path.join(root, ".zombiecoder", "syllabus.md"), "utf8");
+    assert.doesNotMatch(ledger, /### Goal Contract gc-/, "a passing baseline must write no contract");
+    const baselineCard = fake.synthetics.find(
+      (entry) => entry.description === "goal contract baseline blocked",
+    );
+    assert.ok(baselineCard, "the refusal must be visible in the UI");
+
+    // One open contract per session: the second open is how an agent keeps a
+    // spare expectation ready for whatever the check prints.
+    const opened = (await goalTool.execute(
+      {
+        action: "open",
+        goal: "real fix",
+        input: "check-x.mjs",
+        expected: "FIXED",
+        check: 'node -e "console.log(\'BROKEN\')"',
+        pass: "token changes",
+      },
+      { sessionID },
+    )).output;
+    assert.equal(opened.status, "open");
+    await assert.rejects(
+      () =>
+        goalTool.execute(
+          {
+            action: "open",
+            goal: "second contract",
+            input: "check-y.mjs",
+            expected: "OTHER",
+            check: 'node -e "console.log(\'BROKEN\')"',
+            pass: "token changes",
+          },
+          { sessionID },
+        ),
+      /already open for this session/,
+    );
+
+    // The first contract is still the only one; close it so the marker clears.
+    const closed = (await goalTool.execute({ action: "close", id: opened.id }, { sessionID })).output;
+    assert.equal(closed.status, "FAIL", "the check still prints BROKEN");
+    // Real OpenCode kv storage rejects a null value, so the cleared marker must
+    // be a plain object with no id — open only reads `.id`.
+    const marker = fake.storage.get(`goal/active/${sessionID}`) as any;
+    assert.equal(typeof marker, "object");
+    assert.equal(marker?.id, undefined);
+    assert.equal((fake.storage.get(`goal/result/${opened.id}`) as any)?.status, "FAIL");
+  } finally {
+    await cleanup();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("goal_contract close survives storage that rejects null", async () => {
+  const root = tempProject();
+  const fake = makeContext(root);
+  const cleanup = await setup(fake.ctx);
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const goalTool = fake.tools.find((tool) => tool.name === "goal_contract");
+    assert.ok(goalTool, "goal_contract tool missing");
+    const sessionID = "ses_not_null";
+    fake.permissionState.mode = "allow";
+
+    const opened = (await goalTool.execute(
+      {
+        action: "open",
+        goal: "marker clear",
+        input: "check-null.mjs",
+        expected: "FIXED",
+        check: 'node -e "console.log(\'BROKEN\')"',
+        pass: "token changes",
+      },
+      { sessionID },
+    )).output;
+    assert.equal(opened.status, "open");
+
+    // Node's sqlite kv store enforces NOT NULL; a null marker write throws.
+    const set = fake.ctx.storage.set;
+    fake.ctx.storage.set = async (key: string, value: unknown) => {
+      if (value === null) throw new Error("kv: NOT NULL constraint failed");
+      return set(key, value);
+    };
+
+    const closed = (await goalTool.execute({ action: "close", id: opened.id }, { sessionID })).output;
+    assert.equal(closed.status, "FAIL");
+    const marker = fake.storage.get(`goal/active/${sessionID}`) as any;
+    assert.equal(typeof marker, "object");
+    assert.equal(marker?.id, undefined, "a cleared marker must not look active");
   } finally {
     await cleanup();
     fs.rmSync(root, { recursive: true, force: true });
