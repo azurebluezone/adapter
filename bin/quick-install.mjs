@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // One-command installer for people who do not want to learn the flags.
 //
-//   git clone https://github.com/azurebluezone/ZombieCoder-Autonomous-Plugin.git
-//   cd ZombieCoder-Autonomous-Plugin
+//   git clone https://github.com/azurebluezone/adapter.git
+//   cd adapter
 //   node bin/quick-install.mjs
 //
 // Press 1, 2, 3, 4 or 5. The script runs the real install pipeline; it does not

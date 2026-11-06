@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ZombieCoder — one script: bootstrap, update, and environment proof.
 #
-#   curl -fsSL https://raw.githubusercontent.com/azurebluezone/ZombieCoder-Autonomous-Plugin/murubbi/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/azurebluezone/adapter/main/install.sh | bash
 #   curl -fsSL ... | bash -s -- --no-lsp
 #   ZOMBIECODER_TARBALL=/path/to/source.tar.gz bash install.sh
 #
@@ -21,16 +21,16 @@
 # are overwritten, while unknown keys in opencode.json and user data survive.
 #
 # Environment:
-#   ZOMBIECODER_REPO             default azurebluezone/ZombieCoder-Autonomous-Plugin
-#   ZOMBIECODER_REF              default murubbi
+#   ZOMBIECODER_REPO             default azurebluezone/adapter
+#   ZOMBIECODER_REF              default main
 #   ZOMBIECODER_DIR              install root, default ~/.opencode
 #   ZOMBIECODER_TARBALL          local tarball (offline/test); skips the download
 #   ZOMBIECODER_SKIP_INTEGRITY   development only; 1 skips the manifest check
 #   ZOMBIECODER_SPACE_BUDGET_MB  maximum target growth accepted by the proof (default 800)
 set -euo pipefail
 
-REPO="${ZOMBIECODER_REPO:-azurebluezone/ZombieCoder-Autonomous-Plugin}"
-REF="${ZOMBIECODER_REF:-murubbi}"
+REPO="${ZOMBIECODER_REPO:-azurebluezone/adapter}"
+REF="${ZOMBIECODER_REF:-main}"
 TARGET_RAW="${ZOMBIECODER_DIR:-$HOME/.opencode}"
 TARBALL="${ZOMBIECODER_TARBALL:-}"
 ARGS=("$@")

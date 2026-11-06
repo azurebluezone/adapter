@@ -230,7 +230,7 @@ temporary filesystem-এ, integrity manifest যাচাই হবে, installe
 তারপর environment proof লেখা হবে:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/azurebluezone/ZombieCoder-Autonomous-Plugin/murubbi/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/azurebluezone/adapter/main/install.sh | bash
 ```
 
 `install.sh`-ই একমাত্র entrypoint। এটি install logic নকল করে না; source staging
@@ -271,8 +271,8 @@ merge থাকে, এবং নতুন proof লেখা হয়।
 | Environment variable | ডিফল্ট | কাজ |
 |---|---|---|
 | `ZOMBIECODER_DIR` | `~/.opencode` | install root |
-| `ZOMBIECODER_REPO` | `azurebluezone/ZombieCoder-Autonomous-Plugin` | GitHub repo |
-| `ZOMBIECODER_REF` | `murubbi` | branch/tag |
+| `ZOMBIECODER_REPO` | `azurebluezone/adapter` | GitHub repo |
+| `ZOMBIECODER_REF` | `main` | branch/tag |
 | `ZOMBIECODER_TARBALL` | — | offline/local tarball (download skip) |
 | `ZOMBIECODER_SPACE_BUDGET_MB` | `800` | target growth budget; এর বেশি হলে proof FAIL |
 | `ZOMBIECODER_SKIP_INTEGRITY` | — | development only; `1` দিলে manifest check skip |
@@ -300,8 +300,8 @@ node --experimental-strip-types bin/install.mjs --config-dir "$HOME/.opencode" -
 কোডিং না জানলেও চলবে। শুধু terminal-এ তিনটি লাইন:
 
 ```bash
-git clone https://github.com/azurebluezone/ZombieCoder-Autonomous-Plugin.git
-cd ZombieCoder-Autonomous-Plugin
+git clone https://github.com/azurebluezone/adapter.git
+cd adapter
 node bin/quick-install.mjs
 ```
 
@@ -342,8 +342,8 @@ node bin/quick-install.mjs --choice=4 --dir "/path/to/your-project"
 
 ```bash
 # ১. রিপোজিটরি ক্লোন
-git clone https://github.com/azurebluezone/ZombieCoder-Autonomous-Plugin.git
-cd ZombieCoder-Autonomous-Plugin
+git clone https://github.com/azurebluezone/adapter.git
+cd adapter
 
 # ২. dependency ইনস্টল
 npm ci
@@ -360,8 +360,8 @@ npm run install-pack -- --config-dir "$HOME/.opencode" --yes
 
 ```powershell
 # ১. রিপোজিটরি ক্লোন
-git clone https://github.com/azurebluezone/ZombieCoder-Autonomous-Plugin.git
-cd ZombieCoder-Autonomous-Plugin
+git clone https://github.com/azurebluezone/adapter.git
+cd adapter
 
 # ২. dependency ইনস্টল
 npm.cmd ci
@@ -1230,7 +1230,7 @@ OPENCODE_BASE
 এক-ক্লিক (clone ছাড়া, recommended):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/azurebluezone/ZombieCoder-Autonomous-Plugin/murubbi/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/azurebluezone/adapter/main/install.sh | bash
 ```
 
 এটি নতুন source tarball নামায়, integrity যাচাই করে, existing install update করে
@@ -1239,7 +1239,7 @@ curl -fsSL https://raw.githubusercontent.com/azurebluezone/ZombieCoder-Autonomou
 Clone করা repo থেকে:
 
 ```bash
-cd ZombieCoder-Autonomous-Plugin
+cd adapter
 git pull --ff-only
 npm ci
 npm run typecheck
@@ -1251,7 +1251,7 @@ opencode reload
 Windows PowerShell:
 
 ```powershell
-cd ZombieCoder-Autonomous-Plugin
+cd adapter
 git pull --ff-only
 npm.cmd ci
 npm.cmd run typecheck
@@ -1368,7 +1368,7 @@ icacls "$env:USERPROFILE\.opencode\zombiecoder\config.json" /inheritance:r /gran
 ## ১৬. ফাইল স্ট্রাকচার
 
 ```text
-ZombieCoder-Autonomous-Plugin/
+adapter/
 ├── bin/
 │   └── install.mjs
 ├── docs/
@@ -1492,8 +1492,8 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  1525e1aa3c46f068ad29719787c48a624a8f40ae35ed1bde381d06149216463f  ║
-║  files 138 · bytes 1292419 · base no-git · clean                         ║
+║  root  e92b5c9551102e762a6e6c07917e53337ca51d4827142bff5ea748410383a44c  ║
+║  files 138 · bytes 1292212 · base 571c181 · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -1501,7 +1501,7 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-06T21:18:17.712Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-06T21:21:41.942Z
 
 </div>
 <!-- INTEGRITY:END -->

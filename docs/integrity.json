@@ -1,6 +1,6 @@
 {
   "schema": "zombiecoder-integrity/v1",
-  "generated_at": "2026-11-06T21:18:17.712Z",
+  "generated_at": "2026-11-06T21:21:41.942Z",
   "scope": [
     "src",
     "bin",
@@ -12,13 +12,13 @@
     "package.json",
     "LICENSE"
   ],
-  "root_sha256": "1525e1aa3c46f068ad29719787c48a624a8f40ae35ed1bde381d06149216463f",
+  "root_sha256": "e92b5c9551102e762a6e6c07917e53337ca51d4827142bff5ea748410383a44c",
   "file_count": 138,
-  "total_bytes": 1292419,
+  "total_bytes": 1292212,
   "git": {
-    "commit": null,
-    "branch": null,
-    "dirty": false
+    "commit": "571c181",
+    "branch": "main",
+    "dirty": true
   },
   "files": [
     {
@@ -28,8 +28,8 @@
     },
     {
       "path": "bin/quick-install.mjs",
-      "bytes": 5685,
-      "sha256": "fa97c3318d7630421e4f596044aa61da60c0f0d8b7533035f1013f462cedc078"
+      "bytes": 5641,
+      "sha256": "c6847f6d2dae8c70dfb2f03d665784e2f382884585a1f6e140b232dc8432bfcc"
     },
     {
       "path": "docs/skills/bootstrap.md",
@@ -133,8 +133,8 @@
     },
     {
       "path": "install.sh",
-      "bytes": 35845,
-      "sha256": "5e36ebb1642b487cd10ad7e84afbd8e6ee8c9093d753ab98ab146719de453853"
+      "bytes": 35770,
+      "sha256": "e7068e5e91e0a8b60568a7fd0fb4f50364cfeac0422975f24e9f2dcd684d243f"
     },
     {
       "path": "LICENSE",
@@ -198,8 +198,8 @@
     },
     {
       "path": "mcp/public-api/sources.mjs",
-      "bytes": 17233,
-      "sha256": "1d807f81ce5f4b51629f597118a8429541722c0f6d0e9088cf952224f0dc68a4"
+      "bytes": 17211,
+      "sha256": "bd18b936496f7cc34e390f2d3f8b5ac54a8cf412e7d447e40b42b26868ad55fc"
     },
     {
       "path": "mcp/public-api/test/public-api.test.mjs",
@@ -278,8 +278,8 @@
     },
     {
       "path": "scripts/setup.mjs",
-      "bytes": 12807,
-      "sha256": "f991bf440bbcd38819a40978e201817004e5574c4c45ed4f4921fa9ec0353d5f"
+      "bytes": 12763,
+      "sha256": "57420239b7df1f9401c70fba2bc3377a3b0b8f1ef49e2d6a1a8f1786b0ea45c4"
     },
     {
       "path": "src/agents.ts",
@@ -528,8 +528,8 @@
     },
     {
       "path": "src/zombie/skillCatalog.ts",
-      "bytes": 23862,
-      "sha256": "853d3353d8837eecb19731603f23f9fc2aaa71a50b12fbcae99af7db844ae7ab"
+      "bytes": 23840,
+      "sha256": "abb0ad8dbfa0ded08f3c2631da78deb2065ddc005c9f30acca7f43cb014b0325"
     },
     {
       "path": "src/zombie/skills.ts",

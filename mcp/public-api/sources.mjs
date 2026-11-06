@@ -12,7 +12,7 @@ import os from "node:os";
 import path from "node:path";
 
 export const VERSION = "1.0.0";
-const UA = "zombie-public-api/1.0 (local stdio MCP; +https://github.com/azurebluezone/ZombieCoder-Autonomous-Plugin)";
+const UA = "zombie-public-api/1.0 (local stdio MCP; +https://github.com/azurebluezone/adapter)";
 const TIMEOUT_MS = 20000;
 const DEFAULT_DIR = process.env.PUBLIC_API_DIR || path.join(os.homedir(), ".local", "share", "zombie-public-api");
 const cache = new Map();

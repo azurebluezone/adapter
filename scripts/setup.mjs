@@ -3,7 +3,7 @@
 //
 // One-command ZombieCoder setup after cloning the repo.
 //
-//   git clone https://github.com/azurebluezone/ZombieCoder-Autonomous-Plugin.git zombiecoder
+//   git clone https://github.com/azurebluezone/adapter.git zombiecoder
 //   cd zombiecoder
 //   node scripts/setup.mjs --dir /path/to/project
 //   npm run setup -- --dir /path/to/project
@@ -222,7 +222,7 @@ function printHelp() {
   console.log(`ZombieCoder setup
 
 Usage:
-  git clone https://github.com/azurebluezone/ZombieCoder-Autonomous-Plugin.git zombiecoder
+  git clone https://github.com/azurebluezone/adapter.git zombiecoder
   cd zombiecoder
   node scripts/setup.mjs --dir /path/to/project
   npm run setup -- --dir /path/to/project

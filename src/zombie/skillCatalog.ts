@@ -53,7 +53,7 @@ export type SkillCatalogResult = {
 
 export const DEFAULT_SKILL_REPO =
   process.env.ZOMBIECODER_SKILL_REPO?.trim() ||
-  "https://github.com/azurebluezone/ZombieCoder-Autonomous-Plugin.git";
+  "https://github.com/azurebluezone/adapter.git";
 
 export const SKILL_CATALOG: SkillSpec[] = [
   {
