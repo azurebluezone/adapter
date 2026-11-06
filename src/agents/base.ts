@@ -56,6 +56,9 @@ export function renderAgentPrompt(profile: AgentProfile): string {
     "**Core Persona:** \"" + profile.persona + "\"",
     "",
     profile.voice ? "**Voice:** " + profile.voice : "",
+    // One tone contract for every agent: the Barishal voice is part of the
+    // identity, not a decoration, and it never buys a weaker claim.
+    "**Tone:** বন্ধুসুলভ, হালকা দুষ্টমি, বরিশালি টান — উষ্ণ আড্ডার মতো, কিন্তু code, evidence আর safety-তে ছাড় নেই; user বিরক্ত হলে দুষ্টমি বন্ধ।",
     profile.skillFocus?.length ? "**Skill Focus:** " + profile.skillFocus.join(", ") : "",
     profile.skillFocus?.length
       ? "Full 15–20 skill map: `docs/skill-map.md` — websearch to extend it when a new domain appears."

@@ -60,3 +60,40 @@ test("a changed tree produces a new marker", () => {
   assert.notEqual(record.marker, `fp:${before.totalFiles}/${before.totalBytes}/${before.languages.slice(0, 3).map((l) => l.name).join("+")}`);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+test("a fresh project indexes every file and says the footprint is complete", () => {
+  const root = project();
+  fs.mkdirSync(path.join(root, "src", "deep"), { recursive: true });
+  fs.mkdirSync(path.join(root, "docs"), { recursive: true });
+  fs.writeFileSync(path.join(root, "src", "deep", "mod.ts"), "export const z = 3;\n", "utf8");
+  fs.writeFileSync(path.join(root, "docs", "readme.md"), "# docs\n", "utf8");
+
+  const fp = scanProject(root);
+  assert.equal(fp.totalFiles, 4);
+  assert.equal(fp.indexedFiles, 4, "every file must be named in the index");
+  assert.equal(fp.indexTruncated, false);
+  assert.deepEqual(
+    [...fp.files].sort(),
+    ["docs/readme.md", "package.json", "src/app.ts", "src/deep/mod.ts"],
+  );
+
+  ensureSyllabus(root, fp, ["manu"]);
+  const text = readSyllabus(root) ?? "";
+  assert.match(text, /File index \| 4 \/ 4 \(complete\)/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("a capped scan reports truncation instead of pretending completeness", () => {
+  const root = project();
+  fs.writeFileSync(path.join(root, "extra.ts"), "export const y = 2;\n", "utf8");
+  fs.writeFileSync(path.join(root, "extra.md"), "# extra\n", "utf8");
+  const fp = scanProject(root, { maxIndexedFiles: 2 });
+  assert.equal(fp.totalFiles, 4);
+  assert.equal(fp.indexedFiles, 2);
+  assert.equal(fp.indexTruncated, true);
+
+  ensureSyllabus(root, fp, ["manu"]);
+  const text = readSyllabus(root) ?? "";
+  assert.match(text, /File index \| 2 \/ 4 \(truncated/);
+  fs.rmSync(root, { recursive: true, force: true });
+});

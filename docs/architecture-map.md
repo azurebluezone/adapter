@@ -76,6 +76,7 @@ flowchart TD
 | চাই | ফাইল | Anchor | কেন |
 |---|---|---|---|
 | Persona, shared rules, voice | `src/roster.ts` | `SHARED_RULES:5`, `SHARED_PERSONA:170` | সব agent-এর common instruction এখান থেকেই আসে |
+| Tone contract + prompt render | `src/agents/base.ts` | `renderAgentPrompt:48` | প্রতিটি prompt-এ বন্ধুসুলভ/দুষ্টামি/বরিশালি টোন + role + evidence |
 | Agent-এর persona merge | `src/roster.ts` | `mergeAgentPersona:112` | agent-specific + shared block জোড়ে |
 | Agent markdown render | `src/roster.ts` | `agentMarkdown:247` | runtime `.md` persona-র আসল generator |
 | Agent config render | `src/roster.ts` | `renderAgentsConfig:209` | `opencode.json` agent block |
@@ -85,6 +86,8 @@ flowchart TD
 | Memory / archive | `src/zombie/memory.ts` | `archiveSessionSnapshot:315`, `readArchive:333` | session archive ও read |
 | Context pack | `src/zombie/context.ts` | `buildContextPack:244` | bounded SSOT+syllabus+focus+memory |
 | Focus file resolution | `src/zombie/focus.ts` | `resolveFocus:203` | user message → target files |
+| Footprint scan completeness | `src/zombie/scan.ts` | `scanProject:176`, `DEFAULT_MAX_INDEXED_FILES` | totalFiles অক্যাপড; index বড় হলে `indexTruncated` |
+| Footprint rendering | `src/zombie/syllabus.ts` | `renderSyllabusSeed:46`, `ensureSyllabus:153` | নতুন project-এর §2 map + `File index … (complete/truncated)` |
 | Goal contract | `src/zombie/goalContract.ts` | `runCheck:215` | contract parse/match/check |
 | Contract hardening | `src/zombie/goalContract.ts` | `validateCheck`, `trivialExpected` | no-op check আর status-word expected reject করে |
 | Shell write/ledger guard | `src/zombie/shellGuard.ts` | `analyzeShell:209`, `ledgerTarget:220` | quoted text বাদ দিয়ে redirect/write verb parse করে ledger রক্ষা করে |

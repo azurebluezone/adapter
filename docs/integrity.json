@@ -1,6 +1,6 @@
 {
   "schema": "zombiecoder-integrity/v1",
-  "generated_at": "2026-11-06T22:42:21.539Z",
+  "generated_at": "2026-11-06T22:54:47.722Z",
   "scope": [
     "src",
     "bin",
@@ -12,11 +12,11 @@
     "package.json",
     "LICENSE"
   ],
-  "root_sha256": "2d056d0a3ff1a20143ebba719ead51bc7875373c161cdd21163e641fb1fd1e85",
+  "root_sha256": "7084ac4458472d4484b135c8ec67462290018619320addc4f8a4635606d571f9",
   "file_count": 140,
-  "total_bytes": 1330881,
+  "total_bytes": 1337129,
   "git": {
-    "commit": "bec677c",
+    "commit": "e603d96",
     "branch": "main",
     "dirty": true
   },
@@ -288,8 +288,8 @@
     },
     {
       "path": "src/agents/base.ts",
-      "bytes": 6245,
-      "sha256": "7d2a54edac02e8a85cd6ecf0776fce39342f81e81c95164cda0e4e1bd617c266"
+      "bytes": 6705,
+      "sha256": "6e8c1f9d5d03c2f552d52c2b433eee8292ae9a63c9b91a3002aad7e5074c5f88"
     },
     {
       "path": "src/agents/brishti.ts",
@@ -348,8 +348,8 @@
     },
     {
       "path": "src/agents/shared.ts",
-      "bytes": 29775,
-      "sha256": "4fca8d30ee0e1a54ad565a844f9bcb91835b752f32647d21fe66e8d73a30c42f"
+      "bytes": 30081,
+      "sha256": "d1db108e58d744d4045e9c5884809ff855a81bc5f248803d64908d3d2d5c1f9e"
     },
     {
       "path": "src/agents/tuhin.ts",
@@ -518,8 +518,8 @@
     },
     {
       "path": "src/zombie/scan.ts",
-      "bytes": 7562,
-      "sha256": "9a9b657954f86a7f758a0d1fe17523a9d4c8496803c1e72017c3a7ce88116ade"
+      "bytes": 8082,
+      "sha256": "3c5e756fede3cbf06fccdacb1f4606efd15f3b86a624c42a570b25473dbff081"
     },
     {
       "path": "src/zombie/server.ts",
@@ -548,8 +548,8 @@
     },
     {
       "path": "src/zombie/syllabus.ts",
-      "bytes": 11498,
-      "sha256": "4671d119c986da4bcf38854121d8582cc4720abddd0f0563b281759a7d72346f"
+      "bytes": 11658,
+      "sha256": "749d703456fe7f837802b458baf79f9a53e0843484494ee1f4fce22377491757"
     },
     {
       "path": "src/zombie/transform.ts",
@@ -558,8 +558,8 @@
     },
     {
       "path": "test/agents.test.ts",
-      "bytes": 8378,
-      "sha256": "408798c449f9bfed0d1f752b79fbc3383b97e4797cff9a8e15015ffddad67fc7"
+      "bytes": 9334,
+      "sha256": "5af6ca2cdf384f32282897a01a01de242436140727dd8c0d4e872b1aefc3d001"
     },
     {
       "path": "test/audit-install.test.ts",
@@ -593,8 +593,8 @@
     },
     {
       "path": "test/footprint.test.ts",
-      "bytes": 2690,
-      "sha256": "6c053dfca81fe65da03e216d72bea79abbd015ec73f2f714aeb1769db705b8e3"
+      "bytes": 4238,
+      "sha256": "40620b52171bcb7b2445789f6fe066b2bcc658887b38592aa7a57053470bef79"
     },
     {
       "path": "test/frontmatter.test.ts",
@@ -683,8 +683,8 @@
     },
     {
       "path": "test/plugin.test.ts",
-      "bytes": 82891,
-      "sha256": "5cff6b8020a50d85588fe2cfae9ada0df93ef30feb9ffe340d506ecda9153697"
+      "bytes": 85189,
+      "sha256": "13d637282eb60cfdafc8e9f1549336112cc55b33c3e8fbe9047dff19ec329c25"
     },
     {
       "path": "test/repo.test.ts",

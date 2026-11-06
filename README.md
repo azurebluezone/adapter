@@ -194,7 +194,9 @@ evidence presence যাচাই করে, বাস্তব সত্য ন
 - **Persona lock + hardened contract** — প্রতিটি agent-এর system prompt-এ
   `## ZombieCoder Shared Rules` marker থাকতে হয়; না থাকলে context hook persona
   inject করে, আর যে agent-এর কোনো persona নেই তার mutate/subagent call fail-closed
-  block হয় (`src/roster.ts`, `src/plugin.ts`)। `goal_contract` এখন session-এ একটাই
+  block হয় (`src/roster.ts`, `src/plugin.ts`)। প্রতিটি prompt-এ **Tone contract**
+  থাকে — বন্ধুসুলভ, হালকা দুষ্টামি, বরিশালি টান; user বিরক্ত হলে দুষ্টমি বন্ধ,
+  evidence/safety-তে ছাড় নেই (`src/agents/base.ts`). `goal_contract` এখন session-এ একটাই
   open রাখে এবং open-এ check একবার baseline হিসেবে চালায় — baseline pass করলে
   contract লেখাই হয় না, কারণ কাজের আগেই pass করা check কোনো প্রমাণ নয়। v3
   contract-এর `goal/open/<id>` storage marker ছাড়া close হয় না, আর
@@ -204,6 +206,11 @@ evidence presence যাচাই করে, বাস্তব সত্য ন
   newest 10, বাকিটা archive। Context pack RAM-এর ১০টি দেখায় আর archive path দেয়,
   তাই পুরো repo বা পুরো history পাঠাতে হয় না (`src/zombie/memory.ts`,
   `src/zombie/context.ts`)।
+- **Footprint completeness** — নতুন project প্রথম context hook-এই scan হয় এবং
+  syllabus-এর §2-তে footprint লেখা হয়: top-level, directory map, language stats
+  আর `File index | N / total (complete|truncated)`। индекс ক্যাপ করলে silent
+  truncation নয় — স্পষ্ট `truncated` লেখা থাকে (`src/zombie/scan.ts`,
+  `src/zombie/syllabus.ts`)।
 - **Evidence path policy** — agent যেকোনো ফাইল পড়তে পারে, তাই gate path-কে
   sandbox করে না; শুধু যাচাই করে cited ফাইলটি সত্যিই আছে কি না। resolution order:
   working directory → OpenCode config/data root (`$XDG_CONFIG_HOME/opencode`,
@@ -1515,8 +1522,8 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  2d056d0a3ff1a20143ebba719ead51bc7875373c161cdd21163e641fb1fd1e85  ║
-║  files 140 · bytes 1330881 · base bec677c · dirty                        ║
+║  root  7084ac4458472d4484b135c8ec67462290018619320addc4f8a4635606d571f9  ║
+║  files 140 · bytes 1337129 · base e603d96 · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -1524,7 +1531,7 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-06T22:42:21.539Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-06T22:54:47.722Z
 
 </div>
 <!-- INTEGRITY:END -->

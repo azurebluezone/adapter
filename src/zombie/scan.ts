@@ -69,6 +69,10 @@ export type Fingerprint = {
   tree: string[];
   /** Relative file paths, capped so a huge repo cannot bloat the SSOT. */
   files: string[];
+  /** How many files the bounded index actually holds (`files.length`). */
+  indexedFiles: number;
+  /** True when the tree has more files than the bounded index can name. */
+  indexTruncated: boolean;
   ignored: string[];
 };
 
@@ -155,7 +159,11 @@ export type ScanOptions = {
   ignore?: string[];
   maxFiles?: number;
   maxDepth?: number;
+  /** Cap for the named file index; the counts are never capped. */
+  maxIndexedFiles?: number;
 };
+
+export const DEFAULT_MAX_INDEXED_FILES = 2000;
 
 export function languageOf(file: string): string {
   const ext = path.extname(file).toLowerCase();
@@ -169,6 +177,7 @@ export function scanProject(root: string, options: ScanOptions = {}): Fingerprin
   const ignore = new Set(options.ignore ?? DEFAULT_IGNORE);
   const maxFiles = options.maxFiles ?? DEFAULT_MAX_FILES;
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
+  const maxIndexedFiles = options.maxIndexedFiles ?? DEFAULT_MAX_INDEXED_FILES;
 
   const lang = new Map<string, { files: number; bytes: number }>();
   const dirs: string[] = [];
@@ -203,7 +212,7 @@ export function scanProject(root: string, options: ScanOptions = {}): Fingerprin
           return;
         }
         files += 1;
-        if (filePaths.length < 500) filePaths.push(relPath);
+        if (filePaths.length < maxIndexedFiles) filePaths.push(relPath);
         let size = 0;
         try {
           size = fs.statSync(full).size;
@@ -300,6 +309,8 @@ export function scanProject(root: string, options: ScanOptions = {}): Fingerprin
     manifests,
     tree: tree.slice(0, 200),
     files: filePaths,
+    indexedFiles: filePaths.length,
+    indexTruncated: filePaths.length < files,
     ignored: [...ignore],
   };
 }

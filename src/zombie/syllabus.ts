@@ -75,6 +75,7 @@ export function renderSyllabusSeed(fp: Fingerprint, agentIds: string[]): string 
     `| Manifests | ${manifests} |`,
     `| Markers | ${markers} |`,
     `| Files / dirs / bytes | ${fp.totalFiles} / ${fp.totalDirs} / ${fp.totalBytes} |`,
+    `| File index | ${fp.indexedFiles} / ${fp.totalFiles} ${fp.truncated || fp.indexTruncated ? "(truncated — use `project_fingerprint`)" : "(complete)"} |`,
     ``,
     `### Project map (directory → key files)`,
     ``,

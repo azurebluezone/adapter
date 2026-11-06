@@ -10,6 +10,7 @@ import {
   persistProviderUrl,
   syncProviderBaseUrl,
 } from "../src/plugin.ts";
+import { ROSTER } from "../src/roster.ts";
 
 // Tests must not inherit the developer's installed originUrl. The setup tests
 // exercise local model plans, not a live origin handshake.
@@ -715,6 +716,9 @@ test("context hook resolves a session's own project root and scaffolds it", asyn
   const cleanup = await setup(fake.ctx);
   await new Promise((resolve) => setTimeout(resolve, 60));
   const secondRoot = tempProject();
+  fs.mkdirSync(path.join(secondRoot, "src"), { recursive: true });
+  fs.writeFileSync(path.join(secondRoot, "package.json"), '{"name":"fresh"}', "utf8");
+  fs.writeFileSync(path.join(secondRoot, "src", "app.ts"), "export const x = 1;\n", "utf8");
   const sessionID = "ses_other_project";
   fake.sessionLocations.set(sessionID, secondRoot);
 
@@ -736,6 +740,11 @@ test("context hook resolves a session's own project root and scaffolds it", asyn
     fs.existsSync(path.join(secondRoot, ".zombiecoder", "memory", "index.json")),
     "memory index must be scaffolded in the session project",
   );
+  // A brand-new project is mapped on the first context call, with an honest
+  // completeness line instead of a silent cap.
+  const freshSyllabus = fs.readFileSync(path.join(secondRoot, ".zombiecoder", "syllabus.md"), "utf8");
+  assert.match(freshSyllabus, /Project footprint \(auto\)/);
+  assert.match(freshSyllabus, /File index \| 2 \/ 2 \(complete\)/);
   assert.ok(
     system.some((part: any) => String(part?.text ?? "").includes("### Agent contract")),
     "the context hook must push the session project pack",
@@ -2039,6 +2048,49 @@ test("goal_contract close survives storage that rejects null", async () => {
     const marker = fake.storage.get(`goal/active/${sessionID}`) as any;
     assert.equal(typeof marker, "object");
     assert.equal(marker?.id, undefined, "a cleared marker must not look active");
+  } finally {
+    await cleanup();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("all nine roster agents get their persona at runtime and it is audited", async () => {
+  const root = tempProject();
+  fs.writeFileSync(path.join(root, "package.json"), '{"name":"persona-probe"}', "utf8");
+  const fake = makeContext(root);
+  const cleanup = await setup(fake.ctx);
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    for (const agent of ROSTER) {
+      const system: Array<{ type: string; text: string }> = [];
+      await fake.sessionHooks.context({
+        agent: agent.id,
+        sessionID: `ses_persona_${agent.id}`,
+        model: { providerID: "opencode", modelID: "big-pickle" },
+        messages: [],
+        system,
+      });
+      const text = system.map((part) => part.text).join("\n");
+      assert.match(
+        text,
+        /## ZombieCoder Shared Rules/,
+        `${agent.id} did not receive the shared persona`,
+      );
+      assert.ok(text.includes(agent.callSign), `${agent.id} prompt lost its call sign`);
+    }
+
+    const rows = fs
+      .readFileSync(path.join(root, ".zombiecoder", ".state", "audit.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+      .filter((row) => row.kind === "context");
+    assert.equal(rows.length, ROSTER.length);
+    for (const row of rows) {
+      assert.equal(row.personaEnforced, true, `${row.sessionID} ran without a persona`);
+      assert.equal(row.personaSource, "runtime", `${row.sessionID} missed runtime injection`);
+      assert.ok(row.personaBytes > 0, `${row.sessionID} pushed no persona bytes`);
+    }
   } finally {
     await cleanup();
     fs.rmSync(root, { recursive: true, force: true });

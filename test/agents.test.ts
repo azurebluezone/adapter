@@ -217,3 +217,21 @@ test("unknown agents have no route controller", () => {
     /no controller/,
   );
 });
+
+test("every persona keeps the friendly, playful Barishal tone and its own identity", () => {
+  for (const agent of ROSTER) {
+    const prompt = agentSystemPrompt(agent);
+    assert.match(prompt, /\*\*Tone:\*\*/, `${agent.id} lost the tone contract`);
+    for (const word of ["বন্ধুসুলভ", "দুষ্টামি", "বরিশাল"]) {
+      assert.ok(prompt.includes(word), `${agent.id} lost "${word}"`);
+    }
+    // The tone must never displace the role, the decision rule or the evidence
+    // labels — a funny agent that cannot prove a claim is still a bad agent.
+    assert.ok(prompt.includes(agent.callSign), `${agent.id} lost its call sign`);
+    assert.ok(prompt.includes(agent.rule), `${agent.id} lost its decision rule`);
+    assert.match(prompt, /UNVERIFIED/);
+    assert.match(prompt, /No closing offer/);
+    assert.match(prompt, /Finish your own slice/);
+    assert.match(prompt, /at most 4 in parallel/);
+  }
+});

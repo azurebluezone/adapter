@@ -26,6 +26,14 @@ pass/fail line. A missing command is `NOT_TESTED`, not `PASS`.
   roster prompt; the context hook pushes it only when the live system prompt
   lacks `PERSONA_MARKER`. An unknown agent (or one with no persona) cannot use
   mutating tools or launch a subagent.
+- Every rendered prompt carries the **Tone contract**: friendly, a little
+  mischief, Barishal dialect. Tone never weakens a claim; when the user is
+  annoyed, the jokes stop and the result is stated plainly (`src/agents/base.ts`,
+  `src/agents/shared.ts`).
+- A brand-new working directory is scanned on the first context hook and its
+  footprint is written into the syllabus. Counts are never silently capped: the
+  syllabus says `complete` or `truncated` for the file index
+  (`src/zombie/scan.ts`, `src/zombie/syllabus.ts`).
 - Only `zombiecoder` (chair) and `manu` (architect) may launch roster
   specialists: at most 4 in one parallel batch, roster ids only. Specialists keep
   `subagent * deny`; the launcher keeps final responsibility.
@@ -95,8 +103,8 @@ scope, so their footer can be regenerated without changing the code root. Regene
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  2d056d0a3ff1a20143ebba719ead51bc7875373c161cdd21163e641fb1fd1e85  ║
-║  files 140 · bytes 1330881 · base bec677c · dirty                        ║
+║  root  7084ac4458472d4484b135c8ec67462290018619320addc4f8a4635606d571f9  ║
+║  files 140 · bytes 1337129 · base e603d96 · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -104,7 +112,7 @@ scope, so their footer can be regenerated without changing the code root. Regene
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-06T22:42:21.539Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-06T22:54:47.722Z
 
 </div>
 <!-- INTEGRITY:END -->
