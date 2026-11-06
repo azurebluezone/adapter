@@ -1,0 +1,6 @@
+node_modules/
+.zombiecoder/
+.opencode/
+*.log
+.DS_Store
+Thumbs.db
