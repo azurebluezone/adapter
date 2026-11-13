@@ -14,6 +14,8 @@ export type InvisibleReport = {
   kinds: string[];
 };
 
+export type SanitizedMessages = { messages: any[]; affected: Array<{ index: number; count: number; kinds: string[] }> };
+
 const NAMED: Array<{ re: RegExp; label: string }> = [
   { re: /\u200B/g, label: "zero-width space" },
   { re: /\u200C/g, label: "zero-width non-joiner" },
@@ -29,11 +31,31 @@ export function stripInvisible(text: string): string {
   return String(text ?? "").replace(INVISIBLE, "");
 }
 
+/** Clone a context payload and remove invisible controls from user-authored text. */
+export function sanitizeUserMessages(messages: readonly any[]): SanitizedMessages {
+  const affected: SanitizedMessages["affected"] = [];
+  const cleanValue = (value: any): any => {
+    if (typeof value === "string") return stripInvisible(value);
+    if (Array.isArray(value)) return value.map(cleanValue);
+    if (!value || typeof value !== "object") return value;
+    return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, cleanValue(child)]));
+  };
+  const result = messages.map((message, index) => {
+    const role = String(message?.role ?? message?.type ?? message?.info?.role ?? "").toLowerCase();
+    if (role !== "user") return message;
+    const raw = JSON.stringify(message);
+    const report = detectInvisible(raw);
+    if (report.count) affected.push({ index, count: report.count, kinds: report.kinds });
+    return cleanValue(message);
+  });
+  return { messages: result, affected };
+}
+
 /** Report invisible characters without changing the text. */
 export function detectInvisible(text: string): InvisibleReport {
   const value = String(text ?? "");
   const matches = value.match(INVISIBLE) ?? [];
-  const kinds = NAMED.filter((entry) => entry.re.test(value)).map((entry) => entry.label);
+  const kinds = NAMED.filter((entry) => new RegExp(entry.re.source, "g").test(value)).map((entry) => entry.label);
   return { count: matches.length, suspicious: matches.length >= 3, kinds };
 }
 

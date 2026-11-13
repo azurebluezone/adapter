@@ -3,11 +3,13 @@
 // and returns text. Nothing in this file can change an answer after the fact —
 // it can only refuse to release it.
 
+import { createHash } from "node:crypto";
 import {
   SHARED_EXECUTION,
   SHARED_EXPERTISE,
   SHARED_RULES,
 } from "./shared.ts";
+import { BASE_PHASE_TOOLS } from "./defaults.ts";
 import {
   advance,
   isConsentFor,
@@ -34,6 +36,7 @@ import type {
 const TOOL_ALIASES: Readonly<Record<string, string>> = {
   bash: "shell",
   command: "shell",
+  execute: "shell",
   write: "edit",
   patch: "edit",
   multiedit: "edit",
@@ -41,13 +44,48 @@ const TOOL_ALIASES: Readonly<Record<string, string>> = {
 };
 
 export function canonicalTool(tool: string): string {
-  const value = String(tool ?? "").trim().toLowerCase();
+  const value = String(tool ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^zombiecoder[._:/-]/, "");
   return TOOL_ALIASES[value] ?? value;
 }
 
+/**
+ * Phase lists may contain one trailing wildcard, e.g. `image-brand_*`.
+ * OpenCode mounts each MCP server under `<server>_<tool>`, so a namespace
+ * pattern keeps a server usable without hard-coding every tool it exposes.
+ */
+export function toolMatches(entry: string, tool: string): boolean {
+  const pattern = String(entry ?? "").trim().toLowerCase();
+  if (!pattern) return false;
+  if (pattern.endsWith("*")) return tool.startsWith(pattern.slice(0, -1));
+  return pattern === tool;
+}
+
+export function agentProfileMarker(profile: AgentProfile): string {
+  const digest = createHash("sha256")
+    .update(JSON.stringify([profile, SHARED_RULES, SHARED_EXECUTION, SHARED_EXPERTISE]))
+    .digest("hex")
+    .slice(0, 16);
+  return `<!-- zombiecoder-agent-profile:${profile.id}:${digest} -->`;
+}
+
 export function renderAgentPrompt(profile: AgentProfile): string {
+  const toolPhases = new Map<string, string[]>();
+  for (const [phase, tools] of Object.entries(profile.tools.phases)) {
+    for (const tool of tools) {
+      if (BASE_PHASE_TOOLS[phase as RoutePhase].includes(tool)) continue;
+      toolPhases.set(tool, [...(toolPhases.get(tool) ?? []), phase]);
+    }
+  }
+  const toolPolicy = [...toolPhases]
+    .map(([tool, phases]) => `- ${tool}: ${phases.join("/")}`)
+    .sort();
   return [
     "# " + profile.name + " — " + profile.callSign,
+    "",
+    agentProfileMarker(profile),
     "",
     "**Role:** " + profile.role,
     "",
@@ -68,7 +106,11 @@ export function renderAgentPrompt(profile: AgentProfile): string {
     "",
     "**Decision Rule:** " + profile.rule,
     "",
-    "**Focus:** your persona and this role. Finish your own slice; do not hand the whole task away. Only `zombiecoder` (chair) and `manu` (architect) may launch roster specialists — at most 4 in parallel — and the caller keeps final responsibility.",
+    "### Tool access (enforced by plugin)",
+    "Common tool schemas are supplied by OpenCode; the plugin enforces the active phase allowlist.",
+    ...(toolPolicy.length > 0 ? ["Role-specific tools (allowed phases):", ...toolPolicy] : []),
+    "",
+    "**Focus:** keep the selected agent as task owner/reporter. Use only reviewers allowed by the permission matrix and only for a bounded, relevant slice; the selected agent integrates findings and remains responsible.",
     "",
     SHARED_RULES,
     "",
@@ -160,9 +202,8 @@ export class AgentController {
     const policy = this.profile.tools;
     const canonical = canonicalTool(tool);
     if (!canonical) return false;
-    if (policy.denied.includes(canonical)) return false;
-    if (policy.mutating.includes(canonical) && phase !== "work") return false;
-    return policy.phases[phase]?.includes(canonical) ?? false;
+    if (policy.denied.some((entry) => toolMatches(entry, canonical))) return false;
+    return (policy.phases[phase] ?? []).some((entry) => toolMatches(entry, canonical));
   }
 
   deniedTool(tool: string, phase: RoutePhase): boolean {

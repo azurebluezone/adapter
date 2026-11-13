@@ -24,6 +24,7 @@ import {
   PERSONA_MARKER,
   MAX_PARALLEL_SPECIALISTS,
   canDelegate,
+  allowedSpecialistTargets,
   isInternalAgent,
   isRosterAgent,
   mergeAgentPersona,
@@ -43,6 +44,8 @@ import {
   PLUGIN_VERSION,
 } from "./zombie/io.ts";
 import { scanProject } from "./zombie/scan.ts";
+import { recordCompactTask, startProjectWatchdog, watchProject } from "./zombie/watchdog.ts";
+import { sanitizeUserMessages } from "./zombie/sanitize.ts";
 import { writeSsot } from "./zombie/ssot.ts";
 import { ensureSyllabus, readSyllabus, recordProjectFootprint } from "./zombie/syllabus.ts";
 import { ensureOnboarding } from "./zombie/onboarding.ts";
@@ -51,8 +54,6 @@ import {
   keepRecent,
   readIndex,
   readRecent,
-  roleOf,
-  textOf,
   touchIndex,
   writeIndex,
 } from "./zombie/memory.ts";
@@ -76,8 +77,9 @@ import { applyModeOverrides } from "./zombie/modes.ts";
 import { probeMcp } from "./zombie/mcp.ts";
 import { registerSkills } from "./zombie/skills.ts";
 import { ensureSharedSkills, DEFAULT_SKILL_REPO } from "./zombie/skillCatalog.ts";
-import { buildContextPack } from "./zombie/context.ts";
+import { buildContextPack, resolveAllowedPath } from "./zombie/context.ts";
 import { resolveAgentController, subagentGuard } from "./agents/index.ts";
+import { agentProfileMarker, canonicalTool } from "./agents/base.ts";
 import {
   applyToolEvent,
   beginTurn,
@@ -86,6 +88,12 @@ import {
   saveRun,
 } from "./agents/runtime.ts";
 import { hashMessage } from "./agents/route.ts";
+import {
+  isSyntheticText,
+  readSyntheticHashes,
+  rememberSynthetic,
+  resolveUserTurn,
+} from "./agents/turn.ts";
 import type { AgentRun, ReleaseCheck } from "./agents/types.ts";
 import type { GateOptions } from "./zombie/responseGate.ts";
 import { buildRunnerIdentity } from "./zombie/runnerIdentity.ts";
@@ -112,7 +120,7 @@ export const TRANSFORM_APPLY_TIMEOUT_MS = 15000;
 
 // Tools that change the project. A read-only investigation may run before a
 // goal contract; a write may not.
-const MUTATING_TOOLS = new Set(["edit", "write", "patch", "multiedit", "apply_patch", "shell", "bash", "command"]);
+const MUTATING_TOOLS = new Set(["edit", "write", "patch", "multiedit", "apply_patch", "shell", "bash", "command", "execute"]);
 
 // The host starts a batch of children from one call; cap the batch so "a few
 // specialists" cannot become a tree. Cross-turn counting is not claimed.
@@ -543,7 +551,7 @@ export function verifyAgentMarkdownAt(
     const raw = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
     if (pins) {
       const expected = assignment[a.id] ?? a.model;
-      if (!raw.includes(`model: ${expected}`)) missing.push(`${a.id}=${expected}`);
+      if (expected && !raw.includes(`model: ${expected}`)) missing.push(`${a.id}=${expected}`);
     } else if (/^model:/m.test(raw)) {
       missing.push(`${a.id}=pinned-model`);
     }
@@ -631,7 +639,7 @@ export function verifyAgentConfig(
     const expected = assignment[a.id] ?? a.model;
     const entry = config.agents[a.id];
     if (!entry) missing.push(`${a.id}=missing`);
-    else if (pins && entry.model !== expected) missing.push(`${a.id}=model`);
+    else if (pins && expected && entry.model !== expected) missing.push(`${a.id}=model`);
     else if (!pins && entry.model !== undefined) missing.push(`${a.id}=pinned-model`);
     else if (!Array.isArray(entry.permissions) || entry.permissions.length === 0) missing.push(`${a.id}=permissions`);
   }
@@ -694,25 +702,31 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
   const resolvedSessionRoots = new Map<string, string>();
   const scaffoldedRoots = new Set<string>();
   const projectRoots = new Set<string>([root]);
+  const projectWatchers = new Map<string, { close: () => void; supported: boolean }>();
 
   const normalizeProjectRoot = (value: string): string => path.resolve(String(value));
+
+  const startProjectWatch = (projectRoot: string): void => {
+    const normalized = normalizeProjectRoot(projectRoot);
+    if (projectWatchers.has(normalized)) return;
+    const watcher = startProjectWatchdog(
+      normalized,
+      ROSTER.map((agent) => agent.id),
+      layout.dir,
+      (snapshot) => audit(normalized, "plugin", { kind: "watchdog.change", ...snapshot }),
+    );
+    projectWatchers.set(normalized, watcher);
+    audit(normalized, "plugin", { kind: "watchdog.watch", supported: watcher.supported });
+  };
 
   const scaffoldProject = (projectRoot: string): string => {
     const normalized = normalizeProjectRoot(projectRoot);
     if (scaffoldedRoots.has(normalized)) return normalized;
-    ensureZombieDirs(normalized);
-    writeIndex(normalized, readIndex(normalized));
-    const fingerprint = scanProject(normalized);
-    writeSsot(normalized, fingerprint);
-    ensureSyllabus(normalized, fingerprint, ROSTER.map((a) => a.id));
-    // New directory (or changed tree): leave one lesson with the footprint and the
-    // failures carried over from the previous audit trail. Deduped by marker.
-    recordProjectFootprint(normalized, fingerprint);
-    // First-input evidence: docs, tests, logs, markers, audit failures and the
-    // stack skills this project needs. Idempotent per file tree.
-    ensureOnboarding(normalized, fingerprint, { installRoot: layout.dir });
+    const watchdog = watchProject(normalized, ROSTER.map((agent) => agent.id), layout.dir);
+    audit(normalized, "plugin", { kind: "watchdog", ...watchdog });
     scaffoldedRoots.add(normalized);
     projectRoots.add(normalized);
+    startProjectWatch(normalized);
     return normalized;
   };
 
@@ -735,6 +749,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
     }
     resolvedSessionRoots.set(id, resolved);
     projectRoots.add(resolved);
+    startProjectWatch(resolved);
     return resolved;
   };
 
@@ -883,17 +898,13 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
   // free models cannot rewrite the global agents. Project installs keep the
   // project plan.
   const globalAssignment = layout.global ? globalAgentAssignment(layout.configFile, ROSTER) : {};
-  // A live provider plan (or a free-model plan) is newer evidence than the
-  // installer-owned assignment. In global mode the plan is computed from the
-  // same config file, so a free mapping is the owner's current choice and must
-  // reach the agents instead of being masked by the installer's old baseline.
-  // Explicit `modelStrategy: "free"` is an owner choice and wins in global mode.
-  // A plain `auto` fallback (provider disabled) still must not rewrite the
-  // installer-owned global agents.
-  const explicitFree = ["free", "random"].includes(String(config.modelStrategy ?? "").toLowerCase());
+  // Every agent shares the same runtime-selected transport. A global install
+  // must also follow the current catalog/default rather than retaining stale
+  // per-agent model pins from an older installer run.
   const runtimePlanWins =
     plan?.strategy === "custom-provider" ||
-    (plan?.strategy === "free-fallback" && (Boolean(plan?.customProviderUrl) || explicitFree));
+    plan?.strategy === "baseline" ||
+    plan?.strategy === "free-fallback";
   const agentAssignment = layout.global
     ? runtimePlanWins
       ? (plan?.assignment ?? {})
@@ -1067,6 +1078,9 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
     synthetic: async (input: { sessionID: string; text: string; description?: string }) => {
       const door = (ctx as any).session?.synthetic;
       if (typeof door !== "function") throw new Error("session.synthetic unavailable");
+      // Synthetic cards arrive in the model request as user messages; remember
+      // them so the context hook cannot mistake one for a new user turn.
+      await rememberSynthetic(ctx.storage, input.sessionID, input.text);
       await door(input);
     },
     assertPermission: async (input: {
@@ -1224,7 +1238,17 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
         // audit (both projects had time_idle set and zero session.archive rows).
         // The `context` hook fires on every model request and carries the full
         // message list, so archive the overflow here. Idempotent by message id.
-        const messages = Array.isArray(event?.messages) ? event.messages : [];
+        const sourceMessages = Array.isArray(event?.messages) ? event.messages : [];
+        const sanitized = sanitizeUserMessages(sourceMessages);
+        const messages = sanitized.messages;
+        if (Array.isArray(event?.messages) && sanitized.affected.length) {
+          event.messages = messages;
+          audit(projectRoot, agentID, {
+            kind: "input.sanitized",
+            sessionID,
+            affected: sanitized.affected,
+          });
+        }
         if (sessionID && sessionID !== "unknown") {
           // The idle hook has no agent field; remember who spoke last so the
           // snapshot written after the final answer keeps its attribution.
@@ -1246,14 +1270,15 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
         const recent = await readRecent(ctx.storage, sessionID);
         // The focus resolver needs the sentence the user just wrote, not the whole
         // transcript. Walk backwards to the last user turn in the hook payload.
-        let userMessage = "";
-        let userTurnCount = 0;
-        for (let i = messages.length - 1; i >= 0; i -= 1) {
-          if (String(roleOf(messages[i]) ?? "").toLowerCase() !== "user") continue;
-          userTurnCount += 1;
-          if (!userMessage) userMessage = textOf(messages[i]);
-        }
+        // Plugin-generated cards (contract preview/result, breaker) are also
+        // user messages; skip them so they cannot reset the route.
+        const syntheticHashes = await readSyntheticHashes(ctx.storage, sessionID);
+        const { text: userMessage, count: userTurnCount } = resolveUserTurn(
+          messages,
+          (text) => isSyntheticText(text, syntheticHashes),
+        );
         const pack = buildContextPack(projectRoot, agentID, recent, userMessage, sessionID);
+        recordCompactTask(projectRoot, sessionID, userMessage, pack.intent, recent.length);
 
         // Route state is plugin-owned. It is created per user turn and carried
         // through tool loops; a later context request in the same turn must not
@@ -1296,6 +1321,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
                 phase: routeRun.phase,
                 consent: turn.consent,
                 continued: turn.continued,
+                handedOff: turn.handedOff,
                 freshSyllabus,
               });
             }
@@ -1318,7 +1344,12 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           ? event.system.map((part: any) => (typeof part?.text === "string" ? part.text : "")).join("\n")
           : "";
         const systemHasPersona = systemText.includes(PERSONA_MARKER);
-        const personaText = systemHasPersona ? "" : persona.text;
+        const expectedProfileMarker = routeAgent ? agentProfileMarker(routeAgent.profile) : "";
+        const systemHasCurrentPersona =
+          persona.kind === "roster"
+            ? Boolean(expectedProfileMarker && systemText.includes(expectedProfileMarker))
+            : systemHasPersona;
+        const personaText = systemHasCurrentPersona ? "" : persona.text;
         if (Array.isArray(event?.system) && typeof event.system.push === "function") {
           event.system.push({
             type: "text",
@@ -1327,6 +1358,10 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
               "",
               ...(personaText ? [personaText, ""] : []),
               "### Agent contract",
+              `Active agent: ${routeAgent?.profile.name ?? agentID} (${agentID})`,
+              ...(routeAgent && routeRun
+                ? [`Allowed tools in ${routeRun.phase}: ${routeAgent.profile.tools.phases[routeRun.phase].join(", ")}`]
+                : []),
               def
                 ? `Decision rule: ${def.rule}`
                 : `Decision rule: no specialist roster entry for "${agentID}"; the shared ZombieCoder contract above is authoritative.`,
@@ -1343,11 +1378,10 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
                   ]
                 : []),
               'Start every response with "ভাইয়া". Chat in Bengali; code and shortcuts in English.',
-              "Read SSOT and syllabus before acting. The footprint lives inside syllabus.md — never create a separate footprint file.",
-              "Finish your own slice. Only zombiecoder (chair) and manu (architect) may launch roster specialists — at most 4 in parallel — and the launcher keeps final responsibility.",
+              "The context pack carries the relevant SSOT, syllabus, memory, focus files, and contract status. Read full files or archives only when this request needs details not in the pack.",
+              "Active agent retains task ownership. Delegate only a bounded review allowed by the permission matrix; integrate the result and report under the active agent's name.",
               "Evidence before confidence. No evidence means no verified answer.",
-              `Context ownership: SSOT=${pack.owners.ssot.agent}, Syllabus=${pack.owners.syllabus.agent}, Memory=${pack.owners.memory.agent}, Skills=${pack.owners.skills.agent}, Gate=${pack.owners.gate.agent}.`,
-              `Before substantive work, call \`context_status\` and show its uiLine. Make this the first visible line after \"ভাইয়া\" so the user sees who manages SSOT, syllabus and memory: ${pack.uiLine}`,
+              `Context status: ${pack.uiLine}`,
             ].join("\n"),
           });
         }
@@ -1371,8 +1405,8 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           // Bytes actually pushed, not the persona's size: an existing prompt
           // must stay a single copy.
           personaBytes: Buffer.byteLength(personaText, "utf8"),
-          personaEnforced: systemHasPersona || personaText.length > 0,
-          personaSource: systemHasPersona ? "system" : personaText ? "runtime" : "none",
+          personaEnforced: systemHasCurrentPersona || personaText.length > 0,
+          personaSource: systemHasCurrentPersona ? "system" : personaText ? "runtime" : "none",
           runnerKind: runner.kind,
           runnerRef: runner.ref,
           runnerEvidence: runner.evidence,
@@ -1538,8 +1572,13 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
       const key = `agent/breaker/${sessionID}`;
       breakerInflight.add(sessionID);
       try {
+        const recent = await readRecent(ctx.storage, sessionID);
+        const userIntent = [...recent].reverse().find((message) => message.role?.toLowerCase() === "user")?.text;
+        const trackedFailure: BreakerFailure = userIntent
+          ? { ...failure, context: { ...failure.context, userIntent: userIntent.slice(0, 2400) } }
+          : failure;
         const state = readBreakerState(await ctx.storage.get(key), sessionID);
-        const { state: nextState, decision } = decideBreaker(state, failure, BREAKER_LIMIT);
+        const { state: nextState, decision } = decideBreaker(state, trackedFailure, BREAKER_LIMIT);
         await ctx.storage.set(key, nextState);
         audit(projectRoot, "plugin", {
           kind: "agent.failure",
@@ -1547,9 +1586,9 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           agent: agentID,
           model,
           source: input.source,
-          reason: failure.reason,
-          violations: failure.context?.violations,
-          detail: failure.context?.detail,
+          reason: trackedFailure.reason,
+          violations: trackedFailure.context?.violations,
+          detail: trackedFailure.context?.detail,
           failures: nextState.failures.length,
           limit: BREAKER_LIMIT,
           ...input.extra,
@@ -1583,7 +1622,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
         // failure evidence; there is no switchAgent and no delegation.
         await session.synthetic({
           sessionID,
-          text: statusMessage(failure, decision),
+            text: statusMessage(trackedFailure, decision),
           description: "zombiecoder circuit breaker",
         });
         if (input.queueRetry) {
@@ -1599,7 +1638,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           }
           await session.prompt({
             sessionID,
-            text: retryPrompt(failure, input.blockedText, decision),
+            text: retryPrompt(trackedFailure, input.blockedText, decision),
             delivery: "queue",
           });
         }
@@ -1612,7 +1651,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           attempt: decision.attempt,
           limit: decision.limit,
           ok: true,
-          reason: failure.reason,
+          reason: trackedFailure.reason,
           model,
         });
       } catch (error: any) {
@@ -1901,8 +1940,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           );
         }
 
-        // Only the chair and the architect may start a specialist, only roster
-        // ids are valid targets, and one call may not exceed the batch cap.
+        // The per-agent matrix restricts every launch to explicit, bounded targets.
         if (launches) {
           if (!canDelegate(agentID)) {
             audit(projectRoot, agentID, {
@@ -1912,7 +1950,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
               reason: "agent is not a delegator",
             });
             throw new Error(
-              "only zombiecoder (chair) and manu (architect) may launch roster specialists; finish your own slice",
+              `agent "${agentID}" has no delegation targets; finish your own slice`,
             );
           }
           const batch = requestedChildren(input);
@@ -1952,6 +1990,16 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
             throw new Error("a subagent launch needs a roster specialist id");
           }
           for (const target of unique) {
+            if (target === agentID) {
+              audit(projectRoot, agentID, {
+                kind: "agent.delegation.block",
+                sessionID,
+                tool,
+                target,
+                reason: "an agent cannot launch itself",
+              });
+              throw new Error(`agent "${agentID}" cannot launch itself`);
+            }
             if (!isRosterAgent(target)) {
               audit(projectRoot, agentID, {
                 kind: "agent.delegation.block",
@@ -1963,6 +2011,17 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
               throw new Error(
                 `subagent target "${target}" is not a ZombieCoder roster specialist; builtin or unknown agents cannot be launched`,
               );
+            }
+            if (!allowedSpecialistTargets(agentID).includes(target)) {
+              audit(projectRoot, agentID, {
+                kind: "agent.delegation.block",
+                sessionID,
+                tool,
+                target,
+                allowed: allowedSpecialistTargets(agentID),
+                reason: "target is not in this agent's bounded delegation matrix",
+              });
+              throw new Error(`agent "${agentID}" may not launch "${target}"; allowed reviewers: ${allowedSpecialistTargets(agentID).join(", ") || "none"}`);
             }
             const verdict = subagentGuard(target, config.agentModes);
             if (!verdict.allowed) {
@@ -1980,6 +2039,31 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           return;
         }
 
+        const controller = resolveAgentController(agentID, config.agentModes);
+        let activeAgentRun: AgentRun | null = null;
+        if (controller && config.strictAgentWorkflow !== false) {
+          activeAgentRun = await loadRun(ctx.storage, sessionID);
+          if (!activeAgentRun || activeAgentRun.agentID !== agentID) {
+            audit(projectRoot, agentID, {
+              kind: "agent.tool_policy.block",
+              sessionID,
+              tool,
+              reason: "missing or mismatched active agent route",
+            });
+            throw new Error(`agent route missing for ${agentID}; refresh the request before using tools`);
+          }
+          if (!controller.allows(tool, activeAgentRun.phase)) {
+            audit(projectRoot, agentID, {
+              kind: "agent.tool_policy.block",
+              sessionID,
+              tool,
+              phase: activeAgentRun.phase,
+              reason: "tool is not allowed in this agent phase",
+            });
+            throw new Error(`tool "${tool}" is not allowed for ${agentID} during ${activeAgentRun.phase}`);
+          }
+        }
+
         if (!MUTATING_TOOLS.has(tool)) return;
         const fileTarget = String(input.filePath ?? input.path ?? input.file ?? "").replace(/\\/g, "/");
         const targets = [fileTarget, ...patchTargets(input)]
@@ -1990,7 +2074,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
         // one `echo > file`. Quoted text and /dev/null stay read-only.
         const commandText = String(input.command ?? input.cmd ?? "");
         const shellWrite = analyzeShell(commandText);
-        const shellMutates = (tool === "shell" || tool === "bash" || tool === "command") && shellWrite.mutates;
+        const shellMutates = (tool === "shell" || tool === "bash" || tool === "command" || tool === "execute") && shellWrite.mutates;
         const ledger =
           targets.find((value) => /(?:^|\/)\.zombiecoder\/(?:syllabus\.md|SSOT\.md)$/i.test(value)) ??
           ledgerTarget(commandText);
@@ -2006,6 +2090,70 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           throw new Error(
             "syllabus.md and SSOT.md are plugin-owned; use append_syllabus or goal_contract, never edit/write/patch/shell",
           );
+        }
+        const checkedExternalDirectories = new Set<string>();
+        for (const candidate of [...targets, ...shellWrite.targets]) {
+          const withinProject = resolveAllowedPath(projectRoot, candidate);
+          const cleanedCandidate = candidate
+            .trim()
+            .replace(/:\d+(?:-\d+)?$/, "")
+            .replace(/[),.;]+$/, "");
+          const resolved = withinProject ?? (
+            cleanedCandidate && !/^https?:\/\//i.test(cleanedCandidate)
+              ? path.resolve(projectRoot, cleanedCandidate)
+              : null
+          );
+          if (!resolved) {
+            audit(projectRoot, agentID, {
+              kind: "agent.write_scope.block",
+              sessionID,
+              tool,
+              target: candidate,
+              reason: "write target could not be resolved",
+            });
+            throw new Error(`write target could not be resolved: ${candidate}`);
+          }
+          if (!withinProject) {
+            const externalDirectory = path.dirname(resolved);
+            if (!checkedExternalDirectories.has(externalDirectory)) {
+              try {
+                await deps.assertPermission({
+                  sessionID,
+                  action: "external_directory",
+                  resources: [externalDirectory],
+                  save: [externalDirectory],
+                  metadata: { tool, target: resolved },
+                });
+                checkedExternalDirectories.add(externalDirectory);
+              } catch (error: any) {
+                audit(projectRoot, agentID, {
+                  kind: "agent.write_scope.block",
+                  sessionID,
+                  tool,
+                  target: candidate,
+                  externalDirectory,
+                  reason: "external directory permission was rejected or unavailable",
+                });
+                throw new Error(`external directory permission was rejected for ${externalDirectory}`);
+              }
+            }
+          }
+          const relative = path.relative(path.resolve(projectRoot), resolved).split(path.sep).join("/");
+          const isOpenCodeConfig =
+            /^(?:opencode\.jsonc?|\.opencode\/(?:opencode\.jsonc?|agents\/[^/]+\.md|plugins\/.+|commands\/.+|zombiecoder\/config\.json))$/i.test(relative);
+          const explicitlyFocused = activeAgentRun?.focus.some(
+            (focused) => path.normalize(focused).split(path.sep).join("/") === relative,
+          );
+          if (isOpenCodeConfig && !explicitlyFocused) {
+            audit(projectRoot, agentID, {
+              kind: "agent.config_write.block",
+              sessionID,
+              tool,
+              target: relative,
+              reason: "OpenCode config changes were not part of the current request",
+            });
+            throw new Error(`OpenCode config write requires an explicit user request for ${relative}`);
+          }
         }
         const syllabus = readSyllabus(projectRoot) ?? "";
         if (openContracts(syllabus, sessionID).length > 0) return;
@@ -2086,7 +2234,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
         // call that happens to contain the word FAIL. Feed it into the same
         // same-agent breaker so a rewritten expectation cannot pass quietly.
         const contract =
-          String(event?.tool ?? "").toLowerCase() === "goal_contract"
+          canonicalTool(String(event?.tool ?? "")) === "goal_contract"
             ? contractOutcome(event)
             : null;
         if (contract) {
@@ -2158,11 +2306,10 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
   const timer = setInterval(() => {
     for (const projectRoot of projectRoots) {
       try {
-        const written = writeSsot(projectRoot, scanProject(projectRoot));
+        const watchdog = watchProject(projectRoot, ROSTER.map((agent) => agent.id), layout.dir);
         audit(projectRoot, "plugin", {
-          kind: "ssot.refresh",
-          sha256: written.sha256,
-          bytes: written.bytes,
+          kind: "watchdog",
+          ...watchdog,
         });
       } catch (error: any) {
         console.error(
@@ -2173,6 +2320,10 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
   }, config.ssotRefreshMs || DEFAULT_SSOT_REFRESH_MS);
   if (typeof (timer as any).unref === "function") (timer as any).unref();
   cleanups.push(() => clearInterval(timer));
+  cleanups.push(() => {
+    for (const watcher of projectWatchers.values()) watcher.close();
+    projectWatchers.clear();
+  });
   report.outputs.refreshMs = config.ssotRefreshMs;
 
   // ---- report + footprint ---------------------------------------------------

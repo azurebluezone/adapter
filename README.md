@@ -18,11 +18,13 @@ runtime state তৈরি করে; প্রজেক্টের ভিত�
 
 প্রধান বৈশিষ্ট্য:
 
-- ৯টি এজেন্ট, প্রত্যেকটি `mode: all`; কোনো এজেন্ট subagent নয়।
-- OpenCode-এর agent dropdown থেকে প্রত্যেক এজেন্ট সরাসরি নির্বাচন করা যায়।
+- ৯টি এজেন্ট, প্রত্যেকটি `mode: all`; dropdown-এ নির্বাচিত agent-ই primary,
+  আর সে অনুমোদিত bounded subagent ব্যবহার করতে পারে।
+- OpenCode-এর session model-ই agent-দের shared transport; কোনো size/role-ভিত্তিক
+  model বিভাজন নেই।
 - OpenAI-compatible provider-এর `/v1/models` থেকে মডেল তালিকা নেওয়া হয়।
-- Provider unavailable হলে OpenCode-এর free model এবং সর্বশেষে baseline model-এ
-  fallback হয়।
+- Provider URL অনুপস্থিত হলে OpenCode-এর সক্রিয় free/default model সব agent-এ
+  sync হয়; valid model ref না থাকলে session model-ই থাকে।
 - প্রতিটি প্রজেক্টের জন্য `.zombiecoder/SSOT.md`, `syllabus.md`, memory ও
   audit state তৈরি হয়।
 - MCP server শুধু probe সফল হলে register হয়।
@@ -112,14 +114,13 @@ plugin নিজে তৈরি করে।
    `/v1/chat/completions`-এ একটি ছোট chat probe এবং (ডিফল্ট) একটি tool-call
    probe চালায়।
 4. Chat fail, tool fail, অথবা prompt processing খুব ধীর (<20 tok/s) হলে
-   provider config-এ থাকলেও agent-রা baseline free model
-   (`opencode/big-pickle`) পায়। `--allow-slow` দিয়ে slow model জোর করে রাখা যায়।
-5. Provider একেবারে unreachable হলে OpenCode-এর free model fallback হয়;
-   `modelStrategy: "baseline"` এই fallback-কে স্থায়ী করে।
-6. Global install-এ provider live হলে বা configured provider outage হলে runtime
-   plan global agent assignment update করতে পারে।
-7. প্রজেক্ট নিজে provider disable করলে (`customProviderUrl: ""`) global
-   assignment downgrade হয় না।
+   provider config-এ থাকলেও session OpenCode-এর free catalog থেকে একটিমাত্র
+   shared transport model বেছে নেয়। `--allow-slow` দিয়ে slow model জোর করে রাখা যায়।
+5. Provider URL অনুপস্থিত বা provider unreachable হলে OpenCode free catalog
+   থেকে session default-কে অগ্রাধিকার দিয়ে একটি shared model বেছে নেওয়া হয়;
+   model ref না থাকলে কোনো agent pin লেখা হয় না।
+6. Project ও global install—দুই ক্ষেত্রেই বর্তমান runtime plan agent-দের একই
+   model-এ sync করে; পুরোনো আলাদা per-agent pins রাখা হয় না।
 
 ### ২.৩ 100C runtime template
 
@@ -150,9 +151,10 @@ evidence presence যাচাই করে, বাস্তব সত্য ন
   lesson দেখালে সেটি হারিয়ে যেত; এখন marker-যুক্ত সর্বশেষ onboarding আলাদা
   block হিসেবে থাকে আর newest lesson-ও থাকে। Marker না থাকলে pack স্পষ্ট করে
   বলে agent-কে আগে `Project brief` lesson লিখতে হবে।
-- **`context_status` tool** — agent substantive কাজ শুরুর আগে এই tool call করে
-  UI-তে এক লাইন দেখায়: `Context: SSOT OK | Syllabus OK | Memory N recent / M archives | Pack NB`।
-  তাই SSOT, syllabus ও memory manage হচ্ছে কিনা user সরাসরি দেখতে পায়।
+- **Context status** — bounded context pack-এই current request, project SSOT,
+  request-relevant syllabus lesson, focus files ও newest 10 message-এর summary থাকে।
+  `context_status` শুধু তখনই দরকার, যখন ওই pack-এর চেয়ে বেশি detail লাগে; প্রতিটি
+  কাজের আগে আলাদা status call বাধ্যতামূলক নয়।
 - **Hard response gate** — `http.response` hook primary answer যাচাই করে।
   `path:line`, test output বা exit code ছাড়া completed/successful claim পেলে
   উত্তর `UNVERIFIED` message দিয়ে replace করা হয় (`src/zombie/responseGate.ts`)।
@@ -211,6 +213,23 @@ evidence presence যাচাই করে, বাস্তব সত্য ন
   আর `File index | N / total (complete|truncated)`। индекс ক্যাপ করলে silent
   truncation নয় — স্পষ্ট `truncated` লেখা থাকে (`src/zombie/scan.ts`,
   `src/zombie/syllabus.ts`)।
+- **Selected primary, bounded subagents** — roster-এর সব agent OpenCode
+  `mode: all`-এ থাকে। UI-তে নির্বাচিত agent-ই session-এর primary owner ও final
+  reporter; সে policy-অনুমোদিত specialist-কে bounded subtask দিতে পারে। Installer
+  usable `default_agent` ধরে রাখে। Majnu review কেবল QA risk থাকলে, বাধ্যতামূলক নয়।
+- **Footprint-first tools and investigation map** — SSOT/syllabus/session context
+  প্রতি turn-এ যাচাই হয়; `read`, `grep`, `glob` footprint phase থেকেই পাওয়া যায়।
+  `project_investigation` current request, focus files, prior Git state,
+  stack/compiler versions, docs, tests, log errors ও audit failures structured
+  map করে syllabus-এ deduplicate করে। Model training-data cutoff `UNVERIFIED`;
+  provider metadata না থাকলে অনুমান করা হয় না।
+- **Change watchdog and input sanitizer** — recursive filesystem events project
+  map refresh করে; periodic reconciliation missed events ধরে। Audit path/action
+  রাখে, source content নয়। Context hook user message থেকে zero-width ও bidi
+  control সরিয়ে model/memory-তে পাঠায় এবং sanitized count audit করে।
+- **Free model fallback** — `ZOMBIECODER_PROVIDER_URL` খালি থাকলে custom URL probe
+  হয় না; OpenCode catalog থেকে সক্রিয় cost-0 model সব agent-এ একই transport হিসেবে sync হয়।
+  নির্দিষ্ট `:8000`/`:8080` model URL default নয়।
 - **Evidence path policy** — agent যেকোনো ফাইল পড়তে পারে, তাই gate path-কে
   sandbox করে না; শুধু যাচাই করে cited ফাইলটি সত্যিই আছে কি না। resolution order:
   working directory → OpenCode config/data root (`$XDG_CONFIG_HOME/opencode`,
@@ -339,8 +358,8 @@ node bin/quick-install.mjs
 ```
 
 - **1** — `~/.opencode`-এ একবার install; সব project-এ কাজ করবে।
-- **2** — local provider probe না করে `opencode/big-pickle` baseline দিয়ে
-  দ্রুত শুরু; ছোট/ধীর CPU model-এ আটকে থাকবে না।
+- **2** — custom provider probe না করে OpenCode-এর active free catalog ব্যবহার
+  করে; কোনো catalog ref না থাকলে UI-selected model-কে অক্ষত রাখে।
 - **3** — `cd` করা folder-এর `.opencode`-এ project-local install।
 - **4** — শুধু SSOT/syllabus/agent/config state যাচাই করে; কিছু লেখে না।
   `--dir <project>` দিয়ে নির্দিষ্ট project বেছে নেওয়া যায়।
@@ -489,7 +508,7 @@ Installer নিচের কাজগুলো ধাপে ধাপে সম
 8. MCP URL থাকলে probe করে।
 9. Provider-এর `/v1/models` probe করে, তারপর `/v1/chat/completions`-এ chat ও
    tool-call probe চালায়। Chat/tool fail বা prompt throughput `<20 tok/s` হলে
-   provider config-এ থাকলেও baseline free model নির্বাচন করে।
+   provider config-এ থাকলেও OpenCode-এর shared free model নির্বাচন করে; fallback না থাকলে UI selection থাকে।
 10. `opencode.json`-এ provider, models, agents, permissions ও MCP merge করে।
 11. Resolve হওয়া LSP binary থেকে `opencode.json`-এর `lsp` block স্বয়ংক্রিয়ভাবে
     লেখে (`syncLspConfig`); আগের entry অক্ষত থাকে।
@@ -556,7 +575,7 @@ opencode models
 - `debug config` install root-এর `opencode.json` দেখাবে।
 - `debug agents`-এ ৯টি roster agent থাকবে, প্রত্যেকের `mode: all`।
 - `plugin list`-এ `zombiecoder` local plugin দেখাবে।
-- `models`-এ provider model এবং প্রয়োজন হলে `opencode/big-pickle` থাকবে।
+- `models`-এ OpenCode catalog-এর models থাকবে; কোনো model ID hard-code করে pin করা হয় না।
 
 > Windows-এ OpenCode CLI PATH-এ না থাকলে OpenCode Desktop ব্যবহার করুন।
 > CLI command চালাতে হলে OpenCode-এর full executable path ব্যবহার করুন।
@@ -698,24 +717,24 @@ opencode models
 
 | Value | আচরণ |
 |---|---|
-| `auto` | Custom provider → free model → baseline |
-| `custom` | Custom provider; ব্যর্থ হলে baseline |
+| `auto` | Configured custom provider → OpenCode free model → UI-selected model |
+| `custom` | Custom provider; ব্যর্থ হলে explicit baseline env অথবা UI-selected model |
 | `free` | শুধু OpenCode-এর cost `0/0` model |
-| `baseline` | শুধু baseline model |
-| `random` | Auto routing, কিন্তু agent mapping random |
+| `baseline` | `ZOMBIECODER_BASELINE_MODEL`; সেট না থাকলে OpenCode default/session model |
+| `random` | একই roster-এর জন্য একটি shared model randomভাবে বেছে নেয় |
 
 Environment override:
 
 ```bash
 export ZOMBIECODER_MODEL_STRATEGY="auto"
-export ZOMBIECODER_BASELINE_MODEL="opencode/big-pickle"
+export ZOMBIECODER_BASELINE_MODEL="provider/model-id" # optional last-resort override
 ```
 
 Windows PowerShell:
 
 ```powershell
 $env:ZOMBIECODER_MODEL_STRATEGY = "auto"
-$env:ZOMBIECODER_BASELINE_MODEL = "opencode/big-pickle"
+$env:ZOMBIECODER_BASELINE_MODEL = "provider/model-id" # optional last-resort override
 ```
 
 ### ৬.৪ `.environment` থেকে provider ও MCP
@@ -877,13 +896,13 @@ src/roster.ts
 - `model` — installer/runtime resolve করে
 - `mission`, `persona`, `duties`, `rule`
 
-সব agent-এর shared rules (দুটো ব্লক — behaviour ও execution doctrine):
+সব agent-এর concise shared rules, short execution loop ও project-specific baseline:
 
 ```text
 SHARED_RULES + SHARED_EXECUTION
 ```
 
-`SHARED_RULES` বা `SHARED_EXECUTION` পরিবর্তন করলে সব agent-এর prompt পরিবর্তিত হয়। `SHARED_EXECUTION`-এ আছে: কম planning, target-file focus, full-slice (create/edit/delete/view), no mock/watermark, shortcut/codegen, training-cutoff websearch আর বরিশাল টোন।
+`SHARED_RULES`, `SHARED_EXECUTION` বা `SHARED_EXPERTISE` পরিবর্তন করলে সব agent-এর prompt পরিবর্তিত হয়। এগুলো current request, project business purpose, focused tools, real checks, concise reporting ও Barishal tone-এ সীমিত; unrelated domain checklist প্রতিটি call-এ পাঠানো হয় না।
 
 ### ৮.২ Persona পরিবর্তনের ধাপ
 
@@ -1025,8 +1044,9 @@ VS Code-এ OpenCode session দেখতে [`formulahendry.acp-client`](https:
 সব agent:
 
 - `mode: all`
-- একই shared rules ও cross-domain baseline ব্যবহার করে
-- আলাদা model assignment installer/runtime থেকে পায়
+- একই concise shared rules ও project-specific baseline ব্যবহার করে
+- catalog/default model থাকলে সব agent একই transport model পায়; না থাকলে
+  session-selected model ব্যবহার করে
 - agent dropdown-এ সরাসরি selectable
 
 ---
@@ -1048,7 +1068,8 @@ VS Code-এ OpenCode session দেখতে [`formulahendry.acp-client`](https:
 | `zombiecoder.goal_contract` | কাজের আগে observable expected + check command সহ contract খোলা/বন্ধ; session-এ একটাই open, open-এ baseline check, v3 marker ছাড়া close নেই; close নিজেই check চালায় |
 | `zombiecoder.project_onboarding` | প্রথম input-এ docs/tests/audit/skill evidence পড়ে gap syllabus-এ লেখে |
 | `zombiecoder.verify_real` | আসল input ও artifact-এর sha256 রেকর্ড; stand-in হলে `NOT_TESTED` |
-| `zombiecoder.design_sketch` | Code-এর আগে Stitch-style `sketch.md` + `design.json` |
+| `zombiecoder.project_investigation` | request, project state, compiler, docs, tests ও errors-এর map; syllabus-এ dedupe |
+| `zombiecoder.design_sketch` | নতুন screen/flow-এর জন্য ঐচ্ছিক ছোট `sketch.md` + `design.json` |
 | `zombiecoder.design_review` | Markup/CSS-এ `file:line` a11y ও state finding |
 | `zombiecoder.agent_modes` | Agent mode দেখা/বদলানো |
 | `zombiecoder.reload` | Skills/tools/agent door reload |
@@ -1057,7 +1078,7 @@ VS Code-এ OpenCode session দেখতে [`formulahendry.acp-client`](https:
 | `zombiecoder.env_get` | Env presence, value leak ছাড়া |
 | `zombiecoder.service_probe` | Port/service reachability |
 
-মোট ২১টি tool। Tool execute না হলে `৬.৫ Native tool calls` দেখুন।
+মোট ২২টি tool। Tool execute না হলে `৬.৫ Native tool calls` দেখুন।
 
 ### Native `patch` বনাম MCP — ফাইল তৈরি ও এডিট
 
@@ -1522,8 +1543,8 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  7084ac4458472d4484b135c8ec67462290018619320addc4f8a4635606d571f9  ║
-║  files 140 · bytes 1337129 · base e603d96 · dirty                        ║
+║  root  bb165ff27df0bac06bd7842ac6a9e14551f42b8de5f4e320d9c88916dad6ed42  ║
+║  files 148 · bytes 1387221 · base beac29a · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -1531,7 +1552,7 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-06T22:54:47.722Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-13T17:53:50.571Z
 
 </div>
 <!-- INTEGRITY:END -->

@@ -34,9 +34,10 @@ pass/fail line. A missing command is `NOT_TESTED`, not `PASS`.
   footprint is written into the syllabus. Counts are never silently capped: the
   syllabus says `complete` or `truncated` for the file index
   (`src/zombie/scan.ts`, `src/zombie/syllabus.ts`).
-- Only `zombiecoder` (chair) and `manu` (architect) may launch roster
-  specialists: at most 4 in one parallel batch, roster ids only. Specialists keep
-  `subagent * deny`; the launcher keeps final responsibility.
+- The selected agent stays task owner/reporter. `zombiecoder` and `manu` may
+  launch up to 4 roster work specialists; role agents may launch only bounded
+  reviewers in the permission matrix; `majnu` cannot delegate. Plugin hooks
+  enforce target ids, batch size, and the task owner's final responsibility.
 - `goal_contract` is one-open-per-session. open runs the check once as a
   baseline; a baseline that already passes writes no contract. A v3 contract
   without its `goal/open/<id>` storage marker cannot be closed, and shell writes
@@ -103,8 +104,8 @@ scope, so their footer can be regenerated without changing the code root. Regene
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  7084ac4458472d4484b135c8ec67462290018619320addc4f8a4635606d571f9  ║
-║  files 140 · bytes 1337129 · base e603d96 · dirty                        ║
+║  root  bb165ff27df0bac06bd7842ac6a9e14551f42b8de5f4e320d9c88916dad6ed42  ║
+║  files 148 · bytes 1387221 · base beac29a · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -112,7 +113,7 @@ scope, so their footer can be regenerated without changing the code root. Regene
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-06T22:54:47.722Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-13T17:53:50.571Z
 
 </div>
 <!-- INTEGRITY:END -->

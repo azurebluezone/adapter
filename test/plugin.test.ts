@@ -1,20 +1,31 @@
-import test from "node:test";
+import test, { before } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-  setup,
-  detectInstallLayout,
-  providerConfiguredOnDisk,
-  persistProviderUrl,
-  syncProviderBaseUrl,
-} from "../src/plugin.ts";
-import { ROSTER } from "../src/roster.ts";
+import type * as PluginModule from "../src/plugin.ts";
+import { ROSTER, allowedSpecialistTargets } from "../src/roster.ts";
 
 // Tests must not inherit the developer's installed originUrl. The setup tests
 // exercise local model plans, not a live origin handshake.
 process.env.ZOMBIECODER_ORIGIN_URL = "off";
+
+// A top-level import used to turn a missing @opencode/plugin into one
+// file-level failure, hiding all 27 tests below. Load inside a hook so every
+// test registers and reports the real dependency error.
+let pluginModule!: typeof PluginModule;
+
+before(async () => {
+  try {
+    pluginModule = await import("../src/plugin.ts");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `src/plugin.ts failed to load, so no test could run: ${message}. ` +
+        "Repo-root dependencies are required; run `npm ci` at the project root.",
+    );
+  }
+});
 
 type Fake = ReturnType<typeof makeContext>;
 
@@ -159,6 +170,30 @@ function tempProject(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "zombiecoder-test-"));
 }
 
+async function seedToolRoute(
+  fake: Fake,
+  sessionID: string,
+  agentID: string,
+  message: string,
+  openContract = false,
+  focus: string[] = [],
+  phase?: "work",
+): Promise<void> {
+  const [{ beginTurn, runStorageKey }, { getAgentController }] = await Promise.all([
+    import("../src/agents/runtime.ts"),
+    import("../src/agents/index.ts"),
+  ]);
+  let run = beginTurn({ sessionID, agentID, message, focus, freshSyllabus: false }).run;
+  const controller = getAgentController(agentID);
+  assert.ok(controller, `${agentID} controller missing`);
+  if (phase === "work") run = controller.walk(run, ["contract", "work"]);
+  if (openContract) {
+    run = controller.noteContract(run, { id: `gc-${sessionID}`, status: "open", at: run.updatedAt });
+    await fake.storage.set(`goal/active/${sessionID}`, { id: `gc-${sessionID}` });
+  }
+  await fake.storage.set(runStorageKey(sessionID), run);
+}
+
 test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors", async () => {
   const root = tempProject();
   fs.mkdirSync(path.join(root, ".zombiecoder"), { recursive: true });
@@ -185,7 +220,7 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   );
 
   const fake: Fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   await new Promise((resolve) => setTimeout(resolve, 60));
 
   for (const file of ["SSOT.md", "syllabus.md"]) {
@@ -205,21 +240,20 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   const manu = fs.readFileSync(path.join(root, ".opencode", "agents", "manu.md"), "utf8");
   assert.doesNotMatch(manu, /^model:/m, "pins are off by default: markdown must not pin a model");
   assert.match(manu, /ZombieCoder Shared Rules/);
-  assert.match(manu, /Cross-Domain Baseline/);
+  assert.match(manu, /Project-Specific Baseline/);
   assert.match(manu, /ভাইয়া/);
-  assert.match(manu, /মিথ্যে বলা অপরাধ/);
-  assert.match(manu, /UI\/UX/);
-  assert.match(manu, /MCP/);
-  assert.match(manu, /LSP/);
-  assert.match(manu, /SAP/);
-  assert.match(manu, /Dependency minimalism/);
+  assert.match(manu, /Never invent evidence/);
+  assert.match(manu, /Role-specific tools \(allowed phases\)/);
+  assert.match(manu, /current user request is the task source/);
+  assert.match(manu, /private chain-of-thought/);
   assert.match(manu, /^permissions:$/m);
   // Mode is a frontmatter field, not a speech the model performs; delegation is
   // refused in the permission list, not described in prose.
   assert.doesNotMatch(manu, /Mode protocol \(OpenCode V2\)/);
   assert.doesNotMatch(manu, /current mode: /);
   assert.match(manu, /Finish your own slice/);
-  assert.match(manu, /at most 4 in parallel/);
+  assert.match(manu, /delegate only a bounded review/);
+  assert.match(manu, /selected agent as task owner\/reporter/);
   // The provider is a third party: owner PII from identity.ts must never ride
   // along in an agent prompt or config. The persona travels, the person does not.
   for (const secret of [
@@ -273,14 +307,17 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   const configAgents = config.agents as Record<string, any>;
   for (const [id, agent] of Object.entries(configAgents)) {
     assert.equal(agent.mode, "all", "every agent must be a main agent, not a subagent");
-    const subagentRule = (agent.permissions ?? []).find((rule: any) => rule.action === "subagent");
-    assert.ok(subagentRule, `${id}: subagent permission missing`);
-    const delegator = id === "zombiecoder" || id === "manu";
-    assert.equal(
-      subagentRule.effect,
-      delegator ? "allow" : "deny",
-      delegator ? `${id}: the chair/architect may launch specialists` : `${id}: specialists must not delegate`,
+    const subagentRules = (agent.permissions ?? []).filter((rule: any) => rule.action === "subagent");
+    assert.ok(subagentRules.length > 0, `${id}: subagent permission missing`);
+    const allowedTargets = allowedSpecialistTargets(id);
+    assert.deepEqual(
+      subagentRules.filter((rule: any) => rule.effect === "allow").map((rule: any) => rule.resource),
+      allowedTargets,
+      `${id}: config permissions must match the bounded reviewer matrix`,
     );
+    if (allowedTargets.length === 0) {
+      assert.ok(subagentRules.some((rule: any) => rule.effect === "deny" && rule.resource === "*"));
+    }
   }
   assert.ok(Array.isArray(config.agents.manu.permissions));
   assert.equal(config.agents.kobir, undefined);
@@ -298,10 +335,11 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   assert.doesNotMatch(ssot, /^## .*Model plan/m);
   assert.doesNotMatch(ssot, /^## .*MCP/m);
 
-  assert.equal(fake.tools.length, 21);
+  assert.equal(fake.tools.length, 22);
   assert.ok(fake.tools.every((tool) => tool.output), "every tool must declare an output schema");
   assert.ok(fake.tools.some((tool) => tool.name === "memory_archive"));
   assert.ok(fake.tools.some((tool) => tool.name === "project_onboarding"), "project_onboarding tool missing");
+  assert.ok(fake.tools.some((tool) => tool.name === "project_investigation"), "project_investigation tool missing");
   assert.ok(fake.tools.some((tool) => tool.name === "evidence_gate"), "evidence_gate tool missing");
   assert.ok(fake.tools.some((tool) => tool.name === "verify_real"), "verify_real tool missing");
   assert.ok(fake.tools.some((tool) => tool.name === "goal_contract"), "goal_contract tool missing");
@@ -332,9 +370,11 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   );
   const contextTool = fake.tools.find((tool) => tool.name === "context_status");
   assert.ok(contextTool, "context_status tool missing");
+  assert.match(contextTool.description, /compact context is already injected/);
+  assert.match(contextTool.description, /only when more detail/);
   const contextOutput = (await contextTool.execute({ agent: "manu" })).output;
   assert.equal(contextOutput.allowedRoot, root);
-  assert.match(contextOutput.uiLine, /Context: SSOT OK \(manu\) \| Syllabus OK \(halim\)/);
+  assert.match(contextOutput.uiLine, /Agent: manu \| Context: SSOT OK \(steward manu\) \| Syllabus OK \(steward halim\)/);
   assert.ok(contextOutput.packBytes > 0, "context pack must not be empty");
   const onboardingTool = fake.tools.find((tool) => tool.name === "project_onboarding");
   assert.ok(onboardingTool, "project_onboarding tool missing");
@@ -689,7 +729,7 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   const report = JSON.parse(fs.readFileSync(path.join(root, ".zombiecoder", ".state", "setup-report.json"), "utf8"));
   const toolStep = report.steps.find((step: any) => step.step === "register-tools");
   assert.equal(toolStep.ok, true);
-  assert.equal(toolStep.detail, "21 registered");
+  assert.equal(toolStep.detail, "22 registered");
   assert.ok(fs.existsSync(path.join(root, ".zombiecoder", ".state", "audit.jsonl")));
 
   await cleanup();
@@ -713,7 +753,7 @@ test("context hook resolves a session's own project root and scaffolds it", asyn
   );
 
   const fake: Fake = makeContext(setupRoot);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   await new Promise((resolve) => setTimeout(resolve, 60));
   const secondRoot = tempProject();
   fs.mkdirSync(path.join(secondRoot, "src"), { recursive: true });
@@ -796,7 +836,7 @@ test("agentModes config switches a valid mode and rejects unknown ones", async (
     }),
   );
   const fake: Fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   await new Promise((resolve) => setTimeout(resolve, 30));
   try {
     const manu = fs.readFileSync(path.join(root, ".opencode", "agents", "manu.md"), "utf8");
@@ -824,7 +864,7 @@ test("agentModes config switches a valid mode and rejects unknown ones", async (
 test("three consecutive tool errors stop the same agent without switching", async () => {
   const root = tempProject();
   const fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   const after = fake.toolHooks["execute.after"];
   assert.equal(typeof after, "function", "tool failure hook was not registered");
 
@@ -872,7 +912,7 @@ test("three consecutive tool errors stop the same agent without switching", asyn
 test("a goal_contract FAIL feeds the same-agent breaker without switching", async () => {
   const root = tempProject();
   const fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   const after = fake.toolHooks["execute.after"];
   assert.equal(typeof after, "function", "tool failure hook was not registered");
 
@@ -929,9 +969,12 @@ test("a goal_contract FAIL feeds the same-agent breaker without switching", asyn
 test("a write without an open goal contract is blocked and audited", async () => {
   const root = tempProject();
   const fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   const before = fake.toolHooks["execute.before"];
   assert.equal(typeof before, "function", "tool before hook was not registered");
+  await seedToolRoute(fake, "ses_nocontract", "manu", "Change src/a.ts", false, [], "work");
+  await seedToolRoute(fake, "ses_readonly", "manu", "check src/a.ts");
+  await seedToolRoute(fake, "ses_contract", "manu", "Change src/a.ts", true);
 
   await assert.rejects(
     before({
@@ -982,9 +1025,10 @@ test("a write without an open goal contract is blocked and audited", async () =>
 test("a multi-file patch cannot hand-write the syllabus ledger", async () => {
   const root = tempProject();
   const fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   const before = fake.toolHooks["execute.before"];
   assert.equal(typeof before, "function", "tool before hook was not registered");
+  await seedToolRoute(fake, "ses_patch", "manu", "Change src/a.ts", true);
   fs.appendFileSync(
     path.join(root, ".zombiecoder", "syllabus.md"),
     "\n### Goal Contract gc-testopen\n\n- status: open\n- session: ses_patch\n- goal: test\n",
@@ -1029,6 +1073,113 @@ test("a multi-file patch cannot hand-write the syllabus ledger", async () => {
   await cleanup();
 });
 
+test("agent tool policies are enforced against the active route", async () => {
+  const root = tempProject();
+  const fake = makeContext(root);
+  const cleanup = await pluginModule.setup(fake.ctx);
+  const before = fake.toolHooks["execute.before"];
+  assert.equal(typeof before, "function", "tool before hook was not registered");
+  await seedToolRoute(fake, "ses_nila_tools", "nila", "Review the existing UI design");
+  await seedToolRoute(fake, "ses_manu_tools", "manu", "Review the existing UI design");
+
+  await before({
+    sessionID: "ses_nila_tools",
+    agent: "nila",
+    tool: "zombiecoder_design_sketch",
+    input: {},
+  });
+  await before({
+    sessionID: "ses_nila_tools",
+    agent: "nila",
+    tool: "design_review",
+    input: {},
+  });
+  await assert.rejects(
+    before({ sessionID: "ses_manu_tools", agent: "manu", tool: "design_sketch", input: {} }),
+    /not allowed for manu during investigate/,
+  );
+  await assert.rejects(
+    before({ sessionID: "ses_nila_tools", agent: "nila", tool: "edit", input: { filePath: "src/ui.tsx" } }),
+    /not allowed for nila during investigate/,
+  );
+
+  const audit = fs.readFileSync(path.join(root, ".zombiecoder", ".state", "audit.jsonl"), "utf8");
+  assert.match(audit, /"kind":"agent\.tool_policy\.block"/);
+  await cleanup();
+});
+
+test("agent writes stay inside the working directory and config needs explicit focus", async () => {
+  const root = tempProject();
+  const fake = makeContext(root);
+  const cleanup = await pluginModule.setup(fake.ctx);
+  const before = fake.toolHooks["execute.before"];
+  assert.equal(typeof before, "function", "tool before hook was not registered");
+
+  await seedToolRoute(fake, "ses_config_block", "manu", "Update the page layout", true);
+  await assert.rejects(
+    before({ sessionID: "ses_config_block", agent: "manu", tool: "edit", input: { filePath: "opencode.json" } }),
+    /requires an explicit user request/,
+  );
+
+  await seedToolRoute(fake, "ses_config_allow", "manu", "Update opencode.json for this plugin", true, ["opencode.json"]);
+  await before({
+    sessionID: "ses_config_allow",
+    agent: "manu",
+    tool: "edit",
+    input: { filePath: "opencode.json" },
+  });
+
+  await seedToolRoute(fake, "ses_outside", "manu", "Update src/app.ts", true, ["src/app.ts"]);
+  await seedToolRoute(fake, "ses_execute", "manu", "Run a write command");
+  await before({
+    sessionID: "ses_execute",
+    agent: "manu",
+    tool: "execute",
+    input: { command: "pwd" },
+  });
+  await assert.rejects(
+    before({
+      sessionID: "ses_execute",
+      agent: "manu",
+      tool: "execute",
+      input: { command: "echo output > src/execute-output.txt" },
+    }),
+    /goal_contract open is required before this write/,
+    "execute must use the same contract gate as shell writes",
+  );
+  const externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zombiecoder-external-"));
+  fs.mkdirSync(path.join(externalRoot, "src"));
+  const externalTarget = path.join(externalRoot, "src", "app.ts");
+  fake.permissionState.mode = "reject";
+  await assert.rejects(
+    before({
+      sessionID: "ses_outside",
+      agent: "manu",
+      tool: "edit",
+      input: { filePath: externalTarget },
+    }),
+    /external directory permission was rejected/,
+  );
+  const externalPermission = fake.permissions.find((entry) => entry.action === "external_directory");
+  assert.ok(externalPermission, "an external write must use OpenCode's native permission door");
+  assert.deepEqual(externalPermission.resources, [path.join(externalRoot, "src")]);
+  assert.deepEqual(externalPermission.save, [path.join(externalRoot, "src")]);
+
+  fake.permissionState.mode = "allow";
+  await before({
+    sessionID: "ses_outside",
+    agent: "manu",
+    tool: "edit",
+    input: { filePath: externalTarget },
+  });
+
+  const audit = fs.readFileSync(path.join(root, ".zombiecoder", ".state", "audit.jsonl"), "utf8");
+  assert.match(audit, /"kind":"agent\.config_write\.block"/);
+  assert.match(audit, /"kind":"agent\.write_scope\.block"/);
+  fs.rmSync(externalRoot, { recursive: true, force: true });
+  await cleanup();
+});
+
 test("a primary agent cannot be launched through the subagent tool", async () => {
   const root = tempProject();
   fs.mkdirSync(path.join(root, ".zombiecoder"), { recursive: true });
@@ -1037,7 +1188,7 @@ test("a primary agent cannot be launched through the subagent tool", async () =>
     JSON.stringify({ agentModes: { manu: "primary" } }),
   );
   const fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   const before = fake.toolHooks["execute.before"];
   assert.equal(typeof before, "function", "tool before hook was not registered");
 
@@ -1055,8 +1206,7 @@ test("a primary agent cannot be launched through the subagent tool", async () =>
   assert.match(audit, /"kind":"agent\.mode\.block"/);
   assert.match(audit, /"target":"manu"/);
 
-  // A specialist cannot launch anyone, and a delegator cannot name an agent
-  // outside the roster.
+  // Reviewer launches are restricted to each caller's explicit target list.
   await assert.rejects(
     before({
       sessionID: "ses_mode",
@@ -1064,7 +1214,29 @@ test("a primary agent cannot be launched through the subagent tool", async () =>
       tool: "subagent",
       input: { agent: "nila" },
     }),
-    /only zombiecoder \(chair\) and manu \(architect\)/,
+    /may not launch "nila"/,
+  );
+  await before({
+    sessionID: "ses_mode",
+    agent: "nila",
+    tool: "subagent",
+    input: { agent: "majnu" },
+  });
+  await before({
+    sessionID: "ses_mode",
+    agent: "nila",
+    tool: "subagent",
+    input: { agent: "brishti" },
+  });
+  await before({
+    sessionID: "ses_mode",
+    agent: "jarin",
+    tool: "subagent",
+    input: { agent: "majnu" },
+  });
+  await assert.rejects(
+    before({ sessionID: "ses_mode", agent: "majnu", tool: "subagent", input: { agent: "nila" } }),
+    /no delegation targets/,
   );
   await assert.rejects(
     before({
@@ -1090,13 +1262,17 @@ test("a primary agent cannot be launched through the subagent tool", async () =>
     tool: "subagent",
     input: { agent: "nila" },
   });
+  await assert.rejects(
+    before({ sessionID: "ses_mode", agent: "manu", tool: "subagent", input: { agent: "manu" } }),
+    /cannot launch itself/,
+  );
   await cleanup();
 });
 
 test("append_syllabus refuses to mint or cancel a Goal Contract block", async () => {
   const root = tempProject();
   const fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   await new Promise((resolve) => setTimeout(resolve, 30));
   const tool = fake.tools.find((entry) => entry.name === "append_syllabus");
   assert.ok(tool, "append_syllabus tool missing");
@@ -1156,7 +1332,7 @@ test("session.idle archives the complete OpenCode session context", async () => 
     },
   };
 
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   assert.ok(fs.existsSync(path.join(root, ".zombiecoder", "SSOT.md")));
   assert.ok(fs.existsSync(path.join(root, ".zombiecoder", "syllabus.md")));
   assert.ok(fs.existsSync(path.join(root, ".zombiecoder", "memory", "index.json")));
@@ -1183,7 +1359,7 @@ test("session.idle archives the complete OpenCode session context", async () => 
 test("context hook archives overflow without waiting for session.idle", async () => {
   const root = tempProject();
   const fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   const hook = fake.sessionHooks["context"];
   assert.equal(typeof hook, "function", "context hook was not registered");
 
@@ -1206,7 +1382,7 @@ test("context hook archives overflow without waiting for session.idle", async ()
   // event.system, not just sit in the audit log.
   assert.ok(firstEvent.system.length > 0, "context hook did not inject a system part");
   const injected = firstEvent.system.map((part) => part.text).join("\n");
-  assert.match(injected, /Context: SSOT OK \(manu\)/);
+  assert.match(injected, /Context: SSOT OK \(steward manu\)/);
   assert.match(injected, /Pack \d+B/);
   assert.match(injected, /Decision rule:/);
   assert.match(injected, /Start every response with "ভাইয়া"/);
@@ -1215,10 +1391,24 @@ test("context hook archives overflow without waiting for session.idle", async ()
   assert.doesNotMatch(injected, /### Runner identity/);
   assert.doesNotMatch(injected, /big-pickle/);
   assert.match(injected, /Finish your own slice/);
-  assert.match(injected, /at most 4 in parallel/);
+  assert.match(injected, /Active agent retains task ownership/);
 
-  // Builtin OpenCode agents (explore/general/build/plan) have no roster entry.
-  // They must still receive the ZombieCoder identity, not a generic prompt.
+  const switchedEvent = {
+    agent: "nila",
+    sessionID: "ses_ctx",
+    model: { providerID: "opencode", modelID: "big-pickle" },
+    messages: first,
+    system: [] as Array<{ type: string; text: string }>,
+  };
+  await hook(switchedEvent);
+  const switchedText = switchedEvent.system.map((part) => part.text).join("\n");
+  assert.match(switchedText, /Active agent: Nila \(nila\)/);
+  const switchedRoute = (await fake.storage.get("agent/route/ses_ctx")) as any;
+  assert.equal(switchedRoute.agentID, "nila");
+  assert.equal(switchedRoute.phase, "investigate", "the same turn keeps its existing phase");
+  assert.equal(switchedRoute.steps.at(-1)?.kind, "agent_handoff");
+
+  // Generic builtins receive the shared ZombieCoder identity and rules.
   const builtinEvent = {
     agent: "explore",
     sessionID: "ses_builtin",
@@ -1230,10 +1420,24 @@ test("context hook archives overflow without waiting for session.idle", async ()
   const builtinText = builtinEvent.system.map((part) => part.text).join("\n");
   assert.match(builtinText, /ZombieCoder identity \(builtin runner: explore\)/);
   assert.match(builtinText, /ZombieCoder Shared Rules/);
-  assert.match(builtinText, /Execution Doctrine/);
+  assert.match(builtinText, /Short Execution Loop/);
   assert.match(builtinText, /Start every response with "ভাইয়া"/);
   assert.doesNotMatch(builtinText, /unknown agent/);
   assert.doesNotMatch(builtinText, /### Runner identity/);
+
+  const buildEvent = {
+    agent: "build",
+    sessionID: "ses_build",
+    model: { providerID: "opencode", modelID: "big-pickle" },
+    messages: [message(0)],
+    system: [] as Array<{ type: string; text: string }>,
+  };
+  await hook(buildEvent);
+  const buildText = buildEvent.system.map((part) => part.text).join("\n");
+  assert.match(buildText, /ZombieCoder identity \(builtin runner: build\)/);
+  assert.match(buildText, /`agent=build`; `mode=primary`/);
+  assert.match(buildText, /`instruction_profile=code`/);
+  assert.match(buildText, /Implement and verify requested changes/);
 
   // A model with no 0/0 or local evidence must not be sold as free.
   const remoteEvent = {
@@ -1249,17 +1453,31 @@ test("context hook archives overflow without waiting for session.idle", async ()
   assert.doesNotMatch(remoteText, /### Runner identity/);
 
   // A system prompt that already carries the marker must not be doubled.
+  const { mergeAgentPersona } = await import("../src/roster.ts");
   const withPersona = {
     agent: "manu",
     sessionID: "ses_persona",
     model: { providerID: "opencode", modelID: "big-pickle" },
     messages: [message(2)],
-    system: [{ type: "text", text: "## ZombieCoder Shared Rules (bound by plugin — do not remove)\n" }],
+    system: [{ type: "text", text: mergeAgentPersona("manu").text }],
   };
   await hook(withPersona);
   // The hook still appends the context pack; it must not append the persona.
   const pushed = withPersona.system.slice(1).map((part) => part.text).join("\n");
   assert.doesNotMatch(pushed, /(^|\n)# Manu — The Builder/, "an existing persona must not be pushed again");
+
+  const withStalePersona = {
+    agent: "nila",
+    sessionID: "ses_stale_persona",
+    model: { providerID: "opencode", modelID: "big-pickle" },
+    messages: [message(2)],
+    system: [{ type: "text", text: "## ZombieCoder Shared Rules (bound by plugin — do not remove)\n" }],
+  };
+  await hook(withStalePersona);
+  const refreshed = withStalePersona.system.slice(1).map((part) => part.text).join("\n");
+  assert.match(refreshed, /Active agent: Nila \(nila\)/);
+  assert.match(refreshed, /Tool access \(enforced by plugin\)/);
+  assert.match(refreshed, /design_sketch/);
 
   // The audit must record which merge branch ran, not just "context".
   const auditRows = fs
@@ -1269,7 +1487,9 @@ test("context hook archives overflow without waiting for session.idle", async ()
     .map((line) => JSON.parse(line));
   const rosterAudit = auditRows.find((row) => row.sessionID === "ses_ctx" && row.kind === "context");
   const builtinAudit = auditRows.find((row) => row.sessionID === "ses_builtin" && row.kind === "context");
+  const buildAudit = auditRows.find((row) => row.sessionID === "ses_build" && row.kind === "context");
   const personaAudit = auditRows.find((row) => row.sessionID === "ses_persona" && row.kind === "context");
+  const stalePersonaAudit = auditRows.find((row) => row.sessionID === "ses_stale_persona" && row.kind === "context");
   assert.equal(rosterAudit.persona, "roster", "roster agents keep their own markdown");
   // An empty system prompt means the agent file went missing: repair it at
   // runtime instead of letting the agent run without its persona.
@@ -1278,8 +1498,13 @@ test("context hook archives overflow without waiting for session.idle", async ()
   assert.equal(rosterAudit.personaSource, "runtime");
   assert.equal(personaAudit.personaBytes, 0, "an existing persona must not be pushed twice");
   assert.equal(personaAudit.personaSource, "system");
+  assert.ok(stalePersonaAudit.personaBytes > 0, "a stale marker must not suppress the current agent profile");
+  assert.equal(stalePersonaAudit.personaSource, "runtime");
   assert.equal(builtinAudit.persona, "shared", "builtin runner uses the merged persona");
-  assert.ok(builtinAudit.personaBytes > 5000, "the merged persona is the full block");
+  assert.ok(builtinAudit.personaBytes > 0, "the merged persona must not be empty");
+  assert.ok(builtinAudit.personaBytes < 5000, "shared persona should not carry unrelated domain instructions");
+  assert.equal(buildAudit.persona, "shared", "build builtin uses the merged persona");
+  assert.ok(buildAudit.personaBytes > 0, "build persona metadata must be injected");
   assert.equal(rosterAudit.runnerKind, "free");
   assert.equal(rosterAudit.runnerRef, "opencode/big-pickle");
   assert.equal(builtinAudit.runnerKind, "free");
@@ -1331,7 +1556,7 @@ test("global install writes agents/config at the global root and leaves the work
   process.env.ZOMBIECODER_INSTALL_PARENT = globalDir;
   try {
     const fake = makeContext(root);
-    const cleanup = await setup(fake.ctx);
+    const cleanup = await pluginModule.setup(fake.ctx);
     await new Promise((resolve) => setTimeout(resolve, 60));
 
     assert.ok(!fs.existsSync(path.join(root, ".opencode")), "global install must not create .opencode in the working directory");
@@ -1370,7 +1595,7 @@ test("global install writes agents/config at the global root and leaves the work
   }
 });
 
-test("global install keeps global agent models when a project plan falls back to free models", async () => {
+test("global install synchronizes all agents to the selected free fallback model", async () => {
   const root = tempProject();
   const globalDir = tempProject();
   const roster = await import("../src/roster.ts");
@@ -1383,8 +1608,8 @@ test("global install keeps global agent models when a project plan falls back to
   };
   fs.writeFileSync(path.join(globalDir, "opencode.json"), JSON.stringify(globalConfig, null, 2));
 
-  // This project explicitly disables the custom provider, so its own plan is
-  // free-fallback. That must not leak into the installer-owned global config.
+  // With no configured custom provider, all agents should share the OpenCode
+  // free/default model, even when an older global config contains per-agent pins.
   fs.mkdirSync(path.join(root, ".zombiecoder"), { recursive: true });
   fs.writeFileSync(
     path.join(root, ".zombiecoder", "config.json"),
@@ -1404,19 +1629,19 @@ test("global install keeps global agent models when a project plan falls back to
   process.env.ZOMBIECODER_INSTALL_PARENT = globalDir;
   try {
     const fake = makeContext(root);
-    const cleanup = await setup(fake.ctx);
+    const cleanup = await pluginModule.setup(fake.ctx);
     await new Promise((resolve) => setTimeout(resolve, 60));
 
     const after = JSON.parse(fs.readFileSync(path.join(globalDir, "opencode.json"), "utf8"));
-    assert.equal(after.agents.zombiecoder.model, custom, "project free plan overwrote the global agent model");
-    assert.equal(after.agents.manu.model, custom, "second global agent model overwritten");
+    assert.equal(after.agents.zombiecoder.model, "opencode/big-pickle");
+    assert.equal(after.agents.manu.model, "opencode/big-pickle", "agents must share one selected transport model");
     const markdown = fs.readFileSync(path.join(globalDir, "agents", "zombiecoder.md"), "utf8");
-    assert.match(markdown, /^model: missionbarisal\/llama3-groq-tool-use:8b$/m);
+    assert.match(markdown, /^model: opencode\/big-pickle$/m);
 
     const report = JSON.parse(fs.readFileSync(path.join(root, ".zombiecoder", ".state", "setup-report.json"), "utf8"));
     assert.equal(report.outputs.modelStrategy, "free-fallback");
-    assert.equal(report.outputs.agentAssignmentSource, "global opencode.json (installer-owned)");
-    assert.equal(report.outputs.bound.includes("global model"), true);
+    assert.equal(report.outputs.agentAssignmentSource, "runtime model plan (free-fallback)");
+    assert.equal(report.outputs.bound.includes("model"), true);
 
     await cleanup();
   } finally {
@@ -1459,7 +1684,7 @@ test("global install falls back to free models when the configured provider is d
   process.env.ZOMBIECODER_INSTALL_PARENT = globalDir;
   try {
     const fake = makeContext(root);
-    const cleanup = await setup(fake.ctx);
+    const cleanup = await pluginModule.setup(fake.ctx);
     await new Promise((resolve) => setTimeout(resolve, 60));
 
     const after = JSON.parse(fs.readFileSync(path.join(globalDir, "opencode.json"), "utf8"));
@@ -1535,8 +1760,8 @@ test("providerConfiguredOnDisk inherits a provider from an ancestor opencode.jso
     JSON.stringify({ providers: { "zc-ancestor-A": { models: {} } } }),
   );
 
-  assert.equal(providerConfiguredOnDisk(child, "zc-ancestor-A"), true, "ancestor provider not detected");
-  assert.equal(providerConfiguredOnDisk(child, "zc-ancestor-B"), false, "unknown provider falsely detected");
+  assert.equal(pluginModule.providerConfiguredOnDisk(child, "zc-ancestor-A"), true, "ancestor provider not detected");
+  assert.equal(pluginModule.providerConfiguredOnDisk(child, "zc-ancestor-B"), false, "unknown provider falsely detected");
 
   fs.rmSync(ancestor, { recursive: true, force: true });
 });
@@ -1550,7 +1775,7 @@ test("detectInstallLayout treats a .opencode root with its own config as self-co
   fs.writeFileSync(path.join(configDir, "zombiecoder", "config.json"), "{}");
   process.env.ZOMBIECODER_INSTALL_PARENT = configDir;
   try {
-    const layout = detectInstallLayout(root);
+    const layout = pluginModule.detectInstallLayout(root);
     assert.equal(layout.dir, configDir);
     assert.equal(layout.global, true);
     assert.equal(layout.configFile, path.join(configDir, "opencode.json"));
@@ -1574,7 +1799,7 @@ test("origin handshake persistence changes only the URL and keeps the key + mode
     { mode: 0o600 },
   );
 
-  const result = persistProviderUrl("https://new.example/v1", [file]);
+  const result = pluginModule.persistProviderUrl("https://new.example/v1", [file]);
   assert.equal(result.updated, true);
   const after = JSON.parse(fs.readFileSync(file, "utf8"));
   assert.equal(after.customProviderUrl, "https://new.example/v1");
@@ -1605,7 +1830,7 @@ test("syncProviderBaseUrl touches only settings.baseURL", () => {
     { mode: 0o600 },
   );
 
-  const result = syncProviderBaseUrl(file, "missionbarisal", "https://new.example/v1");
+  const result = pluginModule.syncProviderBaseUrl(file, "missionbarisal", "https://new.example/v1");
   assert.equal(result.updated, true);
   const after = JSON.parse(fs.readFileSync(file, "utf8"));
   assert.equal(after.providers.missionbarisal.settings.baseURL, "https://new.example/v1");
@@ -1619,9 +1844,11 @@ test("syncProviderBaseUrl touches only settings.baseURL", () => {
 test("a gate-blocked answer retries the same agent and then opens the breaker", async () => {
   const root = tempProject();
   const fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   const hook = fake.sessionHooks["http.response"];
+  const contextHook = fake.sessionHooks["context"];
   assert.equal(typeof hook, "function", "http.response hook was not registered");
+  assert.equal(typeof contextHook, "function", "context hook was not registered");
 
   const sse = (chunks: string[]) => chunks.join("\n") + "\n";
   const delta = (value: unknown) => `data: ${JSON.stringify(value)}`;
@@ -1656,6 +1883,12 @@ test("a gate-blocked answer retries the same agent and then opens the breaker", 
   assert.equal(fake.prompts.length, 0);
   assert.equal(fake.synthetics.length, 0);
 
+  await contextHook({
+    agent: "manu",
+    sessionID: "ses_gate",
+    messages: [{ role: "user", id: "msg_intent", content: [{ type: "text", text: "Explain the login timeout in src/auth.ts." }] }],
+    system: [],
+  });
   const first = event("manu", unproven);
   await hook(first);
   assert.match(await first.response.text(), /UNVERIFIED/, "the blocked answer must stay truthful");
@@ -1666,6 +1899,7 @@ test("a gate-blocked answer retries the same agent and then opens the breaker", 
   assert.equal(fake.prompts[0].delivery, "queue");
   assert.match(fake.prompts[0].text, /circuit breaker/);
   assert.match(fake.prompts[0].text, /তুমি এখনো `manu`/);
+  assert.match(fake.prompts[0].text, /Original user request:[\s\S]*Explain the login timeout in src\/auth\.ts/);
   assert.match(fake.synthetics[0].text, /Circuit breaker/);
   assert.match(fake.synthetics[0].text, /1\/3/);
 
@@ -1685,6 +1919,7 @@ test("a gate-blocked answer retries the same agent and then opens the breaker", 
   const last = fake.synthetics.at(-1)!;
   assert.match(last.text, /কাজটি সমাধান হয়নি/);
   assert.match(last.text, /`manu` 3 বার/);
+  assert.match(last.text, /মূল অনুরোধ: Explain the login timeout in src\/auth\.ts/);
   assert.match(last.text, /প্রমাণ দিন/);
 
   const breaker = fake.storage.get("agent/breaker/ses_gate") as any;
@@ -1731,7 +1966,7 @@ test("pins on: the breaker never moves the model or the agent", async () => {
       },
     ],
   });
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   const hook = fake.sessionHooks["http.response"];
   assert.equal(typeof hook, "function", "http.response hook was not registered");
 
@@ -1759,7 +1994,7 @@ test("pins on: the breaker never moves the model or the agent", async () => {
   assert.deepEqual(fake.agentSwitches, [], "the breaker never hands the task to another agent");
   const config = JSON.parse(fs.readFileSync(path.join(root, "opencode.json"), "utf8"));
   assert.equal(config.agents.manu.model, "opencode/big-pickle", "pins still configure the agent list");
-  assert.equal(config.agents.jarin.model, "opencode/second-free", "the pinned mapping must resolve deterministically");
+  assert.equal(config.agents.jarin.model, "opencode/big-pickle", "all agents share one selected model");
   assert.equal(fake.modelSwitches.length, 0, "pins on: the runtime model must not follow a breaker");
   assert.equal(fake.prompts.length, 1, "the same agent gets the retry prompt");
   assert.match(fake.prompts[0].text, /তুমি এখনো `manu`/);
@@ -1772,7 +2007,7 @@ test("pins on: the breaker never moves the model or the agent", async () => {
 test("a passing final answer resets the breaker for the next question", async () => {
   const root = tempProject();
   const fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   const hook = fake.sessionHooks["http.response"];
 
   const chunk = (value: unknown) => `data: ${JSON.stringify(value)}`;
@@ -1815,7 +2050,7 @@ test("a passing final answer resets the breaker for the next question", async ()
 test("a failed agent switch still keeps the task moving on the current agent", async () => {
   const root = tempProject();
   const fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   const hook = fake.sessionHooks["http.response"];
   fake.switchState.fail = true;
 
@@ -1847,7 +2082,7 @@ test("a failed agent switch still keeps the task moving on the current agent", a
 test("route gate blocks a substantive answer until goal_contract PASS", async () => {
   const root = tempProject();
   const fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   try {
     const contextHook = fake.sessionHooks["context"];
     const responseHook = fake.sessionHooks["http.response"];
@@ -1937,7 +2172,7 @@ test("route gate blocks a substantive answer until goal_contract PASS", async ()
 test("goal_contract refuses a check that already passes and a second open", async () => {
   const root = tempProject();
   const fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   try {
     // Tool registration is a deferred transform (5ms); wait before reading it.
     await new Promise((resolve) => setTimeout(resolve, 30));
@@ -2015,7 +2250,7 @@ test("goal_contract refuses a check that already passes and a second open", asyn
 test("goal_contract close survives storage that rejects null", async () => {
   const root = tempProject();
   const fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   try {
     await new Promise((resolve) => setTimeout(resolve, 30));
     const goalTool = fake.tools.find((tool) => tool.name === "goal_contract");
@@ -2058,7 +2293,7 @@ test("all nine roster agents get their persona at runtime and it is audited", as
   const root = tempProject();
   fs.writeFileSync(path.join(root, "package.json"), '{"name":"persona-probe"}', "utf8");
   const fake = makeContext(root);
-  const cleanup = await setup(fake.ctx);
+  const cleanup = await pluginModule.setup(fake.ctx);
   try {
     await new Promise((resolve) => setTimeout(resolve, 60));
     for (const agent of ROSTER) {

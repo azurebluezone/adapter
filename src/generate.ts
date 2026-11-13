@@ -41,6 +41,7 @@ async function readRuntimeVersion(): Promise<{ version: string; source: string }
     const password = JSON.parse(fs.readFileSync(configPath, "utf8")).password;
     if (!password) return fallback;
     const base = DEFAULT_OPENCODE_API_URL;
+    if (!base) return fallback;
     const res = await fetch(base + "/api/info", {
       headers: { Authorization: "Basic " + Buffer.from("opencode:" + password).toString("base64") },
       signal: AbortSignal.timeout(5000),

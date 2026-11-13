@@ -43,7 +43,8 @@
     "node": ">=22.6.0"
   },
   "dependencies": {
-    "@opencode/plugin": "^2.0.32"
+    "@opencode/plugin": "^2.0.32",
+    "@opencode/sdk": "^2.2.6"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

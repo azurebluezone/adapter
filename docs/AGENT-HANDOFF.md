@@ -24,7 +24,12 @@
 | Context pack | SSOT excerpt + latest onboarding record + newest lesson + recent memory, bounded। syllabus-এ `onboarding:<hash>` থাকলে project kind, files/bytes, languages, docs/tests, logs বা `no .log files found`, gaps প্রতি turn-এ দেখা যায়—নতুন lesson সেটি ঢেকে দেয় না। |
 | VS Code ACP | `formulahendry.acp-client` extension; `acp.agents.OpenCode` = `{ command: "<opencode path>", args: ["acp"] }`; `acp.autoApprovePermissions` অবশ্যই `"ask"` (allowAll consent bypass করে)। ACP server private — saved session load করতে পারে, desktop app-এর live mirror নয়। |
 | টুল | model-এর জন্মগত অঙ্গ নয়; client/harness চালায় |
-| LSP | OpenCode V2.2.5-এ `lsp` config + server binary; installer ৭টি server auto-generate করে; `npm run lsp:probe` **7/7**; `npm run lsp:diagnostics` real diagnostic দেয়; desktop editor নেই, managed edit diagnostics `NOT_TESTED` |
+| Primary ও subagent | Roster-এর সব agent `mode: all`: UI-তে নির্বাচিত agent session-এর primary owner/reporter; parent যাকে সীমিত কাজ দেয় সে subagent। Installer usable `default_agent` ধরে রাখে, অকারণে `zombiecoder`-এ ফিরিয়ে দেয় না। |
+| Footprint ও investigation | SSOT, syllabus, focus ও session memory context-এ বাধ্যতামূলকভাবে যাচাই হয়। Footprint phase থেকেই `read/grep/glob` চলে। `project_investigation` বর্তমান intent, ফোকাস, prior Git state, ঘোষিত stack version, ইনস্টল করা compiler/runtime version, docs, tests, log errors ও tool failures এক format-এ map করে syllabus-এ একবার রাখে। Model training cutoff `UNVERIFIED`; অনুমান নয়। |
+| Change tracking | Recursive filesystem watcher source changes দ্রুত ধরে; periodic watchdog missed event reconcile করে। Audit-এ path ও add/modify/remove action থাকে, file contents নয়। |
+| Model/provider | `ZOMBIECODER_PROVIDER_URL` খালি থাকলে custom URL probe হয় না; OpenCode catalog-এর সক্রিয় cost-0 model থেকে assignment হয়। `ZOMBIECODER_BASELINE_MODEL` কেবল explicit last-resort override। কোনো নির্দিষ্ট `:8000`/`:8080` model endpoint default নয়। |
+| Goal format | `goal_contract` একই field set ব্যবহার করে: `goal`, `input`, `expected`, `check`, `pass`, `match`; compiler/check parser-এর জন্য field name স্থির রাখুন। |
+| LSP | OpenCode V2.2.5 হলো documented test baseline: `lsp` config + server binary, `npm run lsp:probe` **7/7**, এবং `npm run lsp:diagnostics` real diagnostic দিয়েছে। Generation-time runtime আলাদা করে `doc/identity.json`-এ থাকে; live probe না থাকলে `UNKNOWN`। Target install-এ probe পুনরায় চালাও; desktop editor নেই, managed edit diagnostics `NOT_TESTED` |
 | MCP | দুটি local stdio server: `image-brand` (6 tools: PD/CC0 ছবি + branding + exact-size fit + `web_decorate`), `public-api` (8 tools: Wikipedia feeds, weather, currency, country, QR)। Installer `mcp/` কপি করে `opencode.json`-এ register করে; structural যাচাই `node scripts/audit-install.mjs`, live যাচাই `OPENCODE_CONFIG="$HOME/.opencode/opencode.json" opencode mcp list` বা `/api/mcp`. **কোনো MCP server-এ `patch` tool নেই।** |
 | Patch / edit | Multi-file edit = OpenCode-এর native `patch` (`opencode.tool.patch`, UI-তে `apply_patch`; ইনপুট `{ patchText }`)। OpenCode 2.2.5-এ এটি model-dependent: `model.id`-তে `gpt-` থাকলে (`oss`/`gpt-4` নয়) `patch` থাকে, `edit`/`write` বাদ; অন্য model-এ `patch` বাদ, `edit`/`write` থাকে। MCP দিয়ে `patch` যোগ হয় না। এক `patchText`-এ Add/Update/Delete/Move multiple files; সব hunk আগে verify, তারপর file-by-file apply — fully atomic নয়, automatic backup/rollback নেই; fail করলে `Completed before failure: <file>` আসে। `*** Move to:`-এর সঙ্গে non-empty hunk লাগে। `zombiecoder.patch_preview` শুধু single-file exact-string dry-run + apply-এ backup। `.zombiecoder/syllabus.md` target করলে multi-file patch block হয়; `append_syllabus`/`goal_contract` ব্যবহার করুন। |
 | Safe edit | read → exact diff/`patchText` → apply → `git diff` → targeted test → full test। Apply-এর আগে `git status`, irreversible হলে backup। |
@@ -139,10 +144,11 @@ mutating tool/subagent call **fail-closed block** হয়। `title`, `summary
 ওই session-এর `context` row-তে `persona`, `personaBytes`, `personaEnforced`,
 `personaSource` (`system` | `runtime` | `none`) থাকে।
 
-**সমান্তরাল দল:** শুধু `zombiecoder` (chair) আর `manu` (architect) roster
-specialist launch করতে পারে — এক batch-এ সর্বোচ্চ ৪ জন, roster id ছাড়া কিছু নয়।
-Specialist-এর `subagent * deny` থাকে, তাই সে আর কাউকে ডাকতে পারে না; final
-দায়িত্ব launcher-এর। একটা কাজে বারবার fail হলে দায়িত্ব অন্য agent-এ সরানো যায় না।
+**সমান্তরাল দল:** UI-তে যে roster agent নির্বাচিত, সেই agent primary owner ও final
+reporter। সব roster agent `mode: all`, তাই অনুমোদিত matrix অনুযায়ী অন্য agent
+bounded subagent review করতে পারে। প্রতিটি কাজে Majnu বাধ্যতামূলক নয়; QA risk ও
+permission matrix উপযুক্ত হলেই review দিন। Nested swarm ও batch cap আগের মতোই
+plugin policy-তে enforce হয়।
 
 **Session memory:** transcript `<working-dir>/.zombiecoder/memory/<session>.jsonl`-এ
 append-only থাকে; RAM cache newest 10 turn দেখায়, বাকিটা archive থেকে পড়া যায়।
@@ -152,6 +158,10 @@ Context pack-এ memory line আর archive path থাকে, তাই পু�
 §2-তে top-level, directory map, language stats আর `File index | N / total
 (complete|truncated)` লেখা হয়। সীমা পেরোলে `truncated` স্পষ্ট থাকে, চুপচাপ কম
 দেখানো হয় না।
+
+**CSS/UI:** ছোট CSS বা layout change-এ focused selector পড়ে ছোট patch করুন। নতুন
+screen বা interaction flow না চাইলে `design_sketch`, redesign, token system বা
+পূর্ণ state matrix বাধ্যতামূলক নয়। `design_review` regex heuristic—browser proof নয়।
 
 ---
 
@@ -250,8 +260,8 @@ agent-এর প্রতিটি দাবিও স্পষ্ট।
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  7084ac4458472d4484b135c8ec67462290018619320addc4f8a4635606d571f9  ║
-║  files 140 · bytes 1337129 · base e603d96 · dirty                        ║
+║  root  bb165ff27df0bac06bd7842ac6a9e14551f42b8de5f4e320d9c88916dad6ed42  ║
+║  files 148 · bytes 1387221 · base beac29a · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -259,7 +269,7 @@ agent-এর প্রতিটি দাবিও স্পষ্ট।
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-06T22:54:47.722Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-13T17:53:50.571Z
 
 </div>
 <!-- INTEGRITY:END -->

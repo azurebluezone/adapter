@@ -13,7 +13,7 @@ test("buildDesignSketch writes sketch.md and design.json before any code exists"
   const root = tempProject();
   try {
     const sketch = buildDesignSketch(root, {
-      brief: "Clinic appointment flow",
+      brief: "Clinic appointment flow with booking form and submit action",
       brand: "Shohor Clinic",
       site: "hospital",
       screens: ["Home", "Departments", "Appointment"],
@@ -25,7 +25,7 @@ test("buildDesignSketch writes sketch.md and design.json before any code exists"
     assert.ok(sketch.tokens.some((token) => token.name === "color.accent" && token.value === "#0f766e"));
 
     const spec = JSON.parse(fs.readFileSync(sketch.spec, "utf8"));
-    assert.match(spec.id, /^clinic-appointment-flow-[a-f0-9]{6}$/);
+    assert.match(spec.id, /^clinic-appointment-flow-with-booking-for-[a-f0-9]{6}$/);
     assert.equal(spec.brand, "Shohor Clinic");
     assert.deepEqual(spec.states, ["loading", "empty", "error", "success"]);
     assert.ok(Array.isArray(spec.a11y) && spec.a11y.length >= 5);

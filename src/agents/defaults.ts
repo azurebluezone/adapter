@@ -18,6 +18,9 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "agent_modes",
   ],
   footprint: [
+    "read",
+    "grep",
+    "glob",
     "get_working_directory",
     "read_ssot",
     "read_syllabus",
@@ -39,13 +42,21 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "project_fingerprint",
     "evidence_gate",
     "verify_real",
+    "project_investigation",
     "syntax_check",
+    "goal_contract",
     "http_probe",
     "env_get",
     "service_probe",
     "patch_preview",
     "memory_archive",
     "skill_catalog",
+    // MCP servers mounted by OpenCode are exposed as `<server>_<tool>`.
+    // Read-only research tools may be used wherever facts are gathered.
+    "image-brand_*",
+    "public-api_*",
+    "project_onboarding",
+    "project_fingerprint",
   ],
   propose: [
     "read",
@@ -67,8 +78,14 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "syntax_check",
     "evidence_gate",
     "verify_real",
+    // close runs the recorded check and is the only edge out of work; without
+    // it the same turn can never reach verify/respond.
+    "goal_contract",
     "append_syllabus",
     "context_status",
+    // MCP research/branding tools, same namespace shape as the host.
+    "image-brand_*",
+    "public-api_*",
   ],
   verify: [
     "goal_contract",
@@ -77,6 +94,8 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "syntax_check",
     "shell",
     "read",
+    "image-brand_*",
+    "public-api_*",
   ],
   respond: ["context_status", "append_syllabus"],
 };

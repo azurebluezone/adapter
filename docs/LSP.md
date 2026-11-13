@@ -353,8 +353,8 @@ Endpoint Cloudflare-এর পিছনে:
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  7084ac4458472d4484b135c8ec67462290018619320addc4f8a4635606d571f9  ║
-║  files 140 · bytes 1337129 · base e603d96 · dirty                        ║
+║  root  bb165ff27df0bac06bd7842ac6a9e14551f42b8de5f4e320d9c88916dad6ed42  ║
+║  files 148 · bytes 1387221 · base beac29a · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -362,7 +362,7 @@ Endpoint Cloudflare-এর পিছনে:
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-06T22:54:47.722Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-13T17:53:50.571Z
 
 </div>
 <!-- INTEGRITY:END -->

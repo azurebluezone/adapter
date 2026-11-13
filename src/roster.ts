@@ -46,10 +46,10 @@ export type AgentDef = {
   skillFocus?: string[];
 };
 
-// Last-resort model. The plugin re-resolves it at runtime; set
-// ZOMBIECODER_BASELINE_MODEL (or config.baselineModel) to use another model.
+// Optional explicit last-resort model. By default each session inherits the
+// OpenCode-selected model; the runtime discovers cost-0 catalog models itself.
 export const BASELINE_MODEL =
-  process.env.ZOMBIECODER_BASELINE_MODEL?.trim() || "opencode/big-pickle";
+  process.env.ZOMBIECODER_BASELINE_MODEL?.trim() || "";
 
 // Agents that were renamed or removed. Kept in one list so the plugin, the
 // installer and the syllabus upgrader cannot disagree about what is stale.
@@ -68,16 +68,28 @@ export function isInternalAgent(agentID: string): boolean {
   return INTERNAL_AGENT_IDS.has(String(agentID ?? "").trim().toLowerCase());
 }
 
-/**
- * Only the chair and the architect may start roster specialists. A specialist
- * that can start more specialists turns one task into an unbounded tree.
- */
-export const DELEGATOR_IDS = ["zombiecoder", "manu"] as const;
-/** Hard cap for one parallel batch; the host starts them together. */
+const ALL_SPECIALIST_IDS = ["manu", "jarin", "brishti", "rashed", "halim", "majnu", "nila", "tuhin", "zombiecoder"] as const;
+const SPECIALIST_TARGETS: Readonly<Record<string, readonly string[]>> = {
+  zombiecoder: ALL_SPECIALIST_IDS,
+  manu: ALL_SPECIALIST_IDS,
+  jarin: ["majnu"],
+  brishti: ["majnu"],
+  rashed: ["majnu"],
+  halim: ["majnu"],
+  majnu: [],
+  nila: ["majnu", "brishti", "jarin"],
+  tuhin: ["majnu"],
+};
+
+/** Hard cap for one parallel reviewer or specialist batch. */
 export const MAX_PARALLEL_SPECIALISTS = 4;
 
 export function canDelegate(agentID: string): boolean {
-  return (DELEGATOR_IDS as readonly string[]).includes(String(agentID ?? "").trim());
+  return allowedSpecialistTargets(agentID).length > 0;
+}
+
+export function allowedSpecialistTargets(agentID: string): readonly string[] {
+  return SPECIALIST_TARGETS[String(agentID ?? "").trim()] ?? [];
 }
 
 export function isRosterAgent(agentID: string): boolean {
@@ -125,18 +137,27 @@ export function mergeAgentPersona(agentID: string): AgentPersona {
     "The builtin name describes the tool surface, not the identity. The shared",
     "rules, evidence contract and response contract below bind this session.",
     "",
+    ...(id === "build"
+      ? [
+          "### OpenCode Metadata",
+          "`agent=build`; `mode=primary`; `instruction_profile=code`.",
+          "Implement and verify requested changes; report evidence.",
+          "",
+        ]
+      : []),
     SHARED_PERSONA,
     "",
   ].join("\n");
   return { kind: "shared", text, bytes: Buffer.byteLength(text, "utf8") };
 }
 
-// Delegation is a capability, not a prompt preference. The chair and architect
-// may start up to MAX_PARALLEL_SPECIALISTS roster specialists; every specialist
-// keeps "subagent * deny" so a nested tree cannot form.
+// Delegation is a capability, not a prompt preference. The per-agent target
+// matrix limits work and review launches; Majnu cannot delegate further.
 export function agentPermissions(a: AgentDef): PermissionRule[] {
-  if (canDelegate(a.id)) return [{ action: "subagent", resource: "*", effect: "allow" }];
-  return [{ action: "subagent", resource: "*", effect: "deny" }];
+  const targets = allowedSpecialistTargets(a.id);
+  return targets.length
+    ? targets.map((target) => ({ action: "subagent", resource: target, effect: "allow" }))
+    : [{ action: "subagent", resource: "*", effect: "deny" }];
 }
 
 export function agentSystemPrompt(a: AgentDef): string {
@@ -167,7 +188,7 @@ function legacyAgentSystemPrompt(a: AgentDef): string {
     "",
     "**Decision Rule:** " + a.rule,
     "",
-    "**Focus:** your persona and this role. Finish your own slice; do not hand the whole task away. Only `zombiecoder` (chair) and `manu` (architect) may launch roster specialists — at most 4 in parallel — and the caller keeps final responsibility.",
+    "**Focus:** keep the selected agent as task owner/reporter. Delegate only a bounded review allowed by the permission matrix; integrate findings and remain responsible.",
     "",
     SHARED_RULES,
     "",
@@ -200,7 +221,8 @@ export function agentConfigEntry(
     description: a.description,
     mode: a.mode,
   };
-  if (pins) entry.model = model || a.model;
+  const selected = model || a.model;
+  if (pins && typeof selected === "string" && selected.includes("/") && !/\s/.test(selected)) entry.model = selected;
   entry.system = agentSystemPrompt(a);
   entry.permissions = agentPermissions(a);
   return entry;
@@ -252,7 +274,7 @@ export function agentMarkdown(a: AgentDef, model?: string, pins = true): string 
     "---",
     'description: "' + a.description + '"',
     "mode: " + a.mode,
-    ...(pins ? ["model: " + (model || a.model)] : []),
+    ...(pins && (model || a.model).includes("/") ? ["model: " + (model || a.model)] : []),
     "permissions:",
     rules,
     "---",

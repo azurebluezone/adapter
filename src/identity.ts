@@ -65,7 +65,7 @@ export function identityPayload(ctx: IdCtx) {
           email: "infi@zombiecoder.my.id",
           website: "https://zombiecoder.my.id/",
         },
-        license: "Proprietary - Local Freedom Protocol",
+        license: "Local Freedom, Non-Commercial",
       },
       generated_at: ctx.generatedAt,
       manifest: {

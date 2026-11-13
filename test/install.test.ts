@@ -38,14 +38,25 @@ function runInstaller(
   env: Record<string, string | null> = {},
 ): Promise<{ status: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const childEnv = { ...process.env };
+    const childEnv: Record<string, string | undefined> = {
+      ...process.env,
+      ZOMBIECODER_BASELINE_MODEL: BASELINE,
+    };
     for (const [key, value] of Object.entries(env)) {
       if (value === null) delete childEnv[key];
       else childEnv[key] = value;
     }
+    // These tests cover config generation, not the developer's OpenCode
+    // install. Without this flag a host binary that cannot report a version
+    // fails every install test at the runtime probe.
+    const isolatedArgs = args.some(
+      (arg) => arg === "--no-opencode" || arg.startsWith("--opencode"),
+    )
+      ? args
+      : [...args, "--opencode", "none"];
     const child = spawn(
       process.execPath,
-      ["--experimental-strip-types", INSTALLER, ...args],
+      ["--experimental-strip-types", INSTALLER, ...isolatedArgs],
       { cwd: ROOT, env: childEnv },
     );
     let stdout = "";
@@ -82,6 +93,42 @@ test("installer --help exits without touching the target", async () => {
     assert.equal(result.status, 0);
     assert.match(result.stdout, /Usage:/);
     assert.ok(!fs.existsSync(configDir), "--help created an install root");
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("installer reads the OpenCode version from a supplied binary", async () => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "zombiecoder-opencode-path-"));
+  const root = path.join(parent, "project");
+  const binDir = path.join(parent, "bin");
+  fs.mkdirSync(binDir, { recursive: true });
+  const fake = path.join(binDir, process.platform === "win32" ? "opencode.cmd" : "opencode");
+  fs.writeFileSync(
+    fake,
+    process.platform === "win32"
+      ? "@echo off\r\necho opencode v2.2.5\r\n"
+      : "#!/bin/sh\necho opencode v2.2.5\n",
+  );
+  if (process.platform !== "win32") fs.chmodSync(fake, 0o755);
+  try {
+    const result = await runInstaller([
+      "--dir",
+      root,
+      "--yes",
+      "--no-install",
+      "--no-lsp",
+      "--provider-url",
+      "none",
+      "--opencode-path",
+      fake,
+    ]);
+    assert.equal(result.status, 0, String(result.stderr || result.stdout || ""));
+    assert.match(
+      result.stdout,
+      /OK\s+ensure OpenCode runtime[\s\S]*using 2\.2\.5/,
+      `runtime step did not accept the supplied binary:\n${result.stdout}\n${result.stderr}`,
+    );
   } finally {
     fs.rmSync(parent, { recursive: true, force: true });
   }
@@ -363,18 +410,19 @@ test("installer uses free agent assignments when the project environment URL is 
   );
   fs.writeFileSync(
     path.join(root, "opencode.json"),
-    JSON.stringify({ agents: roster.renderAgentsConfig(roster.ROSTER, assignment) }, null, 2),
+    JSON.stringify({ default_agent: "manu", agents: roster.renderAgentsConfig(roster.ROSTER, assignment) }, null, 2),
   );
   const result = await runInstaller(
     ["--dir", root, "--yes", "--no-install"],
-    { EXTERNAL_MCP_EXTERNAL_OPENAI_COMPATIBLE_URL: null, ZOMBIECODER_PROVIDER_URL: null },
+    { EXTERNAL_MCP_EXTERNAL_OPENAI_COMPATIBLE_URL: null, ZOMBIECODER_PROVIDER_URL: null, ZOMBIECODER_BASELINE_MODEL: null },
   );
   try {
     assert.equal(result.status, 0, String(result.stderr || result.stdout || ""));
     const config = JSON.parse(fs.readFileSync(path.join(root, "opencode.json"), "utf8"));
     // Pins off (default): one root default, no per-agent model. The agent models
     // the fixture wrote are removed so they cannot override a /models choice.
-    assert.equal(config.model, BASELINE);
+    assert.equal(config.model, undefined, "without a provider/catalog ref the installer leaves the UI-selected model alone");
+    assert.equal(config.default_agent, "manu", "installer must preserve the UI owner's selected primary agent");
     for (const agent of roster.ROSTER) {
       assert.equal(config.agents[agent.id].model, undefined);
     }

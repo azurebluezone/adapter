@@ -67,6 +67,15 @@ export function memoryIndexFile(projectRoot: string): string {
   return path.join(memoryDir(projectRoot), "index.json");
 }
 
+/**
+ * Small, generated project/session index used to choose a task slice.  It is
+ * deliberately separate from the append-only transcript: this is a cache of
+ * verified routing facts, never a second conversation store.
+ */
+export function memoryCompactFile(projectRoot: string): string {
+  return path.join(memoryDir(projectRoot), "compact.json");
+}
+
 export function memoryArchiveFile(projectRoot: string, sessionID: string): string {
   return path.join(memoryDir(projectRoot), safe(sessionID) + ".jsonl");
 }

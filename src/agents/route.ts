@@ -45,7 +45,7 @@ const EDGES: Readonly<Record<TaskKind, Readonly<Record<RoutePhase, readonly Rout
   substantive: {
     intake: ["footprint"],
     footprint: ["investigate"],
-    investigate: ["propose"],
+    investigate: ["contract"],
     propose: ["contract"],
     contract: ["work"],
     work: ["verify", "contract"],
@@ -69,7 +69,7 @@ export function hashMessage(message: string): string {
 const TRIVIAL = /^(?:hi|hello|hey|thanks?|thank you|ok(?:ay)?|হাই|হ্যালো|ধন্যবাদ|ওকে|ঠিক আছে|হুম|হাঁ|হ্যাঁ)[\s!।.,?]*$/i;
 
 const WRITE_INTENT =
-  /\b(?:build|create|make|add|implement|fix|refactor|rewrite|write|delete|remove|update|change|install|deploy|migrate|generate|patch|edit|convert|rename|scaffold)\b|(?:বানাও|বানাতে|তৈরি|লিখে|লিখো|ঠিক\s*করে|ঠিক\s*করো|যোগ\s*কর|বদল|মুছে|ইনস্টল|চালু\s*কর|করে\s*দে|সংযোজন|পরিবর্তন)/i;
+  /\b(?:build|create|make|add|implement|fix|refactor|rewrite|write|delete|remove|update|change|install|deploy|migrate|generate|patch|edit|convert|rename|scaffold)\b|(?:বানাও|বানাতে|তৈরি|লিখে|লিখো|ঠিক\s*কর|ফিলাপ|যোগ\s*কর|বদল|মুছে|ইনস্টল|চালু\s*কর|করে\s*দে|সংযোজন|পরিবর্তন|টেস্ট\s*কর)/i;
 
 const READ_INTENT =
   /\b(?:check|inspect|audit|analy[sz]e|review|explain|find|search|read|show|trace|diagnose|verify|test|run|compare)\b|(?:চেক|দেখ|বিশ্লেষণ|পর্যালোচনা|খুঁজ|বুঝিয়ে|বলো|কী|কেন|কোথায়|কেমন|যাচাই|পরীক্ষা)/i;
@@ -190,14 +190,14 @@ export function noteContract(run: AgentRun, contract: ContractSnapshot, now?: Da
   };
 
   if (contract.status === "open") {
-    if (next.phase === "investigate") next = advance(next, "propose", now);
+    if (next.phase === "investigate") next = advance(next, "contract", now);
     if (next.phase === "propose") next = advance(next, "contract", now);
     if (next.phase === "contract") next = advance(next, "work", now);
     return next;
   }
 
   if (contract.status === "PASS") {
-    if (next.phase === "investigate") next = advance(next, "propose", now);
+    if (next.phase === "investigate") next = advance(next, "contract", now);
     if (next.phase === "propose") next = advance(next, "contract", now);
     if (next.phase === "contract") next = advance(next, "work", now);
     if (next.phase === "work") next = advance(next, "verify", now);
@@ -207,7 +207,7 @@ export function noteContract(run: AgentRun, contract: ContractSnapshot, now?: Da
 
   // FAIL / BLOCKED: the agent stays accountable and returns to work; a new
   // contract open is the only way back to a releasable answer.
-  if (next.phase === "investigate") next = advance(next, "propose", now);
+  if (next.phase === "investigate") next = advance(next, "contract", now);
   if (next.phase === "propose") next = advance(next, "contract", now);
   if (next.phase === "contract") next = advance(next, "work", now);
   if (next.phase === "verify" || next.phase === "respond") next = advance(next, "work", now);
@@ -222,9 +222,7 @@ export function noteOnboarding(run: AgentRun, ok: boolean, now?: Date): AgentRun
 export function noteAnswer(run: AgentRun, hasToolCalls: boolean, now?: Date): AgentRun {
   if (hasToolCalls) return run;
   if (run.taskKind === "trivial" && run.phase === "intake") return advance(run, "respond", now);
-  if (run.taskKind !== "trivial" && run.phase === "investigate") {
-    return advance(run, "propose", now);
-  }
+  if (run.taskKind === "readonly" && run.phase === "investigate") return advance(run, "propose", now);
   return run;
 }
 

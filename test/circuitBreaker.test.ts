@@ -59,7 +59,7 @@ test("breaker status and retry prompt carry the failure evidence", () => {
   const ctx = breakerContext(
     { protocol: "openai-sse", violations: ["src/ghost.ts"], matched: [] },
     "I fixed it in src/ghost.ts:42",
-    { model: "opencode/big-pickle" },
+    { model: "opencode/big-pickle", userIntent: "Fix the billing rounding behavior in src/billing.ts." },
   );
   const record = { ...failure("manu", reason), context: ctx };
   const decision = { action: "retry" as const, attempt: 1, limit: 3 };
@@ -68,6 +68,7 @@ test("breaker status and retry prompt carry the failure evidence", () => {
   assert.match(status, /\bmanu\b/);
   assert.match(status, /1\/3/);
   assert.match(status, /does not exist/);
+  assert.match(status, /মূল অনুরোধ: Fix the billing rounding behavior/);
   assert.match(status, /handoff হবে না/);
 
   const prompt = retryPrompt(record, "I fixed it in src/ghost.ts:42", decision);
@@ -77,6 +78,7 @@ test("breaker status and retry prompt carry the failure evidence", () => {
   assert.match(prompt, /path:line/);
   assert.match(prompt, /UNVERIFIED/);
   assert.match(prompt, /অন্য কোনো এজেন্টে সরাও না/);
+  assert.match(prompt, /Original user request:[\s\S]*Fix the billing rounding behavior/);
 });
 
 test("contract and documentation failures use the same-agent breaker", () => {

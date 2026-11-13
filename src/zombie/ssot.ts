@@ -8,6 +8,7 @@ import { docWithSignature, sha256, writeAtomic } from "./io.ts";
 import { ssotFile } from "./paths.ts";
 import { ROSTER, SHARED_EXPERTISE, SHARED_RULES } from "../roster.ts";
 import type { Fingerprint } from "./scan.ts";
+import { discoverTechnologyProfiles } from "./projectProfile.ts";
 
 function packageInfo(fp: Fingerprint) {
   const pkg = fp.manifests.package as any;
@@ -55,8 +56,24 @@ function withoutHeading(text: string): string {
 
 export function renderSsot(fp: Fingerprint): string {
   const pkg = packageInfo(fp);
+  const profiles = discoverTechnologyProfiles(fp.root);
   const lines: string[] = [];
   lines.push(`# SSOT — Single Source of Truth`);
+  lines.push("");
+
+  lines.push(`### Runtime templates and declared versions`);
+  lines.push("");
+  if (profiles.length === 0) {
+    lines.push(`_No supported root runtime manifest was detected. Runtime version is UNVERIFIED; do not infer it from file extensions._`);
+  } else {
+    lines.push(`| Runtime | Declared version | Evidence | Conventional project areas | Contract-run candidate checks |`);
+    lines.push(`| --- | --- | --- | --- | --- |`);
+    for (const profile of profiles) {
+      lines.push(`| ${profile.label} | \`${profile.version}\` | \`${profile.evidence}\` | ${profile.templates.map((item) => `\`${item}\``).join(", ")} | ${profile.checks.map((item) => `\`${item}\``).join(", ") || "_none_"} |`);
+    }
+    lines.push(``);
+    lines.push(`_The selected agent chooses the narrowest relevant check, records it in the goal contract, and runs that recorded command through the normal permission door._`);
+  }
   lines.push("");
   lines.push(`> Generated from the live filesystem. Hand edits are pointless — the next run overwrites them.`);
   lines.push("");

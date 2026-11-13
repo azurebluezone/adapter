@@ -1,0 +1,31 @@
+{
+  "system_identity": {
+    "name": "ZombieCoder",
+    "version": "0.1.0",
+    "version_source": "package.json",
+    "runtime": {
+      "version": "UNKNOWN",
+      "source": "runtime probe unavailable"
+    },
+    "tagline": "যেখানে কোড ও কথা বলে",
+    "branding": {
+      "owner": "Sahon Srabon",
+      "organization": "Developer Zone",
+      "address": "235 South Pirarbag, Amtala Bazar, Mirpur - 60 feet",
+      "location": "Dhaka, Bangladesh",
+      "contact": {
+        "phone": "+880 1323-626282",
+        "email": "infi@zombiecoder.my.id",
+        "website": "https://zombiecoder.my.id/"
+      },
+      "license": "Local Freedom, Non-Commercial"
+    },
+    "generated_at": "2026-11-09T16:23:22.053Z",
+    "manifest": {
+      "read_only": true,
+      "checksum_algorithm": "sha256",
+      "checksum_scope": "canonical JSON of this object, checksum field removed",
+      "checksum": "1a18a48faf4784ccbebc71f095c4c4ada77a5b219cd43da68c2360dfa9e11f85"
+    }
+  }
+}

@@ -62,6 +62,19 @@ test("identity version is the product version, never a runtime build", () => {
   assert.notEqual(oldRuntime.system_identity.runtime.version, newRuntime.system_identity.runtime.version);
 });
 
+test("identity license matches the repository license", () => {
+  const license = fs.readFileSync(path.join(ROOT, "LICENSE"), "utf8");
+  const payload = identityPayload({
+    generatedAt: "2026-10-25T00:00:00.000Z",
+    version: "0.1.0",
+    versionSource: "test",
+    runtime: { version: "UNKNOWN", source: "test" },
+  });
+
+  assert.match(license, /Local Freedom, Non-Commercial License/);
+  assert.equal(payload.system_identity.branding.license, "Local Freedom, Non-Commercial");
+});
+
 test("doc/identity.js is rebuilt from identity.json, not hand-written", async () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   const shipped = JSON.parse(fs.readFileSync(path.join(ROOT, "doc", "identity.json"), "utf8")).system_identity;

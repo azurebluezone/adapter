@@ -12,8 +12,10 @@ import { readText, sha256 } from "./io.ts";
 import { KEEP_RECENT, readIndex, type MemoryMessage } from "./memory.ts";
 import { readSyllabus } from "./syllabus.ts";
 import { memoryArchiveFile, memoryDir, memoryIndexFile, ssotFile, syllabusFile } from "./paths.ts";
-import { FOCUS_LIMITS, listProjectFiles, resolveFocus, type FocusPlan } from "./focus.ts";
+import { extractTerms, FOCUS_LIMITS, listProjectFiles, resolveFocus, type FocusPlan } from "./focus.ts";
 import { openContracts } from "./goalContract.ts";
+import { classifyIntent, type Intent } from "./intent.ts";
+import { discoverTechnologyProfiles } from "./projectProfile.ts";
 
 export const CONTEXT_LIMITS = {
   // Only the slices an agent needs for the current task. The full SSOT and
@@ -23,10 +25,11 @@ export const CONTEXT_LIMITS = {
   // The onboarding record is the project's identity, not the newest lesson.
   // Keep it visible even after later agent notes push it up the append-only file.
   onboarding: 650,
+  request: 1100,
   focus: 600,
-  memoryPerMessage: 180,
-  memoryTotal: 500,
-  total: 2800,
+  memoryPerMessage: 80,
+  memoryTotal: 1100,
+  total: 5200,
 } as const;
 
 // Which SSOT sections each role actually needs. A documentation agent does not
@@ -34,13 +37,13 @@ export const CONTEXT_LIMITS = {
 // structure tree. Unknown agents get the three cheap essentials.
 const SSOT_FOCUS: Record<string, string[]> = {
   manu: ["## 1. Project", "## 3. Structure"],
-  jarin: ["## 2. Detected technologies", "## 3. Structure"],
+  jarin: ["## 1. Project", "## 2. Detected technologies", "## 3. Structure"],
   brishti: ["## 1. Project", "## 2. Detected technologies"],
-  rashed: ["## 2. Detected technologies", "## 3. Structure"],
+  rashed: ["## 1. Project", "## 2. Detected technologies", "## 3. Structure"],
   halim: ["## 1. Project", "## 3. Structure"],
   majnu: ["## 1. Project", "## 2. Detected technologies"],
-  nila: ["## 3. Structure"],
-  tuhin: ["## 2. Detected technologies"],
+  nila: ["## 1. Project", "## 3. Structure"],
+  tuhin: ["## 1. Project", "## 2. Detected technologies"],
   zombiecoder: ["## 1. Project", "## 2. Detected technologies"],
 };
 const DEFAULT_SSOT_FOCUS = ["## 1. Project", "## 2. Detected technologies", "## 3. Structure"];
@@ -91,6 +94,8 @@ export type ContextPack = {
   syllabusExcerptBytes: number;
   /** Target files resolved from the user's message, when one was available. */
   focus: FocusPlan | null;
+  /** Deterministic routing hint; never replaces the user's literal request. */
+  intent: Intent;
   /** Goal contracts opened in this session whose result is not recorded yet. */
   openContractIDs: string[];
   memory: MemoryStatus;
@@ -251,7 +256,7 @@ function onboardingExcerpt(lesson: string): string {
   ].join("\n");
 }
 
-function syllabusExcerpt(text: string): string {
+function syllabusExcerpt(text: string, userMessage: string): string {
   // Lessons are the only syllabus content that changes per turn. The seed puts
   // its placeholder and signature above the first lesson, so slicing the raw
   // section used to send "_Nothing recorded yet_" to the model even when the
@@ -270,10 +275,25 @@ function syllabusExcerpt(text: string): string {
   const newestIndex = lessons.length - 1;
   const newest = lessons[newestIndex].trim();
   const onboardingIndex = lessons.findLastIndex((entry) => ONBOARDING_MARKER.test(entry));
+  const terms = extractTerms(userMessage).map((term) => term.toLowerCase());
+  const relevant = lessons
+    .map((entry, index) => ({
+      entry,
+      index,
+      score: terms.reduce((score, term) => score + Number(entry.toLowerCase().includes(term)), 0),
+    }))
+    .filter(({ index, score }) => index !== newestIndex && index !== onboardingIndex && score > 0)
+    .sort((a, b) => b.score - a.score || b.index - a.index)
+    .slice(0, 2)
+    .sort((a, b) => a.index - b.index);
   const header = `Newest of ${lessons.length} lessons (newest last). Full history: read_syllabus.`;
   const blocks: string[] = [];
   if (onboardingIndex >= 0) {
     blocks.push(clip(onboardingExcerpt(lessons[onboardingIndex]), CONTEXT_LIMITS.onboarding));
+  }
+  if (relevant.length > 0) {
+    const excerpts = relevant.map(({ entry }) => `### ${entry.trim()}`).join("\n\n");
+    blocks.push(clip(`Relevant prior lessons (matched current request):\n${excerpts}`, CONTEXT_LIMITS.syllabus));
   }
   if (onboardingIndex !== newestIndex) {
     blocks.push(clip(`${header}\n### ${newest}`, CONTEXT_LIMITS.syllabus));
@@ -287,7 +307,7 @@ function memorySummary(recent: MemoryMessage[]): string {
   if (recent.length === 0) return "No recent kept exchanges for this session.";
   const lines: string[] = [];
   let used = 0;
-  for (const message of recent.slice(-5)) {
+  for (const message of recent.slice(-KEEP_RECENT)) {
     const role = message.role ?? "message";
     const text = clip(message.text.replace(/\s+/g, " "), CONTEXT_LIMITS.memoryPerMessage);
     const line = `- ${role}: ${text}`;
@@ -333,7 +353,7 @@ export function buildContextPack(
     ? ssotExcerpt(ssotText ?? "", agentID)
     : `Missing: ${ssotPath}. Run the plugin setup before making claims.`;
   const syllabusBody = syllabus.exists
-    ? syllabusExcerpt(syllabusText ?? "")
+    ? syllabusExcerpt(syllabusText ?? "", userMessage)
     : `Missing: ${syllabusPath}. Run the plugin setup before making claims.`;
   const ssotExcerptBytes = ssot.exists ? Buffer.byteLength(ssotBody, "utf8") : 0;
   const syllabusExcerptBytes = syllabus.exists ? Buffer.byteLength(syllabusBody, "utf8") : 0;
@@ -356,14 +376,17 @@ export function buildContextPack(
   // Focus: turn the user's sentence into the smallest truthful file set. This is
   // what stops the "plan first, scan everything" loop the audit found.
   let focusPlan: FocusPlan | null = null;
+  let projectFiles: string[] = [];
   if (String(userMessage ?? "").trim().length > 0) {
     try {
-      const files = listProjectFiles(projectRoot);
-      if (files.length > 0) focusPlan = resolveFocus(files, userMessage);
+      projectFiles = listProjectFiles(projectRoot);
+      if (projectFiles.length > 0) focusPlan = resolveFocus(projectFiles, userMessage);
     } catch {
       focusPlan = null;
     }
   }
+  const intent = classifyIntent(userMessage, projectFiles);
+  const technologies = discoverTechnologyProfiles(projectRoot);
   const focusBody = focusPlan ? clip(focusPlan.text, CONTEXT_LIMITS.focus) : "";
 
   const lines = [
@@ -373,6 +396,9 @@ export function buildContextPack(
     `Allowed root: ${projectRoot}`,
     `Path policy: paths outside the allowed root are denied; a claim with no path/test evidence is UNVERIFIED.`,
     "",
+    ...(String(userMessage ?? "").trim()
+      ? ["### Current user request (source of truth)", clip(userMessage, CONTEXT_LIMITS.request), ""]
+      : []),
     ssot.exists
       ? `### SSOT excerpt (${ssotExcerptBytes}B from a ${ssot.bytes}B file, ${ssot.lines} lines)`
       : "### SSOT (missing)",
@@ -387,7 +413,20 @@ export function buildContextPack(
     ...gate,
     "",
     ...(focusBody ? [`### Focus files — from the user's message (${Buffer.byteLength(focusBody, "utf8")}B)`, focusBody, ""] : []),
-    `### Session memory (${memory.recent} in RAM, newest ${KEEP_RECENT} kept; ${memory.archives} archives) — owner: ${CONTEXT_OWNERS.memory.agent}`,
+    "### Intent routing (deterministic hint)",
+    `- kind: ${intent.kind}; reason: ${intent.reason}`,
+    `- terms: ${intent.terms.length ? intent.terms.map((term) => `\`${term}\``).join(", ") : "none"}`,
+    "- The literal current request above wins if this classification is wrong.",
+    "",
+    "### Technology map (manifest evidence; run focused checks only)",
+    ...(technologies.length
+      ? technologies.slice(0, 5).map((profile) =>
+          `- ${profile.label} ${profile.version} from ${profile.evidence}; checks: ${profile.checks.slice(0, 3).join(", ") || "none"}; official docs: ${profile.documentation[0] ?? "not mapped"}.`,
+        )
+      : ["- No supported stack manifest found; infer from focused files and state uncertainty."]),
+    "- Provider catalog does not expose model training-data cutoffs: UNVERIFIED; use current official docs for version-sensitive claims.",
+    "",
+    `### Session memory (${memory.recent} in RAM, newest ${KEEP_RECENT} kept; ${memory.archives} archives) — steward: ${CONTEXT_OWNERS.memory.agent}`,
     memorySummary(recent),
     ...(memory.recent > 0
       ? [
@@ -397,17 +436,17 @@ export function buildContextPack(
         ]
       : []),
     "",
-    "### Context ownership (visible in the UI)",
-    `- SSOT → ${CONTEXT_OWNERS.ssot.agent} (${CONTEXT_OWNERS.ssot.role})`,
-    `- Syllabus → ${CONTEXT_OWNERS.syllabus.agent} (${CONTEXT_OWNERS.syllabus.role})`,
-    `- Memory → ${CONTEXT_OWNERS.memory.agent} (${CONTEXT_OWNERS.memory.role})`,
-    `- Skills → ${CONTEXT_OWNERS.skills.agent} (${CONTEXT_OWNERS.skills.role})`,
-    `- Evidence gate → ${CONTEXT_OWNERS.gate.agent} (${CONTEXT_OWNERS.gate.role})`,
+    "### Context stewards (not task attribution)",
+    `- SSOT steward: ${CONTEXT_OWNERS.ssot.agent} (${CONTEXT_OWNERS.ssot.role})`,
+    `- Syllabus steward: ${CONTEXT_OWNERS.syllabus.agent} (${CONTEXT_OWNERS.syllabus.role})`,
+    `- Memory steward: ${CONTEXT_OWNERS.memory.agent} (${CONTEXT_OWNERS.memory.role})`,
+    `- Skills steward: ${CONTEXT_OWNERS.skills.agent} (${CONTEXT_OWNERS.skills.role})`,
+    `- Evidence steward: ${CONTEXT_OWNERS.gate.agent} (${CONTEXT_OWNERS.gate.role})`,
   ];
   const text = stripHomePath(clip(lines.join("\n"), CONTEXT_LIMITS.total));
-  const uiLine = `Context: SSOT ${ssot.exists ? "OK" : "MISSING"} (${CONTEXT_OWNERS.ssot.agent}) | Syllabus ${
+  const uiLine = `Agent: ${agentID} | Context: SSOT ${ssot.exists ? "OK" : "MISSING"} (steward ${CONTEXT_OWNERS.ssot.agent}) | Syllabus ${
     syllabus.exists ? "OK" : "MISSING"
-  } (${CONTEXT_OWNERS.syllabus.agent}) | Memory ${memory.recent} recent / ${memory.archives} archives (${
+  } (steward ${CONTEXT_OWNERS.syllabus.agent}) | Memory ${memory.recent} recent / ${memory.archives} archives (steward ${
     CONTEXT_OWNERS.memory.agent
   }) | Focus ${focusPlan ? `${focusPlan.primary.length}+${focusPlan.related.length} files` : "off"} | Contract ${
     openContractsForSession.length ? openContractsForSession[0].id : "none"
@@ -422,6 +461,7 @@ export function buildContextPack(
     ssotExcerptBytes,
     syllabusExcerptBytes,
     focus: focusPlan,
+    intent,
     openContractIDs: openContractsForSession.map((contract) => contract.id),
     memory,
     owners: CONTEXT_OWNERS,

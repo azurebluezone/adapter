@@ -37,6 +37,7 @@ import {
 import { isStandInPath } from "./responseGate.ts";
 import { syntaxCheck } from "./lsp.ts";
 import { ensureOnboarding } from "./onboarding.ts";
+import { buildProjectInvestigation } from "./investigation.ts";
 import { buildDesignSketch, reviewDesign } from "./design.ts";
 import {
   autoInstallSkills,
@@ -281,6 +282,14 @@ export async function registerRpc(rpc: RpcLike | undefined, deps: SurfaceDeps): 
           ssotExcerptBytes: pack.ssotExcerptBytes,
           syllabusExcerptBytes: pack.syllabusExcerptBytes,
           focus: pack.focus,
+          intent: {
+            kind: pack.intent.kind,
+            confidence: pack.intent.confidence,
+            reason: pack.intent.reason,
+            terms: pack.intent.terms,
+            primary: pack.intent.focus?.primary.map((item) => item.path) ?? [],
+            related: pack.intent.focus?.related.map((item) => item.path) ?? [],
+          },
           memory: pack.memory,
           owners: pack.owners,
         };
@@ -996,7 +1005,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
     {
       name: "design_sketch",
       description:
-        "Stitch stage 1: write a real design sketch before code. Produces .zombiecoder/design/<id>/sketch.md (journey, ASCII wireframe, loading/empty/error/success matrix, tokens, WCAG 2.2 AA checklist) and design.json. site: ecommerce | hospital | lms | generic. Follow it with design_review after the markup exists.",
+        "Optional lightweight sketch for a new screen or interaction flow. Small CSS/layout changes should be implemented directly without a sketch or full state matrix. Writes sketch.md and design.json; includes interaction states only when relevant. site: ecommerce | hospital | lms | generic.",
       input: {
         type: "object" as const,
         properties: {
@@ -1047,9 +1056,26 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
       },
     },
     {
+      name: "project_investigation",
+      description:
+        "Build a bounded, session-aware project map: current user intent and focus files, prior Git state, declared stack versions, installed compiler/runtime versions, official documentation links, tests, recent log errors, and prior tool failures. Records one deduplicated structured investigation in the syllabus. It never runs project build/test scripts; model training data remains UNVERIFIED unless the provider exposes auditable metadata.",
+      input: {
+        type: "object" as const,
+        properties: { request: { type: "string", description: "The exact current user request." } },
+        required: ["request"],
+        additionalProperties: false,
+      },
+      run: (input: any, context?: ToolContextLike) =>
+        buildProjectInvestigation(
+          rootFor(context),
+          String(input?.request ?? ""),
+          String(context?.sessionID ?? ""),
+        ),
+    },
+    {
       name: "context_status",
       description:
-        "Show the compact context this agent is working from: SSOT, syllabus, focus files and session memory. Call it before substantive work and show the uiLine to the user so context management is visible in the UI. Pass `message` with the user's sentence to get the target file list.",
+        "Optional detail lookup for the active agent and its context stewards: SSOT, syllabus, focus files and session memory. The compact context is already injected; call this only when more detail or a different focus query is needed. Pass `message` with the user's sentence to get the target file list.",
       input: {
         type: "object" as const,
         properties: {

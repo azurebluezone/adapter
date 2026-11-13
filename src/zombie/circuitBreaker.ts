@@ -22,6 +22,7 @@ export type BreakerContext = {
   blockedChars?: number;
   blockedPreview?: string;
   detail?: string;
+  userIntent?: string;
 };
 
 export type BreakerFailure = {
@@ -97,7 +98,7 @@ export function decideBreaker(
 export function breakerContext(
   verdict: { protocol?: string; violations?: string[]; matched?: string[] },
   text: string,
-  extra: { model?: string; detail?: string } = {},
+  extra: { model?: string; detail?: string; userIntent?: string } = {},
 ): BreakerContext {
   return {
     model: extra.model,
@@ -107,6 +108,7 @@ export function breakerContext(
     blockedChars: text.length,
     blockedPreview: preview(text),
     detail: extra.detail,
+    userIntent: extra.userIntent,
   };
 }
 
@@ -127,6 +129,7 @@ export function statusMessage(
 ): string {
   return [
     `**Circuit breaker:** \`${failure.agent}\` এই attempt-এ আটকে গেছে — ${failure.reason}`,
+    failure.context?.userIntent ? `মূল অনুরোধ: ${preview(failure.context.userIntent)}` : "",
     "",
     `একই এজেন্ট আবার চেষ্টা করবে (প্রয়াস ${decision.attempt}/${decision.limit})। অন্য এজেন্টে handoff হবে না; কাজ ও দায়িত্ব একই এজেন্টের।`,
     kindGuidance(failure.kind),
@@ -145,6 +148,7 @@ export function retryPrompt(
       ? `সমস্যাযুক্ত path: ${failure.context.violations.join(", ")}`
       : "",
     failure.context?.detail ? `failure detail: ${failure.context.detail}` : "",
+    failure.context?.userIntent ? `Original user request:\n${failure.context.userIntent}` : "",
     "",
     kindGuidance(failure.kind),
     "",
@@ -167,6 +171,7 @@ export function unresolvedMessage(state: BreakerState, limit: number = BREAKER_L
     "**কাজটি সমাধান হয়নি — circuit breaker খুলে গেছে।**",
     "",
     `${agent} ${attempts} বার চেষ্টা করেছে। কোনো অন্য এজেন্টে দায়িত্ব সরানো হয়নি।`,
+    last?.context?.userIntent ? `মূল অনুরোধ: ${preview(last.context.userIntent)}` : "",
     last ? `শেষ failure: ${last.reason}` : "",
     last?.context?.detail ? `শেষ detail: ${last.context.detail}` : "",
     "",

@@ -485,8 +485,12 @@ try {
   for (const file of ["plugin.ts", "roster.ts"]) {
     source.set(file, sha256(path.join(work, "src", file)));
   }
-  for (const [rel, hash] of graph(path.join(work, "src", "zombie"))) {
-    source.set(`zombie/${rel}`, hash);
+  // bin/install.mjs copies agents/ into the plugin graph. Leaving it out here
+  // marks all 16 copied agent files as extra, so a correct install fails proof.
+  for (const dir of ["agents", "zombie"]) {
+    for (const [rel, hash] of graph(path.join(work, "src", dir))) {
+      source.set(`${dir}/${rel}`, hash);
+    }
   }
   const installed = graph(path.join(target, "plugins", "zombiecoder"));
   const missing = [...source.keys()].filter((rel) => !installed.has(rel));

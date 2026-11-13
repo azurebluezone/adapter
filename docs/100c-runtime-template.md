@@ -69,6 +69,11 @@ is ever discovered.
 
 ## ৩. Model mapper
 
+> Historical snapshot: the `big-pickle` fallback and per-agent mapper below
+> describe the 2026-10-21 installation evidence, not the current plugin. The
+> current plugin has no hard-coded model ref and uses one shared OpenCode
+> default/free model for all agents, or leaves the UI-selected model untouched.
+
 Interactive:
 
 ```bash
@@ -105,10 +110,10 @@ Rules:
 Fallback:
 
 - Run `opencode models`.
-- Keep IDs containing `free` plus the single allowed literal
-  `opencode/big-pickle`.
-- No other model name is hardcoded.
-- If the OpenCode catalog is unavailable, use the allowed baseline only.
+- Historical mapper kept IDs containing `free` plus the then-configured
+  `opencode/big-pickle` fallback.
+- Current plugin behavior is described in `README.md` §2.2; do not copy this
+  historical fallback into runtime code.
 
 `--apply` is opt-in. It updates only existing agent objects in `opencode.json`,
 copies a mode-`600` backup first, then writes atomically. The live config was not
@@ -493,8 +498,8 @@ resource optimization, first-principles, evidence-before-confidence)। ছো�
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  7084ac4458472d4484b135c8ec67462290018619320addc4f8a4635606d571f9  ║
-║  files 140 · bytes 1337129 · base e603d96 · dirty                        ║
+║  root  bb165ff27df0bac06bd7842ac6a9e14551f42b8de5f4e320d9c88916dad6ed42  ║
+║  files 148 · bytes 1387221 · base beac29a · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -502,7 +507,7 @@ resource optimization, first-principles, evidence-before-confidence)। ছো�
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-06T22:54:47.722Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-13T17:53:50.571Z
 
 </div>
 <!-- INTEGRITY:END -->

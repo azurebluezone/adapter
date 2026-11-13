@@ -10,9 +10,11 @@ import {
   noteContract,
   noteOnboarding,
   releaseCheck,
+  routeKey,
   startRun,
   walk,
 } from "./route.ts";
+import { canonicalTool } from "./base.ts";
 import { isAgentID } from "./index.ts";
 import type {
   AgentRun,
@@ -61,6 +63,8 @@ export type TurnResult = {
   consent: boolean;
   /** True when this is the same run continued by a short "yes". */
   continued: boolean;
+  /** True when the same user turn is transferred to a newly selected agent. */
+  handedOff: boolean;
 };
 
 const CONTINUE =
@@ -94,6 +98,38 @@ export function beginTurn(input: {
     throw new Error(`no controller for agent "${input.agentID}"`);
   }
 
+  if (
+    previous &&
+    previous.sessionID === input.sessionID &&
+    previous.agentID !== input.agentID &&
+    previous.turnIndex === input.turnIndex &&
+    previous.messageHash === hashMessage(message)
+  ) {
+    const at = (input.now ?? new Date()).toISOString();
+    const run: AgentRun = Object.freeze({
+      ...previous,
+      agentID: input.agentID,
+      routeKey: routeKey(input.agentID, previous.taskKind, previous.phase),
+      focus: [...previous.focus],
+      contract: previous.contract ? { ...previous.contract } : null,
+      steps: [
+        ...previous.steps,
+        {
+          at,
+          phase: previous.phase,
+          kind: "agent_handoff",
+          ok: true,
+          detail: `${previous.agentID} -> ${input.agentID}`,
+        },
+      ].slice(-40),
+      updatedAt: at,
+    });
+    Object.freeze(run.focus);
+    if (run.contract) Object.freeze(run.contract);
+    Object.freeze(run.steps);
+    return { run, consent: false, continued: false, handedOff: true };
+  }
+
   if (isContinuation(previous, message)) {
     const consent = Boolean(previous && isConsentFor(previous, message));
     const advanced = consent && previous ? advance(previous, "contract", input.now) : previous!;
@@ -105,7 +141,7 @@ export function beginTurn(input: {
       turnIndex: input.turnIndex ?? advanced.turnIndex,
       updatedAt: (input.now ?? new Date()).toISOString(),
     });
-    return { run, consent, continued: true };
+    return { run, consent, continued: true, handedOff: false };
   }
 
   let run = startRun({
@@ -127,7 +163,7 @@ export function beginTurn(input: {
     if (!run.freshSyllabus) run = walk(run, ["investigate"], input.now);
   }
 
-  return { run, consent: false, continued: false };
+  return { run, consent: false, continued: false, handedOff: false };
 }
 
 function rawResult(event: any): any {
@@ -170,7 +206,9 @@ export function applyToolEvent(
   input: { tool: string; event: any; now?: Date },
 ): AgentRun | null {
   if (!run) return null;
-  const tool = String(input.tool ?? "").toLowerCase();
+  // Code Mode calls arrive namespaced (`zombiecoder_goal_contract`); compare
+  // the canonical tool id so open/PASS actually move the route.
+  const tool = canonicalTool(input.tool);
   const failed = input.event?.status === "error";
   if (failed) return run;
   const at = (input.now ?? new Date()).toISOString();

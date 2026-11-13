@@ -103,7 +103,7 @@ export function renderSyllabusSeed(fp: Fingerprint, agentIds: string[]): string 
     `8. Never lie. Admit a mistake; an honest "I don't know" beats a confident guess.`,
     `9. Read the directory and this syllabus before writing; do not rely on memory.`,
     `10. Shortest evidence-backed answer wins. Send only the necessary context to the provider.`,
-    `11. Every agent is a main agent; the same agent owns the task and its failures. Only the chair (zombiecoder) and the architect (manu) may launch up to 4 roster specialists in parallel; a specialist finishes its own slice and cannot launch another agent.`,
+    `11. The selected agent remains task owner and reporter. Delegation is bounded by the roster permission matrix: chair/Manu may launch up to 4 work specialists, role agents may launch only their named reviewers, and Majnu cannot delegate. Reviewers return findings to the owner; nested or roster-wide swarms are forbidden.`,
     `12. Before work, read the input intake (§5) and the SSOT: locate the files bound to the request, then start. Planning stays at the goal-contract level; no long planning loops between syllabus and conversation.`,
     ``,
     `## 5. Input intake`,

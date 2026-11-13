@@ -7,12 +7,12 @@
 //      baseURL, not the URL written in our config. A provider can be listed in the
 //      catalog while its server is dead; assigning agents to it would point every
 //      request at a corpse.
-//   2. OpenCode's own catalog, filtered to cost 0 / cost 0 — always present
-//   3. a baseline model we observed live in the catalog
+//   2. OpenCode's own catalog, filtered to cost 0 / cost 0
+//   3. an explicit environment fallback, otherwise OpenCode's session default
 //
-// The mapping agent -> model is DETERMINISTIC by default (stable hash of the agent
-// id), because an unreproducible footprint is not evidence. The owner can opt into
-// `modelStrategy: "random"` when they explicitly want random mapping.
+// A model is a shared transport component, not an agent size/role. Every agent
+// receives the same selected model; the user's UI model remains authoritative
+// when no catalog/default ref is available.
 
 import type { AgentDef } from "../roster.ts";
 import { isLocalBaseUrl, type LocalProvider } from "./runnerIdentity.ts";
@@ -275,33 +275,17 @@ export function assignModels(
   randomize = false,
   baseline = BASELINE_MODEL,
   random: () => number = Math.random,
+  preferred = "",
 ): Record<string, string> {
   const assignment: Record<string, string> = {};
-  if (candidates.length === 0) {
-    for (const a of agents) assignment[a.id] = baseline;
-    return assignment;
-  }
-  // Round-robin over a sorted pool: deterministic for the same roster and
-  // catalog, and it spreads agents across different models instead of letting
-  // hash collisions put half the team on one model. Parallel agents on distinct
-  // models do not queue behind each other.
-  //
-  // `randomize` shuffles once and then walks the same pool, so random means
-  // "random order", not "independent dice per agent": every free model is used
-  // before any model repeats. Independent picks left models unused and mapped
-  // 9 agents onto 2-3 refs, which is exactly the bug this replaces.
-  const sorted = [...new Set(candidates)].sort();
+  const sorted = [...new Set(candidates.filter((value) => normalizeModelRef(value)))].sort();
   const pool = randomize ? shuffle(sorted, random) : sorted;
-  let cursor = 0;
+  const preferredRef = normalizeModelRef(preferred);
+  const selected = (!randomize && preferredRef && pool.includes(preferredRef)
+    ? preferredRef
+    : pool[0]) ?? normalizeModelRef(baseline) ?? "";
   for (const a of agents) {
-    // A roster entry pinned by hand wins; otherwise the mapping is stable by
-    // default, and intentionally random only when the owner asks for it.
-    if (a.model && a.model !== baseline && pool.includes(a.model)) {
-      assignment[a.id] = a.model;
-      continue;
-    }
-    assignment[a.id] = pool[cursor % pool.length];
-    cursor += 1;
+    assignment[a.id] = selected;
   }
   return assignment;
 }
@@ -318,7 +302,7 @@ export type ResolveOptions = {
   strategy?: ModelStrategy;
   /** Legacy boolean equivalent of strategy: "random". */
   randomize?: boolean;
-  /** Override the last-resort model (defaults to roster BASELINE_MODEL). */
+  /** Optional environment-configured fallback; otherwise retain OpenCode's session model. */
   baselineModel?: string;
 };
 
@@ -342,13 +326,14 @@ export async function resolveModels(
   const notes: string[] = [];
   const mode: ModelStrategy = options.strategy ?? "auto";
   const randomize = mode === "random" || options.randomize === true;
-  const baselineModel = normalizeModelRef(options.baselineModel) ?? BASELINE_MODEL;
+  const configuredBaseline = normalizeModelRef(options.baselineModel) ?? normalizeModelRef(BASELINE_MODEL) ?? "";
   const customProviderID =
     options.customProviderID?.trim() || DEFAULT_CUSTOM_PROVIDER_ID;
   const configuredUrl = (options.customProviderUrl ?? DEFAULT_CUSTOM_PROVIDER_URL).trim();
 
   const catalog = await readCatalog(doors);
   const defaultModel = await readDefaultModel(doors);
+  const baselineModel = configuredBaseline || defaultModel || "";
   // Catalog facts for the live runner identity. They are computed once here and
   // cached by the setup closure, so the per-request context hook never re-reads
   // the catalog.
@@ -420,8 +405,10 @@ export async function resolveModels(
 
   if (mode === "baseline") {
     strategy = "baseline";
-    candidates = [baselineModel];
-    notes.push(`modelStrategy: baseline — pinned to ${baselineModel}`);
+    candidates = baselineModel ? [baselineModel] : [];
+    notes.push(baselineModel
+      ? `modelStrategy: baseline — using configured/OpenCode default ${baselineModel}`
+      : "modelStrategy: baseline requested but no model ref is available; preserve the UI-selected session model");
   } else if (mode === "free") {
     strategy = "free-fallback";
     candidates = free.map((m) => m.ref);
@@ -464,16 +451,18 @@ export async function resolveModels(
   }
 
   if (candidates.length === 0) {
-    candidates = [baselineModel];
-    strategy = "baseline";
-    notes.push(`no free models available — pinned to baseline ${baselineModel}`);
+    candidates = baselineModel ? [baselineModel] : [];
+    strategy = candidates.length ? "baseline" : "free-fallback";
+    notes.push(candidates.length
+      ? `no free models available — using OpenCode/config default ${baselineModel}`
+      : "no catalog/default model ref available — preserve the UI-selected session model; no model pins written");
   }
 
-  const assignment = assignModels(agents, candidates, randomize, baselineModel);
+  const assignment = assignModels(agents, candidates, randomize, baselineModel, Math.random, defaultModel ?? undefined);
   notes.push(
     randomize
-      ? `random (shuffled round-robin) mapping over ${candidates.length} candidate(s) — every candidate used before a repeat`
-      : `stable round-robin mapping over ${candidates.length} candidate(s)`,
+      ? `one shuffled shared transport model selected from ${candidates.length} candidate(s)`
+      : `one stable shared transport model selected from ${candidates.length} candidate(s)`,
   );
 
   return {

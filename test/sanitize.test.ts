@@ -6,6 +6,7 @@ import {
   detectInvisible,
   detectTrailingMark,
   isExternallyMarked,
+  sanitizeUserMessages,
   stripInvisible,
 } from "../src/zombie/sanitize.ts";
 
@@ -34,6 +35,16 @@ test("two accidental zero-width characters are not called a watermark", () => {
   const report = detectInvisible(`a${ZWSP}b${ZWJ}c`);
   assert.equal(report.count, 2);
   assert.equal(report.suspicious, false);
+});
+
+test("context sanitizer removes invisible controls from user payloads but preserves assistant text", () => {
+  const result = sanitizeUserMessages([
+    { role: "user", content: [{ type: "text", text: `re${ZWJ}view this${ZWSP}` }] },
+    { role: "assistant", content: [{ type: "text", text: `keep${ZWJ}assistant` }] },
+  ]);
+  assert.equal(result.messages[0].content[0].text, "review this");
+  assert.equal(result.messages[1].content[0].text, `keep${ZWJ}assistant`);
+  assert.equal(result.affected[0].count, 2);
 });
 
 test("trailing-space steganography needs a sustained pattern", () => {

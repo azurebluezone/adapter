@@ -1133,9 +1133,14 @@ await step("ensure OpenCode runtime", () => {
     const versionRun = runVersion(binary);
     const info = inspectVersion(binary, () => versionRun.output ?? "");
     if (!info.found) {
+      const raw = String(versionRun.output ?? "").trim();
       return {
         error: `could not read a version from ${binary} --version${
-          versionRun.error ? ` (${versionRun.error})` : ""
+          versionRun.error
+            ? ` (${versionRun.error})`
+            : raw
+              ? ` (raw output: ${JSON.stringify(raw.slice(0, 200))})`
+              : " (no output)"
         }`,
       };
     }
@@ -1768,7 +1773,14 @@ await step("sync opencode.json (providers, agents, permissions, MCP)", async () 
   // Default agent + default model. The model is provider/model in V2. A model is
   // only selected from the gateway when the installer proved it usable; a slow
   // or tool-less provider falls back to the baseline free model.
-  next.default_agent = "zombiecoder";
+  const requestedDefault = typeof existing.default_agent === "string" ? existing.default_agent : "";
+  const requestedDefaultConfig = agents[requestedDefault];
+  const selectedDefaultIsUsable = Boolean(
+    requestedDefault &&
+    (roster.ROSTER.some((agent) => agent.id === requestedDefault) || requestedDefaultConfig) &&
+    requestedDefaultConfig?.mode !== "subagent",
+  );
+  next.default_agent = selectedDefaultIsUsable ? requestedDefault : "zombiecoder";
   const firstCandidate = providerReachable
     ? modelRef(providerID, providerProbe.models[0])
     : null;
@@ -1777,18 +1789,23 @@ await step("sync opencode.json (providers, agents, permissions, MCP)", async () 
   if (!modelPins) {
     // No per-agent pin: the root `model` is the single default. A session that
     // picks another model in /models still wins, and subagents inherit it.
-    next.model = providerReachable ? firstCandidate ?? BASELINE_MODEL : BASELINE_MODEL;
+    const selected = providerReachable ? firstCandidate ?? BASELINE_MODEL : BASELINE_MODEL;
+    if (selected) next.model = selected;
+    else delete next.model;
   } else if (effectiveStrategy === "free") {
     // Pins on: per-agent models are authoritative, so a global `model` would
     // defeat the agent -> model mapping.
     delete next.model;
   } else if (providerReachable) {
-    next.model =
+    const selected =
       existingModel && candidates.includes(existingModel)
         ? existingModel
         : firstCandidate ?? BASELINE_MODEL;
+    if (selected) next.model = selected;
+    else delete next.model;
   } else {
-    next.model = BASELINE_MODEL;
+    if (BASELINE_MODEL) next.model = BASELINE_MODEL;
+    else delete next.model;
   }
 
   // Local stdio servers copied from mcp/ are always registered: they ship with

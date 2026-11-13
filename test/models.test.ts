@@ -49,32 +49,33 @@ test("assignModels is deterministic by default and random when asked", () => {
   for (const model of Object.values(random)) assert.ok(candidates.includes(model));
 });
 
-test("assignModels spreads agents across the candidate pool", () => {
+test("assignModels treats the model as one shared transport for every agent", () => {
   const candidates = ["a/1", "b/2", "c/3"];
   const assigned = assignModels(ROSTER, candidates);
   const used = new Set(Object.values(assigned));
-  assert.equal(used.size, candidates.length, "every candidate should carry at least one agent");
+  assert.equal(used.size, 1, "agents must share one selected model, without size/role mapping");
 });
 
-test("assignModels pins to baseline when there are no candidates", () => {
+test("assignModels leaves the session model unpinned when no model ref is available", () => {
   const assigned = assignModels(ROSTER, []);
-  assert.equal(assigned.manu, "opencode/big-pickle");
+  assert.equal(assigned.manu, "");
+  assert.equal(new Set(Object.values(assigned)).size, 1);
 });
 
-test("random assignment shuffles the pool and uses every candidate before repeating", () => {
+test("random assignment selects one shuffled shared model for the whole roster", () => {
   const candidates = ["a/1", "b/2", "c/3"];
   const first = assignModels(ROSTER, candidates, true, undefined, () => 0);
   const second = assignModels(ROSTER, candidates, true, undefined, () => 0);
   assert.deepEqual(first, second, "an injected random source must be reproducible");
-  assert.equal(new Set(Object.values(first)).size, candidates.length, "every candidate must be used");
+  assert.equal(new Set(Object.values(first)).size, 1, "all agents share one selected model");
   for (const model of Object.values(first)) assert.ok(candidates.includes(model));
 
   const three = assignModels(ROSTER.slice(0, 3), candidates, true, undefined, () => 0.5);
-  assert.deepEqual(new Set(Object.values(three)), new Set(candidates));
+  assert.equal(new Set(Object.values(three)).size, 1);
   assert.equal(Object.keys(three).length, 3);
 });
 
-test("free strategy spreads every free model across the roster instead of pinning one", async () => {
+test("free strategy synchronizes every agent to one shared OpenCode free model", async () => {
   const free = Array.from({ length: 9 }, (_, index) => ({
     providerID: "opencode",
     modelID: `free-${index}`,
@@ -94,8 +95,8 @@ test("free strategy spreads every free model across the roster instead of pinnin
   assert.equal(plan.strategy, "free-fallback");
   assert.equal(plan.candidates.length, 9);
   const used = new Set(Object.values(plan.assignment));
-  assert.equal(used.size, 9, "nine agents must land on nine distinct free models");
-  assert.ok(!used.has("opencode/big-pickle"), "the baseline placeholder must not survive a free plan");
+  assert.equal(used.size, 1, "all agents use one shared transport model");
+  assert.ok([...used][0].startsWith("opencode/free-"));
 });
 
 test("freeModels keeps only cost 0/0 active models", () => {
@@ -277,7 +278,7 @@ test("a non-reference baselineModel never turns the roster baseline into a pin",
   assert.equal(plan.strategy, "free-fallback");
   assert.deepEqual(plan.candidates, ["opencode/big-pickle", "opencode/second-free"]);
   const used = new Set(Object.values(plan.assignment));
-  assert.equal(used.size, 2, "both free models must be used, not one baseline pin");
+  assert.equal(used.size, 1, "both free candidates remain visible but one shared model is selected");
   assert.equal(normalizeModelRef("inherit"), null);
   assert.equal(normalizeModelRef("opencode/big-pickle"), "opencode/big-pickle");
   assert.equal(normalizeModelRef("/model"), null);
@@ -299,15 +300,19 @@ test("resolveModels respects modelStrategy: free without probing the custom prov
             list: async () => ({
               data: [
                 { providerID: "opencode", modelID: "free-one", cost: [{ input: 0, output: 0 }], status: "active", enabled: true },
+                { providerID: "opencode", modelID: "free-z-default", cost: [{ input: 0, output: 0 }], status: "active", enabled: true },
               ],
             }),
+            default: async () => ({ data: { providerID: "opencode", modelID: "free-z-default" } }),
           },
         },
         ROSTER,
         { customProviderUrl: base, strategy: "free" },
       );
       assert.equal(plan.strategy, "free-fallback");
-      assert.deepEqual(plan.candidates, ["opencode/free-one"]);
+      assert.deepEqual(plan.candidates, ["opencode/free-one", "opencode/free-z-default"]);
+      assert.equal(new Set(Object.values(plan.assignment)).size, 1);
+      assert.equal(plan.assignment.zombiecoder, "opencode/free-z-default");
     },
   );
   assert.equal(requests, 0, "strategy=free must not call the custom provider");
@@ -317,7 +322,7 @@ test("resolveModels respects modelStrategy: baseline without probing", async () 
   const plan = await resolveModels(
     { provider: { list: async () => ({ data: [] }) }, model: { list: async () => ({ data: [] }) } },
     ROSTER,
-    { customProviderUrl: "http://127.0.0.1:9/v1", strategy: "baseline" },
+    { customProviderUrl: "http://127.0.0.1:9/v1", strategy: "baseline", baselineModel: "opencode/big-pickle" },
   );
   assert.equal(plan.strategy, "baseline");
   assert.deepEqual(plan.candidates, ["opencode/big-pickle"]);
@@ -386,7 +391,7 @@ test("resolveModels with strategy custom never assigns a dead provider", async (
       const plan = await resolveModels(
         { provider: { list: async () => ({ data: [] }) }, model: { list: async () => ({ data: [] }) } },
         ROSTER,
-        { customProviderUrl: base, providerConfigured: true, strategy: "custom" },
+        { customProviderUrl: base, providerConfigured: true, strategy: "custom", baselineModel: "opencode/big-pickle" },
       );
       assert.equal(plan.strategy, "baseline");
       assert.deepEqual(plan.candidates, ["opencode/big-pickle"]);

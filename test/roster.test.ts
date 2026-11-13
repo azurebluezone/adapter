@@ -21,7 +21,8 @@ test("mergeAgentPersona gives every builtin runner the full shared persona", () 
     assert.ok(persona.text.includes(SHARED_RULES), `${id}: shared rules missing`);
     assert.ok(persona.text.includes(SHARED_EXECUTION), `${id}: execution doctrine missing`);
     assert.equal(persona.bytes, Buffer.byteLength(persona.text, "utf8"));
-    assert.ok(persona.bytes > 5000, `${id}: persona should be the full block`);
+    assert.ok(persona.bytes > 0, `${id}: persona must not be empty`);
+    assert.ok(persona.bytes < 5000, `${id}: shared persona should stay project-scoped`);
   }
   assert.equal(mergeAgentPersona("my-custom-agent").kind, "shared");
 });
@@ -42,19 +43,31 @@ test("roster agents expose their full prompt; hidden builtins get nothing", () =
   }
 });
 
-test("only the chair and the architect may launch specialists", async () => {
-  const { agentPermissions, canDelegate, MAX_PARALLEL_SPECIALISTS, PERSONA_MARKER } = await import(
+test("delegation permissions are limited to bounded work and reviewer targets", async () => {
+  const { agentPermissions, allowedSpecialistTargets, canDelegate, MAX_PARALLEL_SPECIALISTS, PERSONA_MARKER } = await import(
     "../src/roster.ts"
   );
   assert.equal(canDelegate("zombiecoder"), true);
   assert.equal(canDelegate("manu"), true);
-  assert.equal(canDelegate("jarin"), false);
+  assert.equal(canDelegate("nila"), true);
+  assert.equal(canDelegate("jarin"), true);
+  assert.equal(canDelegate("majnu"), false);
+  assert.deepEqual(allowedSpecialistTargets("nila"), ["majnu", "brishti", "jarin"]);
+  assert.deepEqual(allowedSpecialistTargets("jarin"), ["majnu"]);
+  assert.deepEqual(allowedSpecialistTargets("majnu"), []);
   assert.equal(MAX_PARALLEL_SPECIALISTS, 4);
   for (const agent of ROSTER) {
     const rules = agentPermissions(agent);
-    const expected = canDelegate(agent.id) ? "allow" : "deny";
-    assert.equal(rules[0].action, "subagent");
-    assert.equal(rules[0].effect, expected, `${agent.id}: subagent must be ${expected}`);
+    const allowed = allowedSpecialistTargets(agent.id);
+    assert.ok(rules.every((rule) => rule.action === "subagent"));
+    assert.deepEqual(
+      rules.filter((rule) => rule.effect === "allow").map((rule) => rule.resource),
+      allowed,
+      `${agent.id}: subagent permissions must match the bounded target matrix`,
+    );
+    if (allowed.length === 0) {
+      assert.ok(rules.some((rule) => rule.effect === "deny" && rule.resource === "*"));
+    }
   }
   assert.ok(SHARED_RULES.includes(PERSONA_MARKER));
 });
@@ -70,16 +83,14 @@ test("the roster markdown embeds the shared rules exactly once", () => {
   assert.ok(SHARED_PERSONA.startsWith(SHARED_RULES));
 });
 
-test("shared rules carry assembly, precision, runtime-gap and escalation duties", () => {
-  assert.match(SHARED_PERSONA, /Assembly first, not invention/);
-  assert.match(SHARED_PERSONA, /Precise input/);
-  assert.match(SHARED_PERSONA, /Focus on the work/);
-  assert.match(SHARED_PERSONA, /websearch/);
-  assert.match(SHARED_PERSONA, /append_syllabus/);
-  assert.match(SHARED_PERSONA, /skill_catalog/);
+test("shared rules carry project focus, evidence, and concise execution duties", () => {
+  assert.match(SHARED_PERSONA, /current user request is the task source/);
+  assert.match(SHARED_PERSONA, /business purpose/);
+  assert.match(SHARED_PERSONA, /Use the injected request, focus files, and project map/);
+  assert.match(SHARED_PERSONA, /Never ship mock\/demo\/placeholder logic/);
+  assert.match(SHARED_PERSONA, /session notes/);
+  assert.match(SHARED_PERSONA, /private chain-of-thought/);
   assert.match(SHARED_PERSONA, /circuit breaker/);
-  assert.match(SHARED_PERSONA, /goal_contract.*FAIL/);
-  assert.match(SHARED_PERSONA, /user-কে সরাসরি বলো/);
-  assert.match(SHARED_PERSONA, /মিথ্যা বলা অন্যায়/);
-  assert.match(SHARED_PERSONA, /No mock, no demo, no watermark/);
+  assert.match(SHARED_PERSONA, /goal_contract/);
+  assert.match(SHARED_PERSONA, /Barishal/);
 });

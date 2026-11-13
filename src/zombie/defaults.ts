@@ -65,13 +65,13 @@ export { BASELINE_MODEL };
 export const DEFAULT_CUSTOM_PROVIDER_ID =
   env("ZOMBIECODER_PROVIDER_ID") ?? "missionbarisal";
 export const DEFAULT_CUSTOM_PROVIDER_URL =
-  env("ZOMBIECODER_PROVIDER_URL") ?? "https://gpu.zombiecoder.my.id/v1";
+  env("ZOMBIECODER_PROVIDER_URL") ?? "";
 export const DEFAULT_CUSTOM_PROVIDER_KEY =
   env("ZOMBIECODER_PROVIDER_KEY") ?? env("ZOMBIECODER_API_KEY") ?? "";
 export const DEFAULT_PROVIDER_NAME =
   env("ZOMBIECODER_PROVIDER_NAME") ?? "ZombieCoder Gateway";
 export const DEFAULT_OPENCODE_API_URL =
-  env("OPENCODE_API_URL") ?? env("OPENCODE_BASE") ?? "http://127.0.0.1:49374";
+  env("OPENCODE_API_URL") ?? env("OPENCODE_BASE") ?? "";
 // URL-only origin handshake. Empty means "do not handshake"; the provider URL
 // from config is used as-is. Set ZOMBIECODER_ORIGIN_URL or config.originUrl to a
 // trusted origin that publishes /gateway_url.json.

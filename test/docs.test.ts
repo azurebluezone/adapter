@@ -54,3 +54,24 @@ test("a delegation rule in the syllabus seed is rejected", () => {
   const problems = docsConsistencyProblems(root);
   assert.ok(problems.some((problem) => problem.file === "src/zombie/syllabus.ts"));
 });
+
+test("stale license, runtime version, and mandatory context-call claims are rejected", () => {
+  const root = fixture({
+    "README.md": [
+      "একই agent retry করে।",
+      "agent substantive কাজ শুরুর আগে এই tool call করে: context_status",
+      "VS Code ACP setup",
+    ].join("\n"),
+    "docs/AGENT-HANDOFF.md": "ACP setup; OpenCode V2.2.5-এ lsp works.\n",
+    "src/identity.ts": "license: Proprietary - Local Freedom Protocol",
+    "doc/identity.json": "license: Proprietary - Local Freedom Protocol",
+    "src/runtime.ts": "শেষ ৫টি RAM-এ থাকে",
+  });
+
+  const problems = docsConsistencyProblems(root);
+  assert.ok(problems.length >= 5);
+  assert.ok(problems.some((problem) => problem.reason.includes("identity license")));
+  assert.ok(problems.some((problem) => problem.reason.includes("generation-time runtime")));
+  assert.ok(problems.some((problem) => problem.reason.includes("mandatory call")));
+  assert.ok(problems.some((problem) => problem.reason.includes("newest-ten-message")));
+});

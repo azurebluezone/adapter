@@ -70,6 +70,31 @@ const STALE_RULES: StaleRule[] = [
     pattern: /Reject = থামো, handover করো/,
     reason: "Reject means stop and tell the user, not hand over to another agent",
   },
+  {
+    file: "src/identity.ts",
+    pattern: /Proprietary - Local Freedom Protocol/,
+    reason: "identity license must match the repository's non-commercial LICENSE",
+  },
+  {
+    file: "doc/identity.json",
+    pattern: /Proprietary - Local Freedom Protocol/,
+    reason: "generated identity license must match the repository's non-commercial LICENSE",
+  },
+  {
+    file: "docs/AGENT-HANDOFF.md",
+    pattern: /OpenCode V2\.2\.5-এ/,
+    reason: "the documented test baseline must be distinguished from generation-time runtime",
+  },
+  {
+    file: "README.md",
+    pattern: /agent substantive কাজ শুরুর আগে এই tool call করে/,
+    reason: "context_status is optional detail lookup, not a mandatory call for every task",
+  },
+  {
+    file: "src/runtime.ts",
+    pattern: /শেষ ৫টি RAM/,
+    reason: "runtime docs must match the newest-ten-message memory policy",
+  },
 ];
 
 const REQUIRED: Array<{ file: string; pattern: RegExp; reason: string }> = [

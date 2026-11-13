@@ -1,7 +1,7 @@
 // Stitch-style design surface for the UI/UX agent.
 //
-// `design_sketch` writes the sketch stage to disk before any code exists:
-// journey, wireframe, state matrix, tokens and the a11y checklist. `design_review`
+// `design_sketch` writes a short, optional sketch before a new screen/flow.
+// `design_review`
 // then reads the real markup/CSS and reports concrete file:line findings. The
 // review is a regex heuristic, not a browser or an AST; the result says so.
 
@@ -86,22 +86,16 @@ function wireframe(brand: string, site: DesignSite, screens: string[]): string {
   const primary = screens[0] ?? "Home";
   return [
     "```text",
-    `+--------------------------------------------------------------+`,
-    `| ${brand.slice(0, 18).padEnd(24)}  nav: home  ${SITE_LABEL[site].slice(0, 16).padEnd(18)}|`,
-    `|--------------------------------------------------------------|`,
-    `| H1: ${primary.padEnd(56)}|`,
-    `| subhead: one sentence, one promise                           |`,
-    `| [ primary CTA ]   [ secondary action ]                       |`,
-    `|                                                              |`,
-    `| +--------------+  +--------------+  +--------------+          |`,
-    `| | card 1       |  | card 2       |  | card 3       |          |`,
-    `| | title        |  | title        |  | title        |          |`,
-    `| | body 2 lines |  | body 2 lines |  | body 2 lines |          |`,
-    `| +--------------+  +--------------+  +--------------+          |`,
-    `|                                                              |`,
-    `| data strip: one public fact + source                         |`,
-    `| footer: contact, hours, licence                              |`,
-    `+--------------------------------------------------------------+`,
+    `┌──────────────────────────────────────────┐`,
+    `│ ${brand.slice(0, 18).padEnd(18)}  ${SITE_LABEL[site].slice(0, 15).padEnd(15)}│`,
+    `├──────────────────────────────────────────┤`,
+    `│ ${primary.slice(0, 38).padEnd(38)} │`,
+    `│ ${"What the user asked for".padEnd(38)} │`,
+    `│                                          │`,
+    ...screens.slice(1).map((screen) => `│ • ${screen.slice(0, 35).padEnd(35)} │`),
+    `│                                          │`,
+    `│ [ primary action ]                      │`,
+    `└──────────────────────────────────────────┘`,
     "```",
   ].join("\n");
 }
@@ -117,6 +111,7 @@ export function buildDesignSketch(projectRoot: string, input: SketchInput): Desi
     .slice(0, 12);
   if (screens.length === 0) screens.push("Home");
   const tokens = SITE_TOKENS[site];
+  const needsStates = /(?:form|submit|search|filter|load|request|checkout|login|save|ডাটা|ফর্ম|খোঁজ|অনুসন্ধান|লগইন)/i.test(brief);
   const id = slug(brief);
   const dir = input.output
     ? path.resolve(projectRoot, input.output)
@@ -134,7 +129,7 @@ export function buildDesignSketch(projectRoot: string, input: SketchInput): Desi
     site,
     screens,
     tokens,
-    states: ["loading", "empty", "error", "success"],
+    states: needsStates ? ["loading", "empty", "error", "success"] : [],
     a11y: [
       "WCAG 2.2 AA contrast for text and controls",
       "Visible :focus-visible ring on every interactive element",
@@ -155,40 +150,40 @@ export function buildDesignSketch(projectRoot: string, input: SketchInput): Desi
     "",
     "## User journey",
     "",
-    "1. Land on the page and understand the promise in one screen.",
-    "2. Scan the three cards; each card answers one real question.",
-    "3. Take the primary action, or open a secondary detail.",
-    "4. See loading, then success or an error with a recovery path.",
+    "1. Understand the page purpose.",
+    "2. Find the requested content or control.",
+    "3. Complete the primary action and see a clear result.",
     "",
     "## Wireframe",
     "",
     wireframe(brand, site, screens),
     "",
-    "## State matrix",
-    "",
-    "| State | Trigger | What the user sees | Recovery |",
-    "|---|---|---|---|",
-    "| loading | first paint / submit | skeleton with the final layout | none needed |",
-    "| empty | zero records | one sentence + primary action | create or change filter |",
-    "| error | request failed | what failed, why, retry button | retry / contact |",
-    "| success | action completed | confirmation + next step | continue |",
-    "",
+    ...(needsStates ? [
+      "## Interaction states",
+      "",
+      "| State | User feedback | Recovery |",
+      "|---|---|---|",
+      "| loading | Preserve the final layout; show progress | Wait or cancel when useful |",
+      "| empty | Say there is no result and show one next action | Change query or add an item |",
+      "| error | Explain the failed action in plain language | Retry or choose a safe next step |",
+      "| success | Confirm the result | Continue only when the user expects it |",
+      "",
+    ] : []),
     "## Design tokens",
     "",
     "| Token | Value | Use |",
     "|---|---|---|",
     ...tokens.map((token) => `| \`${token.name}\` | \`${token.value}\` | ${token.use} |`),
     "",
-    "## Accessibility checklist",
+    "## Relevant accessibility checks",
     "",
     ...spec.a11y.map((item) => `- [ ] ${item}`),
     "",
     "## Handoff",
     "",
-    "1. Build the markup/CSS with the tokens above.",
-    "2. Call `design_review` on the output directory.",
-    "3. Fix every high finding before claiming the design is done.",
-    "4. Verify the real page with keyboard, zoom 200%, and one slow request.",
+    "1. Implement only the requested screen and sections.",
+    "2. Check the changed page with keyboard and the relevant viewport sizes.",
+    "3. Use `design_review` only for relevant markup/accessibility checks; it is a heuristic, not browser proof.",
     "",
   ].join("\n");
 

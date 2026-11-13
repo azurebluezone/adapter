@@ -5,8 +5,8 @@ This file is the contract; the tests below enforce it.
 
 ## Leaves the machine (required for the product to work)
 
-- The agent system prompt (persona, shared rules, execution doctrine).
-- The compact context pack: SSOT excerpt, syllabus lessons, focus files, recent memory.
+- The agent system prompt (role persona, concise shared rules, short execution loop).
+- The compact context pack: current user request, relevant SSOT/syllabus excerpts, focus files, newest 10 messages.
 - Tool names and JSON schemas.
 - The session model reference and the provider credential OpenCode already holds.
 

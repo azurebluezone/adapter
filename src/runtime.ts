@@ -4,7 +4,6 @@
 import {
   BASELINE_MODEL,
   DEFAULT_CUSTOM_PROVIDER_ID,
-  DEFAULT_CUSTOM_PROVIDER_URL,
 } from "./zombie/defaults.ts";
 
 const F = String.fromCharCode(96, 96, 96);
@@ -80,12 +79,13 @@ export function renderRuntime(): string {
   out.push("## ৩. Model Fallback Resolver");
   out.push("");
   out.push(F + "text");
-  out.push(`১) baseline (শেষ অবলম্বন): ${BASELINE_MODEL} — \`ZOMBIECODER_BASELINE_MODEL\` দিয়ে বদলানো যায়`);
-  out.push(`২) কাস্টম প্রোভাইডার নিজের baseURL live probe-এ সাড়া দিলে: <${DEFAULT_CUSTOM_PROVIDER_ID}>/<model-id>`);
-  out.push(`   (ডিফল্ট URL: ${DEFAULT_CUSTOM_PROVIDER_URL}; \`ZOMBIECODER_PROVIDER_URL\`/\`ZOMBIECODER_PROVIDER_ID\` দিয়ে বদলানো যায়)`);
-  out.push("৩) না হলে: OpenCode catalog → cost[0].input == 0 && output == 0");
-  out.push("৪) ম্যাপিং:  agent id → stable hash → নির্দিষ্ট ফ্রি মডেল");
-  out.push("৫) ব্যর্থ হলে: rotation → পরের ফ্রি মডেল; কখনো hard-fail নয়");
+  out.push(BASELINE_MODEL
+    ? `১) explicit last-resort: ${BASELINE_MODEL}`
+    : "১) কোনো hard-coded model নেই; UI-selected/OpenCode default model অক্ষত থাকে");
+  out.push(`২) কাস্টম প্রোভাইডার শুধু \`ZOMBIECODER_PROVIDER_URL\` দেওয়া থাকলে probe হয়: <${DEFAULT_CUSTOM_PROVIDER_ID}>/<model-id>`);
+  out.push("৩) URL না থাকলে: OpenCode catalog → সক্রিয় cost[0].input == 0 && output == 0");
+  out.push("৪) প্রতিটি agent একই নির্বাচিত model-কে transport component হিসেবে ব্যবহার করে");
+  out.push("৫) catalog/default ref না থাকলে model pin নয়; session-এর model selection বহাল থাকে");
   out.push("৬) ফলাফল cache: install root-এর `zombiecoder/models.json` (default `~/.config/opencode`, `--config-dir` হলে সেই root); প্রকল্পে কোনো models/config ফাইল auto-create হয় না।");
   out.push(F);
   out.push("");
@@ -100,7 +100,7 @@ export function renderRuntime(): string {
   out.push("|---|---|");
   out.push("| `ctx.location` | বর্তমান ডিরেক্টরি — built-in, watcher লাগে না |");
   out.push("| `ctx.storage` (`get`/`set`/`remove`/`scan`) | memory ও state (DB-backed) |");
-  out.push("| `ctx.session.hook` (`context`/`compaction`) | প্রতি model request-এ session message-এর overflow (>5) project-local JSONL archive-এ; `reasoning`/`thinking` বাদ, message id দিয়ে idempotent |");
+  out.push("| `ctx.session.hook` (`context`/`compaction`) | প্রতি context sync-এ visible user/assistant dialogue project-local JSONL archive-এ; RAM-এ newest 10, `reasoning`/`thinking` বাদ, message id দিয়ে idempotent |");
   out.push("| `ctx.event.subscribe` + `ctx.session.context` | `session.idle` হলে snapshot archive-এর চেষ্টা; V2.1.3-এ এই event observed হয়নি, তাই এটি একমাত্র ভরসা নয় |");
   out.push("| `ctx.tool.hook` | একই session/agent-এ পরপর ৩টি tool execution error হলে একই agent-এর failure counter; কোনো agent switch বা delegation নেই |");
   out.push("| `synthetic` + `prompt` | response gate, goal_contract FAIL বা docs consistency FAIL-এ failure record + status message + একই agent-এর queued retry; ৩টি failure হলে breaker খুলে actionable unresolved message |");
@@ -122,7 +122,7 @@ export function renderRuntime(): string {
   out.push("- provider/mcp URL না মিললে কিছুই ভাঙে না — শুধু `NOT_CONFIGURED` লেখা থাকে, আর OpenCode-এর ডিফল্ট মডেল আমাদের agent/persona/meta নিয়ে কাজ চালিয়ে যায়।");
   out.push("- Active project-এর `.environment` থেকে `EXTERNAL_MCP_EXTERNAL_OPENAI_COMPATIBLE_URL`, `EXTERNAL_MCP_EXTERNAL_OPENAI_COMPATIBLE_API_KEY` ও `EXTERNAL_MCP_URL` পড়া হয়; process environment একই key-তে অগ্রাধিকার পায়। Provider key OpenAI-compatible gateway-এর জন্য, MCP auth-এর জন্য নয়। ফাইলটি execute হয় না।");
   out.push("- Installer target `.environment` থেকে provider/MCP URL পড়ে, probe-verified MCP URL OpenCode config-এ register করে। Runtime project `.environment` থেকে MCP URL probe করে; project config-এ নিজে MCP server register করে না। URL ফাঁকা/অনুপস্থিত ও explicit strategy না থাকলে provider `free` fallback হয়।");
-  out.push("- Project খুললে `.zombiecoder/`, SSOT, syllabus ও memory index তৈরি হয়; প্রতিটি model request-এ (context hook) দৃশ্যমান message-এর শেষ ৫টি RAM-এ, তার আগেরগুলো project-local JSONL archive-এ যায়; compaction hook-ও একই কাজ করে। `session.idle` snapshot শুধু best-effort; event না এলে archive বন্ধ হয় না।");
+  out.push("- Project খুললে `.zombiecoder/`, SSOT, syllabus ও memory index তৈরি হয়; প্রতিটি context request-এ visible user/assistant dialogue project-local JSONL-এ append হয়, RAM-এ newest 10 থাকে, আর provider পায় current request ও bounded relevant context। `reasoning`/`thinking` বাদ যায়; `session.idle` snapshot best-effort backup মাত্র।");
   out.push("- Circuit breaker শুধু hook-এ ধরা failure (tool execution error, response-gate block, goal_contract FAIL) গণনা করে; semantic ভুল শনাক্ত করে না। কোনো agent/model handoff নেই — একই agent দায়িত্বে থাকে। Evidence gate evidence-এর কাঠামো যাচাই করে, দাবির সত্যতা স্বয়ংক্রিয়ভাবে প্রমাণ করে না।");
   out.push("");
   out.push("## ৬. কেন এই ফাইল আগে ছিল না");

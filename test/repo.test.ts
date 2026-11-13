@@ -32,10 +32,9 @@ test("installer/runtime sources do not duplicate provider defaults or credential
     assert.deepEqual(hits, [allowed], `${pattern} must live only in ${allowed}`);
   };
 
-  onlyInDefaults(/gpu\.zombiecoder\.my\.id/, "src/zombie/defaults.ts");
-  onlyInDefaults(/127\.0\.0\.1:49374/, "src/zombie/defaults.ts");
+  assert.doesNotMatch(contents.find(({ file }) => file === "src/zombie/defaults.ts")?.text ?? "", /127\.0\.0\.1:49374/);
   onlyInDefaults(/missionbarisal/, "src/zombie/defaults.ts");
-  onlyInDefaults(/opencode\/big-pickle/, "src/roster.ts");
+  assert.doesNotMatch(contents.find(({ file }) => file === "src/roster.ts")?.text ?? "", /opencode\/big-pickle/);
 
   for (const { file, text } of contents) {
     assert.doesNotMatch(text, /apiKey\s*:\s*["']public["']/, `${file} still hardcodes a fake credential`);

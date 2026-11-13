@@ -94,7 +94,7 @@ test("context pack merges SSOT, syllabus and memory into a bounded pack", () => 
     pack.text.length <= CONTEXT_LIMITS.total + 64,
     `pack must stay bounded, got ${pack.text.length} chars (limit ${CONTEXT_LIMITS.total})`,
   );
-  assert.match(pack.uiLine, /Context: SSOT OK \(manu\) \| Syllabus OK \(halim\) \| Memory 2 recent/);
+  assert.match(pack.uiLine, /Agent: manu \| Context: SSOT OK \(steward manu\) \| Syllabus OK \(steward halim\) \| Memory 2 recent/);
   assert.equal(pack.ssot.exists, true);
   assert.equal(pack.syllabus.exists, true);
   assert.ok(
@@ -112,9 +112,11 @@ test("context pack merges SSOT, syllabus and memory into a bounded pack", () => 
   assert.equal(pack.owners.ssot.agent, "manu");
   assert.equal(pack.owners.syllabus.agent, "halim");
   assert.equal(pack.owners.memory.agent, "zombiecoder");
-  assert.match(pack.uiLine, /SSOT OK \(manu\)/);
-  assert.match(pack.uiLine, /Syllabus OK \(halim\)/);
-  assert.match(pack.text, /### Context ownership/);
+  assert.match(pack.uiLine, /SSOT OK \(steward manu\)/);
+  assert.match(pack.uiLine, /Syllabus OK \(steward halim\)/);
+  assert.match(pack.text, /### Context stewards \(not task attribution\)/);
+  assert.match(pack.text, /SSOT steward: manu/);
+  assert.match(pack.text, /Syllabus steward: halim/);
 });
 
 test("context pack carries persona context, not model identity", () => {
@@ -123,6 +125,24 @@ test("context pack carries persona context, not model identity", () => {
   assert.doesNotMatch(pack.text, /### Runner identity/);
   assert.doesNotMatch(pack.text, /big-pickle/);
   assert.doesNotMatch(pack.text, /kind: (free|local|paid)/);
+  assert.match(pack.text, /\| Name \| test-project \|/, "every agent needs the project's identity");
+  assert.match(pack.uiLine, /^Agent: jarin \|/);
+});
+
+test("context pack preserves the current request and all ten recent messages", () => {
+  const root = seedProject();
+  const recent = Array.from({ length: 10 }, (_, index) => ({
+    role: index % 2 === 0 ? "user" : "assistant",
+    text: `recent-message-${index + 1}`,
+    at: new Date().toISOString(),
+  }));
+  const request = "Fix invoice rounding in src/billing.ts and preserve the retail policy.";
+  const pack = buildContextPack(root, "tuhin", recent, request, "ses_intent");
+
+  assert.match(pack.text, /### Current user request \(source of truth\)/);
+  assert.match(pack.text, /preserve the retail policy/);
+  for (const message of recent) assert.ok(pack.text.includes(message.text), message.text);
+  assert.match(pack.text, /\| Name \| test-project \|/, "specialists must see project constraints");
 });
 
 test("syllabus excerpt shows the newest lesson, not the seed placeholder", () => {
@@ -163,6 +183,32 @@ test("syllabus excerpt shows the newest lesson, not the seed placeholder", () =>
   assert.match(pack.text, /### Pre-work gate/);
   assert.match(pack.text, /- open: gc-abc123 — fix the excerpt/);
   assert.match(pack.uiLine, /\| Contract gc-abc123/);
+});
+
+test("syllabus excerpt includes prior lessons relevant to the current request", () => {
+  const root = seedProject();
+  fs.writeFileSync(
+    path.join(root, ".zombiecoder", "syllabus.md"),
+    [
+      "# Syllabus",
+      "",
+      "## 5. Lessons (append-only)",
+      "",
+      "### Billing rounding policy",
+      "",
+      "Keep invoice rounding at two decimal places for retail checkout.",
+      "",
+      "### Newest lesson — editor setup",
+      "",
+      "Use the existing TypeScript formatter settings.",
+      "",
+    ].join("\n"),
+  );
+
+  const pack = buildContextPack(root, "manu", [], "Fix invoice rounding in src/billing.ts.");
+  assert.match(pack.text, /Billing rounding policy/);
+  assert.match(pack.text, /retail checkout/);
+  assert.match(pack.text, /Newest lesson — editor setup/);
 });
 
 test("pre-work gate says none when the session has no open contract", () => {

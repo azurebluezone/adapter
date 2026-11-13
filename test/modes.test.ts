@@ -9,7 +9,7 @@ import {
   modeProtocol,
   planModeSwitch,
 } from "../src/zombie/modes.ts";
-import { ROSTER, agentConfigEntry, agentMarkdown, agentSystemPrompt } from "../src/roster.ts";
+import { ROSTER, agentConfigEntry, agentMarkdown, agentSystemPrompt, allowedSpecialistTargets } from "../src/roster.ts";
 import {
   AGENT_CONTROLLERS,
   modeMatrix,
@@ -112,8 +112,13 @@ test("every persona keeps its frontmatter mode and carries no mode protocol", ()
     assert.match(prompt, /Finish your own slice/);
     const markdown = agentMarkdown(agent);
     assert.match(markdown, new RegExp("^mode: " + agent.mode + "$", "m"));
-    const effect = agent.id === "zombiecoder" || agent.id === "manu" ? "allow" : "deny";
-    assert.match(markdown, new RegExp(`action: subagent\\s+resource: "\\*"\\s+effect: ${effect}`));
+    const targets = allowedSpecialistTargets(agent.id);
+    for (const target of targets) {
+      assert.match(markdown, new RegExp(`action: subagent\\s+resource: "${target}"\\s+effect: allow`));
+    }
+    if (targets.length === 0) {
+      assert.match(markdown, /action: subagent\s+resource: "\*"\s+effect: deny/);
+    }
     assert.ok(MODE_REGISTRY[agent.mode], "agent mode must exist in the registry");
   }
   assert.match(modeProtocol("subagent"), /picker/);

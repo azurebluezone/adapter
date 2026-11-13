@@ -43,9 +43,9 @@ flowchart TD
 
 `install.sh` install logic duplicate করে না: এটি source staging, integrity, দুই installer pass আর inline verifier চালায়; আসল pipeline সবসময় `bin/install.mjs`। Proof-এর ১৭টি check হলো integrity, staging budget, config JSON, entrypoint, source hash fidelity, single loader, ৯ agent, consent `ask`, dependencies, audit, LSP config, LSP initialize, live `/api/plugin`, live MCP connectivity (`/api/mcp`), idempotence `H1 === H2`, space delta এবং staging cleanup।
 
-## ২. Tool map — ২১টি tool
+## ২. Tool map — ২২টি tool
 
-গণনা প্রমাণ: `toolSpecs()` runtime-এ ২১টি spec দেয় এবং `test/plugin.test.ts:300` `assert.equal(fake.tools.length, 21)` করে। নিচের প্রতিটি নাম `src/zombie/server.ts`-এর `name:` লাইন থেকে নেওয়া। Test column-এ `:161` = test "setup scaffolds .zombiecoder…", `:697` = test "context hook resolves…"; বাকি `file:line`-ও test declaration।
+গণনা প্রমাণ: `toolSpecs()` runtime-এ ২২টি spec দেয় এবং `test/plugin.test.ts`-এ tool count assert করে। নিচের প্রতিটি নাম `src/zombie/server.ts`-এর `name:` লাইন থেকে নেওয়া।
 
 | # | Tool | কাজ (এক লাইন) | Impl `file:line` | Test | `plugin.ts` dep |
 |---|---|---|---|---|---|
@@ -55,21 +55,22 @@ flowchart TD
 | 4 | `append_syllabus` | নতুন lesson append করে | `src/zombie/server.ts:401` | `test/plugin.test.ts:1058` (ledger guard); tool call via `goal_contract` | `projectRoot` |
 | 5 | `goal_contract` | expected outcome লিখে রাখে; এক session-এ একটাই open, open-এ baseline check; close-এ নিজেই check চালায় | `src/zombie/server.ts:432` | `test/plugin.test.ts:161`, `test/goalContract.test.ts:38` | `projectRoot` + optional `synthetic` |
 | 6 | `project_fingerprint` | live project scan, কোনো file লেখে না | `src/zombie/server.ts:987` | `test/plugin.test.ts:161` | `projectRoot` |
-| 7 | `design_sketch` | code-এর আগে `sketch.md` + `design.json` লেখে | `src/zombie/server.ts:993` | `test/design.test.ts:12` | `projectRoot` |
+| 7 | `design_sketch` | নতুন screen/flow-এর জন্য ঐচ্ছিক ছোট `sketch.md` + `design.json` | `src/zombie/server.ts:993` | `test/design.test.ts:12` | `projectRoot` |
 | 8 | `design_review` | markup/CSS-এ `file:line` a11y finding | `src/zombie/server.ts:1011` | `test/design.test.ts:66` | `projectRoot` |
 | 9 | `project_onboarding` | প্রথম input-এ docs/code gap syllabus-এ লেখে | `src/zombie/server.ts:1024` | `test/plugin.test.ts:338` | `projectRoot` |
-| 10 | `context_status` | SSOT/syllabus/memory/focus pack-এর `uiLine` দেয় | `src/zombie/server.ts:1046` | `test/plugin.test.ts:697` | `projectRoot` + `storage` |
-| 11 | `evidence_gate` | Python gate চালিয়ে claim PASS/FAIL যাচাই করে | `src/zombie/server.ts:1094` | `test/plugin.test.ts:161` | `projectRoot` |
-| 12 | `verify_real` | real input+artifact hash করে provenance লেখে | `src/zombie/server.ts:1180` | `test/plugin.test.ts:161` | `projectRoot` |
-| 13 | `memory_archive` | archived session message পড়ে | `src/zombie/server.ts:1308` | `test/plugin.test.ts:161` (existence only); execution `UNVERIFIED` | `projectRoot` |
-| 14 | `syntax_check` | LSP-shaped syntax fallback (LSP নয়) | `src/zombie/server.ts:1330` | `test/lsp.test.ts:6` (module), `test/plugin.test.ts:161` (existence) | `—` |
-| 15 | `skill_catalog` | shared skill list/install/auto | `src/zombie/server.ts:1352` | `test/plugin.test.ts:161` (existence), `test/skillCatalog.test.ts:113` | `installRoot` + `reloadSkills` |
-| 16 | `agent_modes` | V2 mode list + validated switch plan | `src/zombie/server.ts:1384` | `test/plugin.test.ts:769` | `—` |
-| 17 | `reload` | agents/skills/providers/tools door reload | `src/zombie/server.ts:1440` | `test/tools.test.ts:54` | `reloadAgents/Skills/Providers/Tools` |
-| 18 | `http_probe` | HTTP status/header/body hash, secret redact | `src/zombie/server.ts:1477` | `test/tools.test.ts:68` | `—` |
-| 19 | `patch_preview` | one exact-string replace dry-run; apply-এ backup | `src/zombie/server.ts:1542` | `test/tools.test.ts:89` | `projectRoot` |
-| 20 | `env_get` | env var আছে কিনা, value ছাড়া | `src/zombie/server.ts:1601` | `test/tools.test.ts:125` | `—` |
-| 21 | `service_probe` | TCP connect বা HTTP GET probe | `src/zombie/server.ts:1625` | `test/tools.test.ts:141` | `—` |
+| 10 | `project_investigation` | request/session, prior state, compiler, docs, tests, logs-এর bounded map syllabus-এ dedupe করে | `src/zombie/server.ts` | `test/investigation.test.ts` | `projectRoot` |
+| 11 | `context_status` | SSOT/syllabus/memory/focus pack-এর `uiLine` দেয় | `src/zombie/server.ts` | `test/plugin.test.ts` | `projectRoot` + `storage` |
+| 12 | `evidence_gate` | Python gate চালিয়ে claim PASS/FAIL যাচাই করে | `src/zombie/server.ts` | `test/plugin.test.ts` | `projectRoot` |
+| 13 | `verify_real` | real input+artifact hash করে provenance লেখে | `src/zombie/server.ts` | `test/plugin.test.ts` | `projectRoot` |
+| 14 | `memory_archive` | archived session message পড়ে | `src/zombie/server.ts` | `test/plugin.test.ts` | `projectRoot` |
+| 15 | `syntax_check` | syntax fallback (LSP নয়) | `src/zombie/server.ts` | `test/lsp.test.ts` | `—` |
+| 16 | `skill_catalog` | shared skill list/install/auto | `src/zombie/server.ts` | `test/skillCatalog.test.ts` | `installRoot` + `reloadSkills` |
+| 17 | `agent_modes` | V2 mode list + validated switch plan | `src/zombie/server.ts` | `test/plugin.test.ts` | `—` |
+| 18 | `reload` | agents/skills/providers/tools door reload | `src/zombie/server.ts` | `test/tools.test.ts` | reload doors |
+| 19 | `http_probe` | HTTP status/header/body hash, secret redact | `src/zombie/server.ts` | `test/tools.test.ts` | `—` |
+| 20 | `patch_preview` | one exact-string replace dry-run; apply-এ backup | `src/zombie/server.ts` | `test/tools.test.ts` | `projectRoot` |
+| 21 | `env_get` | env var আছে কিনা, value ছাড়া | `src/zombie/server.ts` | `test/tools.test.ts` | `—` |
+| 22 | `service_probe` | TCP connect বা HTTP GET probe | `src/zombie/server.ts` | `test/tools.test.ts` | `—` |
 
 ## ৩. কোথায় কী এডিট করব
 
@@ -92,7 +93,7 @@ flowchart TD
 | Contract hardening | `src/zombie/goalContract.ts` | `validateCheck`, `trivialExpected` | no-op check আর status-word expected reject করে |
 | Shell write/ledger guard | `src/zombie/shellGuard.ts` | `analyzeShell:209`, `ledgerTarget:220` | quoted text বাদ দিয়ে redirect/write verb parse করে ledger রক্ষা করে |
 | Persona enforcement + delegation | `src/plugin.ts` | `mergeAgentPersona` call, `execute.before` guard | persona marker check, unknown agent fail-closed, সর্বোচ্চ ৪ specialist |
-| Tools | `src/zombie/server.ts` | `toolSpecs:320` | ২১টি tool-এর একমাত্র registry |
+| Tools | `src/zombie/server.ts` | `toolSpecs:320` | ২২টি tool-এর একমাত্র registry |
 | Plugin wiring / hooks | `src/plugin.ts` | `setup:683`, `export default:2204` | surface registration ও hook lifecycle |
 | Bootstrap / update / proof | `install.sh` | staging + two installer passes + inline verifier | `PROOF PASS`/`PROOF FAIL`, `$TARGET/zombiecoder/install-proof.json` |
 | Setup / install | `bin/install.mjs` | `renderAgentsConfig` call `:1224`, LSP sync `:1302`, `retireLegacyDuplicateEntry:734` | global/project install; duplicate loader retire with backup |
