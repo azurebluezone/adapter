@@ -121,7 +121,7 @@ test("the route is parameterized and illegal edges are impossible", () => {
 
   const investigating = manu.walk(run, ["footprint", "investigate"]);
   assert.equal(investigating.routeKey, "zc/manu/substantive/investigate");
-  assert.throws(() => manu.advance(investigating, "respond"), /illegal route step/);
+  assert.throws(() => manu.advance(investigating, "respond"), /contract gate/);
 
   const working = manu.noteContract(investigating, {
     id: "gc_route",
@@ -138,6 +138,15 @@ test("the route is parameterized and illegal edges are impossible", () => {
   });
   assert.equal(passed.phase, "respond");
   assert.equal(manu.release(passed).ok, true);
+
+  const rejected = manu.noteContract(investigating, {
+    id: "gc_rejected",
+    status: "REJECTED",
+    at: investigating.updatedAt,
+  });
+  assert.equal(rejected.phase, "respond");
+  assert.equal(manu.release(rejected).ok, true);
+  assert.match(manu.release(rejected).reason, /handoff only/);
 
   const frozen = manu.start({ sessionID: "ses_route", message: "fix the bug" });
   assert.throws(() => {
@@ -321,7 +330,20 @@ test("contract tool results are parsed from the real hook shapes", () => {
   assert.equal(pass?.exitCode, 0);
   const fail = contractFromEvent({ result: JSON.stringify({ id: "gc_1", status: "FAIL" }) });
   assert.equal(fail?.status, "FAIL");
-  assert.equal(contractFromEvent({ result: { status: "rejected" } }), null);
+  assert.equal(contractFromEvent({ result: { status: "rejected" } })?.status, "REJECTED");
+  assert.equal(contractFromEvent({ result: { status: "unavailable" } })?.status, "REJECTED");
+});
+
+test("all roster agents receive the same actionable work and consent rules", () => {
+  for (const controller of AGENT_CONTROLLERS) {
+    const prompt = controller.prompt();
+    assert.match(prompt, /Substantive work order:/, `${controller.id}: shared work order missing`);
+    assert.match(prompt, /write only after `status: open`\/route `work`/, `${controller.id}: write gate missing`);
+    assert.match(prompt, /stop all project tools and hand over/, `${controller.id}: consent handoff missing`);
+    assert.equal(controller.allows("read", "investigate"), true, `${controller.id}: investigate must permit reads`);
+    assert.equal(controller.allows("edit", "investigate"), false, `${controller.id}: investigate must deny edits`);
+    assert.equal(controller.allows("edit", "work"), true, `${controller.id}: work must permit edits`);
+  }
 });
 
 test("unknown agents have no route controller", () => {

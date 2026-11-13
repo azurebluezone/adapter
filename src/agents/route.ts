@@ -45,9 +45,9 @@ const EDGES: Readonly<Record<TaskKind, Readonly<Record<RoutePhase, readonly Rout
   substantive: {
     intake: ["footprint"],
     footprint: ["investigate"],
-    investigate: ["contract"],
-    propose: ["contract"],
-    contract: ["work"],
+    investigate: ["contract", "respond"],
+    propose: ["contract", "respond"],
+    contract: ["work", "respond"],
     work: ["verify", "contract"],
     verify: ["respond", "work"],
     respond: [],
@@ -148,7 +148,8 @@ export function advance(run: AgentRun, next: RoutePhase, now?: Date): AgentRun {
   if (
     next === "respond" &&
     run.taskKind === "substantive" &&
-    run.contract?.status !== "PASS"
+    run.contract?.status !== "PASS" &&
+    run.contract?.status !== "REJECTED"
   ) {
     throw new RouteError(
       `contract gate: ${run.agentID} cannot enter respond without goal_contract PASS ` +
@@ -205,6 +206,13 @@ export function noteContract(run: AgentRun, contract: ContractSnapshot, now?: Da
     return next;
   }
 
+  if (contract.status === "REJECTED") {
+    if (next.phase === "investigate" || next.phase === "propose" || next.phase === "contract") {
+      next = advance(next, "respond", now);
+    }
+    return next;
+  }
+
   // FAIL / BLOCKED: the agent stays accountable and returns to work; a new
   // contract open is the only way back to a releasable answer.
   if (next.phase === "investigate") next = advance(next, "contract", now);
@@ -255,6 +263,13 @@ export function releaseCheck(run: AgentRun | null): ReleaseCheck {
       ...base,
       ok: true,
       reason: "proposal turn: asking the user for consent before any work",
+    };
+  }
+  if (run.phase === "respond" && run.contract?.status === "REJECTED") {
+    return {
+      ...base,
+      ok: true,
+      reason: `contract ${run.contract.id} was rejected; handoff only, no work or success may be claimed`,
     };
   }
   if (

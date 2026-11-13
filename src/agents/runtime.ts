@@ -186,12 +186,28 @@ export function contractFromEvent(event: any): ContractSnapshot | null {
   const value = rawResult(event);
   if (!value) return null;
   const status = String(value.status ?? "").toLowerCase();
-  if (status !== "open" && status !== "pass" && status !== "fail" && status !== "blocked") {
+  if (
+    status !== "open" &&
+    status !== "pass" &&
+    status !== "fail" &&
+    status !== "blocked" &&
+    status !== "rejected" &&
+    status !== "unavailable"
+  ) {
     return null;
   }
   const contract: ContractSnapshot = {
     id: String(value.id ?? "").trim() || "unknown",
-    status: status === "pass" ? "PASS" : status === "fail" ? "FAIL" : status === "blocked" ? "BLOCKED" : "open",
+    status:
+      status === "pass"
+        ? "PASS"
+        : status === "fail"
+          ? "FAIL"
+          : status === "blocked"
+            ? "BLOCKED"
+            : status === "rejected" || status === "unavailable"
+              ? "REJECTED"
+              : "open",
     at: new Date().toISOString(),
   };
   if (typeof value.check === "string") contract.check = value.check;

@@ -440,24 +440,24 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
     {
       name: "goal_contract",
       description:
-        "Pre-register a task's expected outcome in the append-only syllabus BEFORE writing code, with the user's explicit consent. open refuses a second contract while one is open in this session, rejects a no-op check or a status-word expected, and runs the check once as a baseline after consent; a baseline that already passes writes no contract, because a check that passes before the work proves nothing. open needs the real user input, an observable expected output (not 'tests pass'), the check command, pass criteria and a match mode (contains|equals|regex|json); it shows a Bengali preview card in the session UI, then asks the user through the native permission door. In that dialog Allow once approves this goal, Allow always approves later opens in this project, and Reject writes nothing and returns status=rejected. close shows its own preview and asks again (per contract), then RUNS the recorded check command in the project root (120s cap) and matches the real output against the recorded expected value; PASS only when the exit code is 0 and the output matches. close proposes no saved pattern, so Allow always cannot skip the next close. Agent-supplied observed/exitCode are saved as a claim and never trusted. A mismatch, empty output or failed command is FAIL, so a mock cannot be tuned to the expected result afterwards. After a FAIL, a new contract may reuse the same check only with the same expected; a different expected is rejected as a rewrite (v2 contracts enforce this again at close). A FAIL result is fed into the same-agent circuit breaker; there is no delegation. Without an approval the tool writes and runs nothing; the agent must hand over instead of self-closing.",
+        "Pre-register a task's expected outcome in the append-only syllabus BEFORE writing code, with the user's explicit consent. open refuses a second contract while one is open in this session, rejects a no-op check or a status-word expected, and runs the check once as a baseline after consent; a baseline that already passes writes no contract, because a check that passes before the work proves nothing. Before open, make sure the check command is valid and use `expected` as a literal distinctive success marker the check emits (for example FEATURE_CHECK_OK), not a prose summary; the check must print it only when all stated requirements pass. open needs the real user input, observable expected output, check command, pass criteria and a match mode (contains|equals|regex|json); it shows a Bengali preview card, then asks through the native permission door. In that dialog Allow once approves this goal, Allow always approves later opens in this project, and Reject writes nothing and returns status=rejected. Only after open returns status=open may the agent write; the route then advances to work. close shows its own preview and asks again, then RUNS the recorded check command in the project root (120s cap) and matches real output against the recorded expected marker; PASS only when exit code is 0 and output matches. On close, provide the returned id; do not provide guessed observed/exitCode because the plugin runs and trusts the real check output. A mismatch, empty output or failed command is FAIL; fix the real behavior under the same expected marker and close the same contract again. Never rewrite a failed expected. After a FAIL, a new contract may reuse the same check only with the same expected; a different expected is rejected as a rewrite. A FAIL result is fed into the same-agent circuit breaker. Without approval the tool writes/runs nothing; hand over instead of self-closing.",
       input: {
         type: "object" as const,
         properties: {
           action: { type: "string", enum: ["open", "close"] },
           id: { type: "string", description: "Contract id returned by open; required by close." },
-          goal: { type: "string" },
-          input: { type: "string", description: "Real user input: file path, URL, or exact request." },
-          expected: { type: "string", description: "Observable outcome the user will see (status/body/file content)." },
-          check: { type: "string", description: "Command that produces the observable outcome. close runs it." },
-          pass: { type: "string", description: "Pass criteria." },
+          goal: { type: "string", description: "Required for open: concise outcome derived from the user's request." },
+          input: { type: "string", description: "Required for open: real user input, such as a file path, URL, or exact request." },
+          expected: { type: "string", description: "Literal distinctive success marker emitted by the check only when all requirements pass; do not use a prose summary." },
+          check: { type: "string", description: "Runnable command that proves the requirements and prints the expected marker only on success. close runs it." },
+          pass: { type: "string", description: "Required for open: observable pass criteria that the check enforces." },
           match: {
             type: "string",
             enum: ["contains", "equals", "regex", "json"],
             description: "How close compares the real output with expected. Default contains.",
           },
-          observed: { type: "string", description: "Actual output produced by the check." },
-          exitCode: { type: "number" },
+          observed: { type: "string", description: "Untrusted claim only. Omit on close; the plugin runs the recorded check and captures real output." },
+          exitCode: { type: "number", description: "Untrusted claim only. Omit on close; the plugin captures the real exit code." },
           artifact: { type: "string", description: "Path to the recorded output." },
         },
         required: ["action"],
@@ -577,11 +577,26 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             [projectRoot],
           );
           if (!approval.ok) {
+            if (sessionID) {
+              await deps.storage.set(`goal/handoff/${sessionID}`, {
+                status: "stopped",
+                reason: approval.reason || approval.status,
+                goal,
+                stoppedAt: new Date().toISOString(),
+              });
+            }
             audit(projectRoot, "goal_contract", {
               kind: "goal_contract.open",
               status: approval.status,
               goal,
               reason: approval.reason,
+            });
+            audit(projectRoot, "goal_contract", {
+              kind: "goal_contract.handoff.stop",
+              status: "stopped",
+              sessionID,
+              goal,
+              reason: approval.reason || approval.status,
             });
             appendSyllabus(
               projectRoot,
@@ -604,7 +619,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
               reason: approval.reason,
               next: [
                 ...(uiShown ? [] : ["Paste the preview above into the chat verbatim; the session UI did not show it."]),
-                "Ask the user to rephrase the goal or hand over; do not retry the same goal silently.",
+                "Consent was rejected. Stop this task now: do not call more project tools, run a check, retry open, or edit. Hand over and wait for a new user instruction.",
               ].join(" "),
             };
           }
@@ -971,7 +986,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
                   "",
                   status === "PASS"
                     ? "প্রমাণ syllabus-এ লেখা হয়েছে।"
-                    : "এটা PASS নয় — ফল বদলালে নতুন contract খোলো।",
+                    : "এটা PASS নয় — আসল আচরণ ঠিক করো, তারপর একই contract id, check ও expected রেখে আবার close করো। Plugin check-টি নতুন করে চালাবে।",
                 ].join("\n"),
               });
               uiShown = true;

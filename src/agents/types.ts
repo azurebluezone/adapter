@@ -83,7 +83,7 @@ export type AgentProfile = {
   gates: GatePolicy;
 };
 
-export type ContractStatus = "open" | "PASS" | "FAIL" | "BLOCKED";
+export type ContractStatus = "open" | "PASS" | "FAIL" | "BLOCKED" | "REJECTED";
 
 export type ContractSnapshot = {
   id: string;

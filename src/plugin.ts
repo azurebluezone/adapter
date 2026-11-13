@@ -87,7 +87,7 @@ import {
   routeForResponse,
   saveRun,
 } from "./agents/runtime.ts";
-import { hashMessage } from "./agents/route.ts";
+import { hashMessage, legalNext } from "./agents/route.ts";
 import {
   isSyntheticText,
   readSyntheticHashes,
@@ -1294,6 +1294,19 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
                 previous.turnIndex === userTurnCount &&
                 previous.messageHash === hashMessage(userMessage),
             );
+            if (!sameTurn) {
+              const consentHandoffKey = `goal/handoff/${sessionID}`;
+              const consentHandoff = (await ctx.storage.get(consentHandoffKey)) as
+                | { status?: string }
+                | null
+                | undefined;
+              if (consentHandoff?.status === "stopped") {
+                await ctx.storage.set(consentHandoffKey, {
+                  status: "cleared",
+                  clearedAt: new Date().toISOString(),
+                });
+              }
+            }
             if (sameTurn) {
               routeRun = previous;
             } else {
@@ -1918,6 +1931,21 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
         const agentID = String(event?.agent ?? "unknown");
         const projectRoot = await resolveSessionRoot(sessionID);
         const input = (event?.input ?? {}) as Record<string, unknown>;
+        const consentHandoff = (await ctx.storage.get(`goal/handoff/${sessionID}`)) as
+          | { status?: string; reason?: string }
+          | null
+          | undefined;
+        if (consentHandoff?.status === "stopped") {
+          audit(projectRoot, agentID, {
+            kind: "goal_contract.handoff.block",
+            sessionID,
+            tool,
+            reason: consentHandoff.reason ?? "contract consent was rejected",
+          });
+          throw new Error(
+            "goal_contract consent was rejected for this task. No further project tools or checks may run; hand over and wait for a new user instruction.",
+          );
+        }
         const launches = tool === "subagent" || tool === "task";
 
         // Persona is a capability boundary, not a prompt hint. An unknown agent,
@@ -2053,6 +2081,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
             throw new Error(`agent route missing for ${agentID}; refresh the request before using tools`);
           }
           if (!controller.allows(tool, activeAgentRun.phase)) {
+            const nextPhases = legalNext(activeAgentRun.taskKind, activeAgentRun.phase);
             audit(projectRoot, agentID, {
               kind: "agent.tool_policy.block",
               sessionID,
@@ -2060,7 +2089,14 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
               phase: activeAgentRun.phase,
               reason: "tool is not allowed in this agent phase",
             });
-            throw new Error(`tool "${tool}" is not allowed for ${agentID} during ${activeAgentRun.phase}`);
+            const next = activeAgentRun.taskKind === "substantive" && activeAgentRun.phase === "investigate"
+              ? "Investigate with read-only tools, then call goal_contract(action=\"open\") and wait for status=open; after user approval the route advances to work. Do not retry this write."
+              : activeAgentRun.phase === "work"
+                ? "Use only the tools allowed in work; if this is a different task, finish or hand off the current contract first."
+                : `Allowed next route phase(s): ${nextPhases.join(", ") || "none"}.`;
+            throw new Error(
+              `tool "${tool}" is not allowed for ${agentID} during ${activeAgentRun.phase}. ${next}`,
+            );
           }
         }
 
