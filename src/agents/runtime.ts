@@ -89,6 +89,8 @@ export function beginTurn(input: {
   freshSyllabus?: boolean;
   turnIndex?: number;
   now?: Date;
+  /** Open contract already recorded for this session, re-read from the syllabus. */
+  openContract?: ContractSnapshot | null;
 }): TurnResult {
   const previous = input.previous ?? null;
   const message = String(input.message ?? "");
@@ -161,6 +163,13 @@ export function beginTurn(input: {
     run = walk(run, ["footprint"], input.now);
     // A brand-new syllabus must get Halim's full footprint before investigation.
     if (!run.freshSyllabus) run = walk(run, ["investigate"], input.now);
+  }
+
+  // A new user turn must not orphan an open contract. The syllabus is the
+  // durable record; re-attaching it returns the run to the phase that can
+  // finish it instead of stranding write tools in investigate.
+  if (input.openContract && run.taskKind === "substantive") {
+    run = noteContract(run, input.openContract, input.now);
   }
 
   return { run, consent: false, continued: false, handedOff: false };

@@ -1408,10 +1408,24 @@ if (DO_INSTALL && !NEEDS_DEPS) {
       encoding: "utf8",
       shell: process.platform === "win32",
     });
-    if (result.status !== 0) {
+    const installedPlugin = path.join(CONFIG_DIR, "node_modules", "@opencode", "plugin");
+    if (result.error || result.status !== 0) {
+      // A failed registry call must not destroy an install that already works.
+      // Keep the resolvable dependency and report the degradation instead of
+      // leaving the user with a half-installed plugin.
+      if (fs.existsSync(installedPlugin)) {
+        const why = result.error
+          ? String(result.error.message ?? result.error)
+          : `npm exited ${result.status}`;
+        console.log(`FALLBACK_NPM — ${why}; keeping the previously installed @opencode/plugin`);
+        return `degraded: ${why}; existing @opencode/plugin kept`;
+      }
+      if (result.error) {
+        throw new Error(`npm failed: ${String(result.error.message ?? result.error)}`);
+      }
       throw new Error(`npm exited ${result.status}: ${(result.stderr || "").trim().split("\n").slice(-4).join(" ")}`);
     }
-    if (!fs.existsSync(path.join(CONFIG_DIR, "node_modules", "@opencode", "plugin"))) {
+    if (!fs.existsSync(installedPlugin)) {
       throw new Error("@opencode/plugin not present after npm install");
     }
     const tail = (result.stdout || "").trim().split("\n").slice(-1)[0] ?? "";
@@ -1456,15 +1470,29 @@ if (DO_LSP) {
         timeout: 300000,
       },
     );
-    if (result.error) {
-      throw new Error(`LSP npm install failed: ${String(result.error.message ?? result.error)}`);
-    }
-    if (result.status !== 0) {
+    const after = resolveLspServers(CONFIG_DIR);
+    const ready = Object.keys(after.servers).length;
+    if (result.error || result.status !== 0) {
+      // The config generator already points at whatever resolves. Keep those
+      // servers instead of failing the whole install over one download.
+      if (ready > 0) {
+        const why = result.error
+          ? String(result.error.message ?? result.error)
+          : `npm exited ${result.status}`;
+        console.log(`FALLBACK_LSP — ${why}; keeping ${ready} resolvable server(s)`);
+        return `degraded: ${ready}/${ready + after.missing.length} server(s) resolved; missing ${after.missing.join(", ")}`;
+      }
+      if (result.error) {
+        throw new Error(`LSP npm install failed: ${String(result.error.message ?? result.error)}`);
+      }
       const tail = (result.stderr || "").trim().split("\n").slice(-4).join(" ");
       throw new Error(`LSP npm exited ${result.status}: ${tail}`);
     }
-    const after = resolveLspServers(CONFIG_DIR);
     if (after.missing.length > 0) {
+      if (ready > 0) {
+        console.log(`FALLBACK_LSP — ${ready} server(s) resolved from PATH; missing ${after.missing.join(", ")}`);
+        return `degraded: ${ready} resolved; missing ${after.missing.join(", ")}`;
+      }
       throw new Error(`LSP binaries still missing after npm install: ${after.missing.join(", ")}`);
     }
     return `installed ${lspPackageList().length} package(s); 4/4 resolvable`;
@@ -1882,12 +1910,14 @@ if (DO_PROVIDER_CONFIG && DO_MCP_CHECK) {
       pathToFileURL(path.join(PACKAGE_ROOT, "mcp", "shared", "client.mjs")).href
     );
     const parts = [];
+    const failures = [];
     for (const server of servers) {
-      const client = await startServer(server.entry, {
-        timeoutMs: 20000,
-        cwd: path.dirname(server.entry),
-      });
+      let client;
       try {
+        client = await startServer(server.entry, {
+          timeoutMs: 20000,
+          cwd: path.dirname(server.entry),
+        });
         await client.request("initialize", {
           protocolVersion: "2024-11-05",
           capabilities: {},
@@ -1902,9 +1932,26 @@ if (DO_PROVIDER_CONFIG && DO_MCP_CHECK) {
           throw new Error("image-brand: web_decorate missing from tools/list");
         }
         parts.push(`${server.name}=${names.length}`);
+      } catch (error) {
+        failures.push(`${server.name}: ${String(error?.message ?? error)}`);
       } finally {
-        await client.close();
+        if (client) {
+          try {
+            await client.close();
+          } catch {
+            /* the server may already be gone */
+          }
+        }
       }
+    }
+    if (failures.length > 0) {
+      // One dead server is a degraded surface, not a dead install. Fail only
+      // when no server answered at all; the config still lists what works.
+      if (parts.length > 0) {
+        console.log(`FALLBACK_MCP — ${parts.join(", ")}; unavailable: ${failures.join("; ")}`);
+        return `${parts.join(", ")} (degraded; ${failures.length} unavailable)`;
+      }
+      throw new Error(`no MCP server answered tools/list: ${failures.join("; ")}`);
     }
     return parts.join(", ");
   });

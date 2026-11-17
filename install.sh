@@ -25,6 +25,7 @@
 #   ZOMBIECODER_REF              default main
 #   ZOMBIECODER_DIR              install root, default ~/.opencode
 #   ZOMBIECODER_TARBALL          local tarball (offline/test); skips the download
+#   ZOMBIECODER_SOURCE_DIR       local checkout; used when no tarball is set
 #   ZOMBIECODER_SKIP_INTEGRITY   development only; 1 skips the manifest check
 #   ZOMBIECODER_SPACE_BUDGET_MB  maximum target growth accepted by the proof (default 800)
 set -euo pipefail
@@ -56,6 +57,7 @@ Installer flags (passed through to bin/install.mjs):
 Environment:
   ZOMBIECODER_DIR             install root (default ~/.opencode)
   ZOMBIECODER_TARBALL         local tarball; skips the git download
+  ZOMBIECODER_SOURCE_DIR      local checkout; fallback when no tarball is set
   ZOMBIECODER_REPO/REF        repository and branch for the download
   ZOMBIECODER_SPACE_BUDGET_MB target growth budget accepted by the proof
 
@@ -154,30 +156,77 @@ done
 [ -n "$STAGING_BASE" ] || die "কোনো staging directory-তে ৬৪ MB খালি জায়গা নেই (TMPDIR, /tmp, /dev/shm)।"
 
 WORK="$(mktemp -d "$STAGING_BASE/zombiecoder-install.XXXXXX")"
-cleanup() { rm -rf "$WORK"; }
+# A checkout fallback clones outside WORK so copying it into WORK cannot recurse
+# into itself; cleanup must remove both roots.
+CHECKOUT="$WORK.checkout"
+cleanup() { rm -rf "$WORK" "$CHECKOUT"; }
 trap cleanup EXIT INT TERM
 
 SOURCE_KIND="download"
+TARBALL_BYTES=0
+
+copy_tree() {
+  # Copy a source tree without build output or the nested git database. The
+  # published tarball never contains these either, so the source-fidelity proof
+  # compares like with like.
+  ( cd "$1" && tar -cf - \
+      --exclude=.git --exclude=node_modules --exclude=.zombiecoder \
+      --exclude=.opencode . ) | tar -xf - -C "$2"
+}
+
 if [ -n "$TARBALL" ]; then
   [ -f "$TARBALL" ] || die "TARBALL পাওয়া যায়নি: $TARBALL"
   cp --reflink=auto "$TARBALL" "$WORK/source.tar.gz" 2>/dev/null || cp "$TARBALL" "$WORK/source.tar.gz"
   SOURCE_KIND="tarball"
   say "▶ source: $TARBALL"
+elif [ -n "${ZOMBIECODER_SOURCE_DIR:-}" ]; then
+  [ -f "$ZOMBIECODER_SOURCE_DIR/package.json" ] \
+    || die "ZOMBIECODER_SOURCE_DIR-এ package.json নেই: $ZOMBIECODER_SOURCE_DIR"
+  SOURCE_KIND="checkout"
+  say "▶ source: local checkout $ZOMBIECODER_SOURCE_DIR"
+  copy_tree "$ZOMBIECODER_SOURCE_DIR" "$WORK"
+  echo "FALLBACK_CHECKOUT — source came from ZOMBIECODER_SOURCE_DIR=$ZOMBIECODER_SOURCE_DIR (no network)"
 else
-  URL="https://codeload.github.com/${REPO}/tar.gz/refs/heads/${REF}"
-  say "▶ download: $URL"
-  curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 600 \
-    -o "$WORK/source.tar.gz" "$URL" \
-    || die "ডাউনলোড ব্যর্থ। ইন্টারনেট বা ref ($REF) দেখুন।"
+  fetch_tarball() {
+    say "▶ download: $1"
+    curl -fsSL --retry 2 --retry-delay 2 --connect-timeout 20 --max-time 600 \
+      -o "$WORK/source.tar.gz" "$1"
+  }
+  DOWNLOADED=0
+  # Three independent endpoints: codeload, the archive alias, and the ref form.
+  # One CDN or path shape failing is not enough to stop an install.
+  for url in \
+    "https://codeload.github.com/${REPO}/tar.gz/refs/heads/${REF}" \
+    "https://github.com/${REPO}/archive/refs/heads/${REF}.tar.gz" \
+    "https://github.com/${REPO}/archive/${REF}.tar.gz"; do
+    if fetch_tarball "$url"; then DOWNLOADED=1; break; fi
+    warn "download failed: $url"
+  done
+  if [ "$DOWNLOADED" -ne 1 ]; then
+    echo "FALLBACK_DOWNLOAD — every tarball endpoint failed; trying a shallow git checkout" >&2
+    if command -v git >/dev/null 2>&1 \
+      && git clone --quiet --depth 1 --branch "$REF" "https://github.com/${REPO}.git" "$CHECKOUT"; then
+      SOURCE_KIND="checkout"
+      copy_tree "$CHECKOUT" "$WORK"
+      rm -rf "$CHECKOUT"
+      echo "FALLBACK_CHECKOUT — source came from git clone ${REPO}@${REF}" >&2
+    else
+      die "ডাউনলোড ও git checkout দুটোই ব্যর্থ। ইন্টারনেট, ref ($REF) বা ZOMBIECODER_SOURCE_DIR দেখুন।"
+    fi
+  fi
 fi
 
-TARBALL_BYTES="$(wc -c < "$WORK/source.tar.gz" | tr -d ' ')"
+if [ -f "$WORK/source.tar.gz" ]; then
+  TARBALL_BYTES="$(wc -c < "$WORK/source.tar.gz" | tr -d ' ')"
+fi
 say "▶ staging: $WORK ($(fs_type "$STAGING_BASE"), $(mb "$((STAGING_KB * 1024))") MB free before download)"
 
-tar -xzf "$WORK/source.tar.gz" -C "$WORK" --strip-components=1 \
-  || die "tarball খোলা যায়নি।"
-rm -f "$WORK/source.tar.gz"
-[ -f "$WORK/package.json" ] || die "tarball-এ package.json নেই; ভাঙা ডাউনলোড।"
+if [ -f "$WORK/source.tar.gz" ]; then
+  tar -xzf "$WORK/source.tar.gz" -C "$WORK" --strip-components=1 \
+    || die "tarball খোলা যায়নি।"
+  rm -f "$WORK/source.tar.gz"
+fi
+[ -f "$WORK/package.json" ] || die "source-এ package.json নেই; ভাঙা ডাউনলোড।"
 
 SOURCE_BYTES="$(size_bytes "$WORK")"
 STAGING_FREE_NOW_KB="$(free_kb "$WORK")"

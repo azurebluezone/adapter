@@ -412,6 +412,25 @@ export function buildContextPack(
     "### Pre-work gate — goal contract",
     ...gate,
     "",
+    "### Task slice (act on this)",
+    `- Intent: ${intent.kind}; focus: ${
+      focusPlan ? `${focusPlan.primary.length} primary + ${focusPlan.related.length} related files (below)` : "none matched — one bounded grep, then at most five files"
+    }.`,
+    `- Contract: ${
+      openContractsForSession.length
+        ? openContractsForSession.map((contract) => `${contract.id} (open)`).join(", ")
+        : "none — inspect, propose the goal, then open one with the user's consent"
+    }.`,
+    "- Everything below this section is reference for this slice, not extra work. Act on the slice only.",
+    "",
+    "### Working budget (anti-overthink)",
+    "- One request → one contract → the smallest file set; the footprint above is the scan, do not list the tree again.",
+    ...(focusPlan
+      ? ["- Open the named focus files first; add a file only when the check output or an import line points at it."]
+      : ["- No focus file matched: run one bounded grep for the most distinctive term, then open at most five files."]),
+    "- No plan longer than the next action; one reviewer only for a named slice; after three failed attempts stop and report the blocker.",
+    "- Reply shape: result → evidence (path:line, command exit code or marker) → next action. Quote the marker, not the whole tool transcript.",
+    "",
     ...(focusBody ? [`### Focus files — from the user's message (${Buffer.byteLength(focusBody, "utf8")}B)`, focusBody, ""] : []),
     "### Intent routing (deterministic hint)",
     `- kind: ${intent.kind}; reason: ${intent.reason}`,
@@ -437,11 +456,11 @@ export function buildContextPack(
       : []),
     "",
     "### Context stewards (not task attribution)",
-    `- SSOT steward: ${CONTEXT_OWNERS.ssot.agent} (${CONTEXT_OWNERS.ssot.role})`,
-    `- Syllabus steward: ${CONTEXT_OWNERS.syllabus.agent} (${CONTEXT_OWNERS.syllabus.role})`,
-    `- Memory steward: ${CONTEXT_OWNERS.memory.agent} (${CONTEXT_OWNERS.memory.role})`,
-    `- Skills steward: ${CONTEXT_OWNERS.skills.agent} (${CONTEXT_OWNERS.skills.role})`,
-    `- Evidence steward: ${CONTEXT_OWNERS.gate.agent} (${CONTEXT_OWNERS.gate.role})`,
+    `- SSOT steward: ${CONTEXT_OWNERS.ssot.agent}`,
+    `- Syllabus steward: ${CONTEXT_OWNERS.syllabus.agent}`,
+    `- Memory steward: ${CONTEXT_OWNERS.memory.agent}`,
+    `- Skills steward: ${CONTEXT_OWNERS.skills.agent}`,
+    `- Evidence steward: ${CONTEXT_OWNERS.gate.agent}`,
   ];
   const text = stripHomePath(clip(lines.join("\n"), CONTEXT_LIMITS.total));
   const uiLine = `Agent: ${agentID} | Context: SSOT ${ssot.exists ? "OK" : "MISSING"} (steward ${CONTEXT_OWNERS.ssot.agent}) | Syllabus ${

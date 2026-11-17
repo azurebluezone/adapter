@@ -36,6 +36,13 @@ import {
 } from "./goalContract.ts";
 import { isStandInPath } from "./responseGate.ts";
 import { syntaxCheck } from "./lsp.ts";
+import {
+  diagnosticsForFile,
+  disposeSymbolServers,
+  findReferences,
+  findSymbols,
+  symbolOverview,
+} from "./symbols.ts";
 import { ensureOnboarding } from "./onboarding.ts";
 import { buildProjectInvestigation } from "./investigation.ts";
 import { buildDesignSketch, reviewDesign } from "./design.ts";
@@ -324,6 +331,13 @@ type ToolSpec = {
   description: string;
   input: Record<string, unknown>;
   run: (input: any, context?: ToolContextLike) => any;
+  /**
+   * OpenCode 2.2+ hides a plugin tool inside the Code Mode `execute` wrapper by
+   * default. The route gate sees that wrapper, not the inner call, so a tool
+   * needed from a narrow phase (respond has no shell) must be registered as a
+   * direct tool. Only the release-phase tools opt in.
+   */
+  direct?: boolean;
 };
 
 export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
@@ -409,6 +423,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
     {
       name: "append_syllabus",
       description: "Append a lesson to the syllabus. Append-only: existing content is never modified.",
+      direct: true,
       input: {
         type: "object" as const,
         properties: { topic: { type: "string" }, summary: { type: "string" } },
@@ -440,7 +455,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
     {
       name: "goal_contract",
       description:
-        "Pre-register a task's expected outcome in the append-only syllabus BEFORE writing code, with the user's explicit consent. open refuses a second contract while one is open in this session, rejects a no-op check or a status-word expected, and runs the check once as a baseline after consent; a baseline that already passes writes no contract, because a check that passes before the work proves nothing. Before open, make sure the check command is valid and use `expected` as a literal distinctive success marker the check emits (for example FEATURE_CHECK_OK), not a prose summary; the check must print it only when all stated requirements pass. open needs the real user input, observable expected output, check command, pass criteria and a match mode (contains|equals|regex|json); it shows a Bengali preview card, then asks through the native permission door. In that dialog Allow once approves this goal, Allow always approves later opens in this project, and Reject writes nothing and returns status=rejected. Only after open returns status=open may the agent write; the route then advances to work. close shows its own preview and asks again, then RUNS the recorded check command in the project root (120s cap) and matches real output against the recorded expected marker; PASS only when exit code is 0 and output matches. On close, provide the returned id; do not provide guessed observed/exitCode because the plugin runs and trusts the real check output. A mismatch, empty output or failed command is FAIL; fix the real behavior under the same expected marker and close the same contract again. Never rewrite a failed expected. After a FAIL, a new contract may reuse the same check only with the same expected; a different expected is rejected as a rewrite. A FAIL result is fed into the same-agent circuit breaker. Without approval the tool writes/runs nothing; hand over instead of self-closing.",
+        "Pre-register a task's expected outcome in the append-only syllabus BEFORE writing code, with the user's explicit consent. open returns the live open contract instead of minting a second one in this session, rejects a no-op check or a status-word expected, and runs the check once as a baseline after consent; a baseline that already passes writes no contract, because a check that passes before the work proves nothing. Before open, make sure the check command is valid and use `expected` as a literal distinctive success marker the check emits (for example FEATURE_CHECK_OK), not a prose summary; the check must print it only when all stated requirements pass. open needs the real user input, observable expected output, check command, pass criteria and a match mode (contains|equals|regex|json); it shows a Bengali preview card, then asks through the native permission door. In that dialog Allow once approves this goal, Allow always approves later opens in this project, and Reject writes nothing and returns status=rejected. Only after open returns status=open may the agent write; the route then advances to work. close shows its own preview and asks again, then RUNS the recorded check command in the project root (120s cap) and matches real output against the recorded expected marker; PASS only when exit code is 0 and output matches. On close, provide the returned id; do not provide guessed observed/exitCode because the plugin runs and trusts the real check output. A mismatch, empty output or failed command is FAIL; fix the real behavior under the same expected marker and close the same contract again. Never rewrite a failed expected. After a FAIL, a new contract may reuse the same check only with the same expected; a different expected is rejected as a rewrite. A FAIL result is fed into the same-agent circuit breaker. Without approval the tool writes/runs nothing; hand over instead of self-closing.",
       input: {
         type: "object" as const,
         properties: {
@@ -508,18 +523,37 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           // otherwise keep a fresh expectation ready for whatever the check prints.
           if (sessionID) {
             const active = (await deps.storage.get(`goal/active/${sessionID}`)) as { id?: string } | null | undefined;
-            const alreadyOpen = active?.id || openContracts(currentSyllabus, sessionID)[0]?.id;
+            const alreadyOpen = openContracts(currentSyllabus, sessionID)[0]?.id || active?.id;
             if (alreadyOpen) {
-              audit(projectRoot, "goal_contract", {
-                kind: "goal_contract.duplicate_open",
-                status: "rejected",
-                sessionID,
-                open: alreadyOpen,
-                goal,
-              });
-              throw new Error(
-                `goal_contract ${alreadyOpen} is already open for this session; close it with its recorded check before opening a new one`,
-              );
+              const existing = parseContract(currentSyllabus, alreadyOpen);
+              if (!existing && active?.id) {
+                // A stale active pointer without a syllabus block is not a
+                // contract; clearing it keeps a real open possible.
+                await deps.storage.set(`goal/active/${sessionID}`, { clearedAt: new Date().toISOString() });
+              } else {
+                audit(projectRoot, "goal_contract", {
+                  kind: "goal_contract.duplicate_open",
+                  status: "open",
+                  sessionID,
+                  open: alreadyOpen,
+                  reused: true,
+                  goal,
+                });
+                // Idempotent open: the route needs the contract back, not a
+                // thrown tool error (an error event cannot move the phase, so
+                // write tools used to stay blocked in investigate).
+                return {
+                  id: alreadyOpen,
+                  file: syllabusFile(projectRoot),
+                  status: "open",
+                  approved: true,
+                  reused: true,
+                  check: existing?.check ?? "",
+                  expected: existing?.expected ?? "",
+                  match: existing?.match ?? "contains",
+                  note: `contract ${alreadyOpen} is already open for this session; close it before opening another`,
+                };
+              }
             }
           }
           const rewrite = failedExpectedRewrite(currentSyllabus, { check, expected, match: mode });
@@ -1091,6 +1125,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
       name: "context_status",
       description:
         "Optional detail lookup for the active agent and its context stewards: SSOT, syllabus, focus files and session memory. The compact context is already injected; call this only when more detail or a different focus query is needed. Pass `message` with the user's sentence to get the target file list.",
+      direct: true,
       input: {
         type: "object" as const,
         properties: {
@@ -1392,6 +1427,102 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
         if (!code.trim()) throw new Error("code is required");
         return syntaxCheck(code, String(input?.language ?? "text"));
       },
+    },
+    {
+      name: "symbol_overview",
+      description:
+        "Read-only outline of one file's symbols (classes, interfaces, functions, methods) from the real language server already configured for this project. Failures return { ok:false, error:{ code, message, hint } }.",
+      input: {
+        type: "object" as const,
+        properties: {
+          path: { type: "string", description: "File to outline, relative to the project root." },
+          depth: { type: "number", description: "Nested symbol depth; 1 = top level, -1 = all." },
+          max_chars: { type: "number", description: "Budget for the JSON outline (default 20000)." },
+        },
+        required: ["path"],
+        additionalProperties: false,
+      },
+      run: async (input: any, context?: ToolContextLike) =>
+        symbolOverview({
+          root: rootFor(context),
+          installRoot: deps.installRoot(),
+          file: String(input?.path ?? ""),
+          depth: typeof input?.depth === "number" ? input.depth : undefined,
+          maxChars: typeof input?.max_chars === "number" ? input.max_chars : undefined,
+        }),
+    },
+    {
+      name: "find_symbols",
+      description:
+        "Find a symbol by name or name_path using the real language server. With a path it searches that file; without one it asks the workspace. Read-only; failures return { ok:false, error:{ code, message, hint } }.",
+      input: {
+        type: "object" as const,
+        properties: {
+          name: { type: "string", description: "Symbol name or name_path (Container/member)." },
+          path: { type: "string", description: "Optional file to search; omit to query the workspace." },
+          substring: { type: "boolean", description: "Match name_path by substring." },
+          max_results: { type: "number", description: "Maximum matches (default 20, cap 100)." },
+        },
+        required: ["name"],
+        additionalProperties: false,
+      },
+      run: async (input: any, context?: ToolContextLike) =>
+        findSymbols({
+          root: rootFor(context),
+          installRoot: deps.installRoot(),
+          name: String(input?.name ?? ""),
+          ...(input?.path ? { file: String(input.path) } : {}),
+          substring: input?.substring === true,
+          maxResults: typeof input?.max_results === "number" ? input.max_results : undefined,
+        }),
+    },
+    {
+      name: "find_references",
+      description:
+        "Find real references to a symbol defined in one file, using textDocument/references from the configured language server. Read-only; failures return { ok:false, error:{ code, message, hint } }.",
+      input: {
+        type: "object" as const,
+        properties: {
+          path: { type: "string", description: "File containing the definition." },
+          name_path: { type: "string", description: "Symbol name or name_path from symbol_overview." },
+          include_snippet: { type: "boolean", description: "Include the source line for each reference (default true)." },
+          max_results: { type: "number", description: "Maximum references (default 50, cap 200)." },
+        },
+        required: ["path", "name_path"],
+        additionalProperties: false,
+      },
+      run: async (input: any, context?: ToolContextLike) =>
+        findReferences({
+          root: rootFor(context),
+          installRoot: deps.installRoot(),
+          file: String(input?.path ?? ""),
+          namePath: String(input?.name_path ?? ""),
+          includeSnippet: input?.include_snippet !== false,
+          maxResults: typeof input?.max_results === "number" ? input.max_results : undefined,
+        }),
+    },
+    {
+      name: "diagnostics_for_file",
+      description:
+        "Return real diagnostics for one file from the configured language server: pull diagnostics when the server supports them, otherwise the published diagnostics for that document. Read-only; failures return { ok:false, error:{ code, message, hint } }.",
+      input: {
+        type: "object" as const,
+        properties: {
+          path: { type: "string", description: "File to diagnose, relative to the project root." },
+          min_severity: { type: "string", enum: ["error", "warning", "info", "hint"] },
+          timeout_ms: { type: "number", description: "How long to wait for published diagnostics (default 4000)." },
+        },
+        required: ["path"],
+        additionalProperties: false,
+      },
+      run: async (input: any, context?: ToolContextLike) =>
+        diagnosticsForFile({
+          root: rootFor(context),
+          installRoot: deps.installRoot(),
+          file: String(input?.path ?? ""),
+          minSeverity: input?.min_severity,
+          timeoutMs: typeof input?.timeout_ms === "number" ? input.timeout_ms : undefined,
+        }),
     },
     {
       name: "skill_catalog",
@@ -1738,15 +1869,60 @@ export type ToolRegistration = {
   /** Always empty at registration time; the transform applies after setup returns. */
   registered: string[];
   /** Resolves with what the deferred transform actually applied. */
-  applied: Promise<{ registered: string[]; error?: string }>;
+  applied: Promise<{ registered: string[]; surface: string[]; error?: string }>;
   release: () => Promise<void>;
 };
+
+/**
+ * OpenCode keys the tool registry by effective id: `<namespace>_<tool>` when a
+ * namespace is set, otherwise the bare tool name. MCP servers register their
+ * own tools under their server namespace, so `append_syllabus` can exist both
+ * as `<mcp-server>_append_syllabus` and `zombiecoder_append_syllabus`.
+ * Comparing bare names skipped our tool whenever an MCP server exposed the same
+ * name; the live catalog then lost the ZombieCoder entry entirely.
+ */
+function effectiveToolID(entry: any): string {
+  const name = String(entry?.name ?? "").replace(/[^A-Za-z0-9_-]/g, "_");
+  if (!name) return "";
+  const namespace = entry?.options?.namespace;
+  if (!namespace) return name;
+  return `${String(namespace).replaceAll(".", "_")}_${name}`;
+}
+
+/**
+ * Persist what the running host actually registered. The setup report is
+ * written by the same process; this file lets a shell check compare the real
+ * surface with the source spec list instead of trusting a count string.
+ */
+function recordToolSurface(projectRoot: string, registered: string[], surface: string[]): void {
+  try {
+    const file = path.join(projectRoot, ".zombiecoder", ".state", "tool-surface.json");
+    const own = surface.filter((id) => id.startsWith(`${TOOL_NAMESPACE.name}_`));
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      JSON.stringify(
+        {
+          at: new Date().toISOString(),
+          namespace: TOOL_NAMESPACE.name,
+          registered: [...new Set(registered)],
+          zombiecoder: [...new Set(own)].sort(),
+          surface: [...new Set(surface)].sort(),
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+  } catch {
+    /* the surface snapshot is evidence, never a setup blocker */
+  }
+}
 
 export function registerTools(tool: ToolLike | undefined, deps: SurfaceDeps): ToolRegistration {
   if (!tool || typeof tool.transform !== "function") {
     return {
       registered: [],
-      applied: Promise.resolve({ registered: [], error: "ctx.tool not available" }),
+      applied: Promise.resolve({ registered: [], surface: [], error: "ctx.tool not available" }),
       release: async () => undefined,
     };
   }
@@ -1754,22 +1930,32 @@ export function registerTools(tool: ToolLike | undefined, deps: SurfaceDeps): To
   // Every ZombieCoder tool returns a JSON object. Declaring the output schema is
   // not optional: OpenCode rejects a result that carries `output` without one.
   const output = { type: "object" as const, additionalProperties: true };
-  const kept = keepTransform<any, string[]>(tool as TransformDoor<any>, (editor: any) => {
-    const added: string[] = [];
-    editor?.namespace?.(TOOL_NAMESPACE);
-    const existing = new Set<string>((editor.list?.() ?? []).map((entry: any) => entry?.name).filter(Boolean));
-    for (const spec of specs) {
-      // OpenCode re-runs transforms on reload. Do not add the same tool twice.
-      if (existing.has(spec.name)) {
-        added.push(spec.name);
-        continue;
-      }
-      editor.add({
+  const kept = keepTransform<any, { registered: string[]; surface: string[] }>(
+    tool as TransformDoor<any>,
+    (editor: any) => {
+      const added: string[] = [];
+      editor?.namespace?.(TOOL_NAMESPACE);
+      const existing = new Set<string>(
+        (editor.list?.() ?? []).map((entry: any) => effectiveToolID(entry)).filter(Boolean),
+      );
+      for (const spec of specs) {
+        const id = effectiveToolID({ name: spec.name, options: { namespace: TOOL_NAMESPACE.name } });
+        // OpenCode re-runs transforms on reload. Do not add the same tool twice.
+        if (existing.has(id)) {
+          added.push(id);
+          continue;
+        }
+        editor.add({
         name: spec.name,
         description: spec.description,
         input: spec.input,
         output,
-        options: { namespace: TOOL_NAMESPACE.name },
+        options: {
+          namespace: TOOL_NAMESPACE.name,
+          // Direct tools stay outside the Code Mode wrapper, so `respond`
+          // (which allows no shell) can still reach the release-phase tools.
+          ...(spec.direct ? { codemode: false } : {}),
+        },
         execute: async (input: any, context?: ToolContextLike) => {
           // JSON has no `undefined`. A result such as
           // { id, file, copied, error: undefined } is a valid JS object but an
@@ -1781,9 +1967,23 @@ export function registerTools(tool: ToolLike | undefined, deps: SurfaceDeps): To
           };
         },
       });
-      added.push(spec.name);
+      added.push(id);
     }
-    return added;
+    // The editor's own list is the live surface. Read it back after the adds so
+    // an MCP collision shows up as two ids instead of a silently dropped tool.
+    let surface = added;
+    try {
+      const listed = (editor.list?.() ?? []).map((entry: any) => effectiveToolID(entry)).filter(Boolean);
+      if (listed.length > 0) surface = listed;
+    } catch {
+      /* keep the registered ids when the host cannot list */
+    }
+    try {
+      recordToolSurface(deps.projectRoot(), added, surface);
+    } catch {
+      /* a missing project root must not break registration */
+    }
+    return { registered: added, surface };
   });
 
   const applied = kept.first.then(async (value) => {
@@ -1796,12 +1996,22 @@ export function registerTools(tool: ToolLike | undefined, deps: SurfaceDeps): To
       }
     }
     return {
-      registered: value ?? [],
+      registered: value?.registered ?? [],
+      surface: value?.surface ?? [],
       error: value === null ? kept.error() ?? "tool transform callback did not fire" : kept.error(),
     };
   });
 
-  return { registered: [], applied, release: kept.release };
+  return {
+    registered: [],
+    applied,
+    release: async () => {
+      // Symbol tools own lazily spawned language servers; unload them with the
+      // registration so a plugin reload does not leave orphan processes.
+      disposeSymbolServers();
+      await kept.release();
+    },
+  };
 }
 
 // Audit append is the one thing every surface shares. It lives under .state so

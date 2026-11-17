@@ -335,7 +335,7 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   assert.doesNotMatch(ssot, /^## .*Model plan/m);
   assert.doesNotMatch(ssot, /^## .*MCP/m);
 
-  assert.equal(fake.tools.length, 22);
+  assert.equal(fake.tools.length, 26);
   assert.ok(fake.tools.every((tool) => tool.output), "every tool must declare an output schema");
   assert.ok(fake.tools.some((tool) => tool.name === "memory_archive"));
   assert.ok(fake.tools.some((tool) => tool.name === "project_onboarding"), "project_onboarding tool missing");
@@ -729,7 +729,7 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   const report = JSON.parse(fs.readFileSync(path.join(root, ".zombiecoder", ".state", "setup-report.json"), "utf8"));
   const toolStep = report.steps.find((step: any) => step.step === "register-tools");
   assert.equal(toolStep.ok, true);
-  assert.equal(toolStep.detail, "22 registered");
+  assert.equal(toolStep.detail, "26 registered, 26 live");
   assert.ok(fs.existsSync(path.join(root, ".zombiecoder", ".state", "audit.jsonl")));
 
   await cleanup();
@@ -2169,7 +2169,7 @@ test("route gate blocks a substantive answer until goal_contract PASS", async ()
   }
 });
 
-test("goal_contract refuses a check that already passes and a second open", async () => {
+test("goal_contract refuses an already-green check and reuses one open", async () => {
   const root = tempProject();
   const fake = makeContext(root);
   const cleanup = await pluginModule.setup(fake.ctx);
@@ -2202,8 +2202,9 @@ test("goal_contract refuses a check that already passes and a second open", asyn
     );
     assert.ok(baselineCard, "the refusal must be visible in the UI");
 
-    // One open contract per session: the second open is how an agent keeps a
-    // spare expectation ready for whatever the check prints.
+    // One open contract per session: the second open returns the live contract
+    // instead of minting a spare expectation. A tool error cannot move the
+    // route, so refusing by throw left write tools blocked in investigate.
     const opened = (await goalTool.execute(
       {
         action: "open",
@@ -2216,20 +2217,24 @@ test("goal_contract refuses a check that already passes and a second open", asyn
       { sessionID },
     )).output;
     assert.equal(opened.status, "open");
-    await assert.rejects(
-      () =>
-        goalTool.execute(
-          {
-            action: "open",
-            goal: "second contract",
-            input: "check-y.mjs",
-            expected: "OTHER",
-            check: 'node -e "console.log(\'BROKEN\')"',
-            pass: "token changes",
-          },
-          { sessionID },
-        ),
-      /already open for this session/,
+    const second = (await goalTool.execute(
+      {
+        action: "open",
+        goal: "second contract",
+        input: "check-y.mjs",
+        expected: "OTHER",
+        check: 'node -e "console.log(\'BROKEN\')"',
+        pass: "token changes",
+      },
+      { sessionID },
+    )).output;
+    assert.equal(second.id, opened.id, "a second open must reuse the live contract");
+    assert.equal(second.reused, true);
+    const ledgerAfterSecond = fs.readFileSync(path.join(root, ".zombiecoder", "syllabus.md"), "utf8");
+    assert.equal(
+      (ledgerAfterSecond.match(/### Goal Contract gc-/g) ?? []).length,
+      1,
+      "a second open must not append a second contract",
     );
 
     // The first contract is still the only one; close it so the marker clears.

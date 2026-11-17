@@ -3,8 +3,9 @@
 // request remains the source of truth and always travels with the context.
 
 import { detectExtensionHints, extractTerms, resolveFocus, type FocusPlan } from "./focus.ts";
+import { classifyIntentKind, type IntentKind } from "./intentRules.ts";
 
-export type IntentKind = "conversation" | "inspect" | "change" | "verify";
+export type { IntentKind };
 
 export type Intent = {
   kind: IntentKind;
@@ -15,19 +16,10 @@ export type Intent = {
   reason: string;
 };
 
-const CHANGE = /\b(?:add|build|create|implement|fix|refactor|rewrite|write|delete|remove|update|change|install|deploy|migrate|generate|patch|edit|convert|rename|scaffold)\b|(?:বানাও|বানাতে|তৈরি|লিখে|লিখো|ঠিক\s*কর|যোগ\s*কর|বদল|মুছে|ইনস্টল|চালু\s*কর|সংযোজন|পরিবর্তন)/i;
-const VERIFY = /\b(?:test|compile|typecheck|lint|verify|validate|build)\b|(?:টেস্ট|কম্পাইল|যাচাই|পরীক্ষা)/i;
-const INSPECT = /\b(?:check|inspect|audit|analy[sz]e|review|explain|find|search|read|show|trace|diagnose|compare)\b|(?:চেক|দেখ|বিশ্লেষণ|পর্যালোচনা|খুঁজ|বুঝিয়ে|বলো|কেন|কোথায়)/i;
-
 export function classifyIntent(message: string, files: string[] = []): Intent {
   const text = String(message ?? "").trim();
-  const kind: IntentKind = CHANGE.test(text)
-    ? "change"
-    : VERIFY.test(text)
-      ? "verify"
-      : INSPECT.test(text)
-        ? "inspect"
-        : "conversation";
+  // One shared word list with the route gate; see zombie/intentRules.ts.
+  const kind = classifyIntentKind(text);
   const focus = text && files.length ? resolveFocus(files, text) : null;
   return {
     kind,

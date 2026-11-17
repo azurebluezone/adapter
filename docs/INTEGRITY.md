@@ -7,21 +7,21 @@
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  8b9396d1f23f50be20fc692dc1548d5eb2a17d2c9d2c02d811be691bcd06b4f8  ║
-║  files 148 · bytes 1392996 · base c35d470 · dirty                        ║
+║  root  d31dab6c29dc27502836e62fc6876086a04d6c6c51005505080b5bda9248829d  ║
+║  files 155 · bytes 1480438 · base 8004453 · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
 | Field | Value |
 |---|---|
 | Schema | `zombiecoder-integrity/v1` |
-| Generated (UTC) | `2026-11-13T22:22:15.675Z` |
-| Base commit | `c35d470` |
+| Generated (UTC) | `2026-11-17T22:47:46.870Z` |
+| Base commit | `8004453` |
 | Branch | `agent-runtime-audit-20261114` |
 | Code tree | `dirty` |
-| Files | 148 |
-| Bytes | 1392996 |
-| Root SHA-256 | `8b9396d1f23f50be20fc692dc1548d5eb2a17d2c9d2c02d811be691bcd06b4f8` |
+| Files | 155 |
+| Bytes | 1480438 |
+| Root SHA-256 | `d31dab6c29dc27502836e62fc6876086a04d6c6c51005505080b5bda9248829d` |
 
 ## Scope
 
@@ -47,7 +47,7 @@ npm run integrity:check
 
 | Path | Bytes | SHA-256 |
 |---|---:|---|
-| `bin/install.mjs` | 87620 | `086f76a17df297a99535502fa0ddb9f9aad4ce221a2188f7cad27a2b4f57ad03` |
+| `bin/install.mjs` | 89971 | `b9ea26b019f20f609f425dbdd4f6b6359061433b4d25b33d4c5d60002f318d61` |
 | `bin/quick-install.mjs` | 5641 | `c6847f6d2dae8c70dfb2f03d665784e2f382884585a1f6e140b232dc8432bfcc` |
 | `docs/skills/bootstrap.md` | 574 | `0580d9dff2bf4a466597b5dcb41792ba7bba22175e37ff95dfa716acb057e51c` |
 | `docs/skills/cpanel.md` | 1867 | `f056fa581f9a0fa268556d8769fc2c5389a864fbd552e90b1692efde0c003537` |
@@ -69,7 +69,7 @@ npm run integrity:check
 | `docs/skills/typescript.md` | 638 | `07d314e2ab542bbfe39b5fdcfd1e4f8ebc255b61ca989c3f9970608e1095cc5e` |
 | `docs/skills/uiux-delivery.md` | 3952 | `c2a66f4f4f3edbee5135b6e4b05ef82165f35baf1f9a7138c0d0f0d268394e15` |
 | `docs/skills/web-delivery.md` | 4247 | `61ce13fc7897d4cb1a7bd59cfaa058ef6d94d6d7e7cb34295b179bc7e72cf0db` |
-| `install.sh` | 35979 | `ff0360eb53837699276db350f5427d5d615f4c2cc252b83b0cc4275ce5d683da` |
+| `install.sh` | 38130 | `c3785f31e1a7da6866ceadfa828afd165114cbcb2f2f7d6ff17e445d3daef002` |
 | `LICENSE` | 1961 | `d06b8b22307bf25fa4e3dba778ad2ccc1350c2e5cd1b5e6ed40c2de25b6cd95a` |
 | `mcp/image-brand/e2e-live.mjs` | 2781 | `8ae7c8c7ce022cbb80f049d56aeec5719dfc69cc90ee87c3aed8006454ebc04f` |
 | `mcp/image-brand/fixtures.py` | 1731 | `bee4ffeed922dafa6a11c47dfca4ff1c9e647dbf12038cc8cff3d6d31ff1ea44` |
@@ -99,10 +99,12 @@ npm run integrity:check
 | `scripts/lsp-probe.mjs` | 7294 | `77f7d44d6529d2d73376c4ca09053c046d3209af0b90ec1da5fda2335c4fe7ae` |
 | `scripts/modes-check.mjs` | 4341 | `0135f1f8fd3ef2c076c4be85f0b7ece12e36f5478c0ba88a34db7e40306557c5` |
 | `scripts/setup.mjs` | 12763 | `57420239b7df1f9401c70fba2bc3377a3b0b8f1ef49e2d6a1a8f1786b0ea45c4` |
+| `scripts/symbol-probe.mjs` | 3452 | `f9377dbe1d9f199a6d0a139ee46dc2ef4708fadc2dc1441ae5475c550dddc8fe` |
+| `scripts/verify-wiring.mjs` | 17096 | `8d27e5e86cd42ee3a7f378ffcb8f696bef2310472bfef8d8c976c049cd10682c` |
 | `src/agents.ts` | 13479 | `0e9fc2b22e375579fb2e77d8772717aec58cf31bd0bad91795cbd0dd4b46574e` |
 | `src/agents/base.ts` | 8318 | `a03474c4beb11e3d51e5f5cac67dd98062f83d744da97ceb22b478858ff70925` |
 | `src/agents/brishti.ts` | 1905 | `1a894e846c733aac9c61b3c22b7d5f3254dc3063bdd0b604b2e697763f087de5` |
-| `src/agents/defaults.ts` | 3986 | `6e2a53dfd779a0e7fb31ba332f3530c54760ca73b6ceb56b93162ba13b9895e3` |
+| `src/agents/defaults.ts` | 5175 | `cd32915bd0b18ccc69fd14cd6b30c426c6fb5f2a35852bce39fef81f9e30d958` |
 | `src/agents/halim.ts` | 1935 | `2ddc0f5097e4d703b0e64548f4e6e1f930ec2e0dcfa6b5743ab117421e5ec83f` |
 | `src/agents/index.ts` | 4509 | `245c6de43f295d406536b2bfb48f414781f7345d55dd16c55039ed067e538aac` |
 | `src/agents/jarin.ts` | 1650 | `ff791ee47845d672a9dc86754d6f046a57e6b919395246015b8ed97241a6f603` |
@@ -110,9 +112,9 @@ npm run integrity:check
 | `src/agents/manu.ts` | 1781 | `04d229ac7298a076a5db7673d8bf0a76cfe5d6cf8931ef9f64f5570a03c8aeca` |
 | `src/agents/nila.ts` | 2242 | `c18bfb99f7333607e89de8cc8ea7258ec399df4a9d2169e5cbed2d1a4c710446` |
 | `src/agents/rashed.ts` | 1748 | `75fe74123f35f4f3e447ffab619d19b20aa6be3dce4e6931db9645ec3f6e83b3` |
-| `src/agents/route.ts` | 10777 | `2f2609b780c01fedfd621ca56228297020978440c3b626364fbcc6f374f80e1c` |
-| `src/agents/runtime.ts` | 8702 | `f8c78d4fdc56924b3d813d4858399de42ce4b6dbcc92fe9b0dfc9aafd74d013c` |
-| `src/agents/shared.ts` | 6902 | `0710675dd1d966e0d7a0b153889f420d034a7ab00de23fb8684cea2f1684d825` |
+| `src/agents/route.ts` | 10184 | `1b9be2c6e6ff81e65915d53e5b40413e297d3040f7f23669890ac96516dc30c2` |
+| `src/agents/runtime.ts` | 9170 | `c8e8166be871d969ea3eacba7777d5d0db2540ce9de878c7b2b7931f101828ae` |
+| `src/agents/shared.ts` | 6864 | `a15edd43568cbcf3e989a37d8aec738f6ced53acf933562fe9f2d11656567720` |
 | `src/agents/tuhin.ts` | 1964 | `9ff9a03166f09d8909ae2da277e30d62fd0f81e1f6deb68f8f103d811a031f14` |
 | `src/agents/turn.ts` | 2848 | `36ef7e546f9c8131ab2780af0b8c29ace3082b676b13bd885ef7e9b11bcab0ac` |
 | `src/agents/types.ts` | 3255 | `bdb1c56d01faf589429cda6bd017797716ffe98569963fbfe0fc87b5849ba9f9` |
@@ -121,18 +123,19 @@ npm run integrity:check
 | `src/generate.ts` | 6956 | `a908cccdca29b6cad134f07873e83bf86ce9b45d107a4d21a27708c581ed9a3c` |
 | `src/identity.ts` | 11767 | `e0a07f913823045857b811ed7cf87e9bc34172cd0fb0662ce75a92691cc49ffd` |
 | `src/install/space.ts` | 3813 | `098fe34dfe34003f1ad66cb1e6aa32f4ef8415bc9d81f198c61776fbd31f4931` |
-| `src/plugin.ts` | 101453 | `9a9a3e4cee56733a1c92317d9b0ecf45c5637b4aeddc3cefb27a8d023c0a9f57` |
+| `src/plugin.ts` | 102622 | `b1a14cbcce351894127242b549990e9f6bcc2e54f09183150d39f05acf6dec86` |
 | `src/roster.ts` | 10259 | `c77ed9c1fcadc658411915fad178780a2847fcd2ca3e5dbb524ebe0564fb3cd8` |
 | `src/runtime.ts` | 16007 | `e1abe71ca259e56f6465d9a4e884e645901bd234007cd71664feb6b72b43b567` |
 | `src/zombie/circuitBreaker.ts` | 8526 | `a786855b8c6146dacc4d366976516883456d1c2644094cc773c70c4c63a0dba7` |
-| `src/zombie/context.ts` | 19736 | `0fe0f500b0f844c9771ea6206112b9663415caa4689719a0585973fcd1ba095e` |
+| `src/zombie/context.ts` | 20913 | `6c724c234c57b27fc8b27aa6d0c7430a06c058a9b49918488044d8c901a10661` |
 | `src/zombie/defaults.ts` | 3435 | `d77ae2c7532edcf8cb954d5eafb94782c39ec2ebc66b0f0d992639097362cec1` |
 | `src/zombie/design.ts` | 13478 | `7374301b4ebc6d5754456c7396cc85ee7cda6c599aa8c2d8a3c4e4cc7a83d3d0` |
 | `src/zombie/docsConsistency.ts` | 4738 | `5bd0126df48e12257d027e27f42e43f49409a8d8ef312db1840722f97291559f` |
 | `src/zombie/focus.ts` | 13450 | `83b95b0216e699fda9047cad4ce854de8fd9c22182d174fa800f0f6ff411b14b` |
 | `src/zombie/frontmatter.ts` | 10771 | `97a5c91c10c8edf838b7e6d47ad2549874885c0316254c3457434ceff0f07b16` |
 | `src/zombie/goalContract.ts` | 13607 | `e713487a6419eeaad0f4c0d5b271b5b4f96072d7c73e1912b4e71e22cc8f73d1` |
-| `src/zombie/intent.ts` | 2223 | `574e14ec8873c37b98766452b9cfb3c6c236200bb2d5eeec5e014638c9263082` |
+| `src/zombie/intent.ts` | 1358 | `a84a333928237442d0b6b7e558cf59bfb953f8d3d1e2f0247ce58a876f50da2e` |
+| `src/zombie/intentRules.ts` | 2883 | `ee1d86c65bd18fd68392dc97b1a19f2f0bb572e4a3815d4f24a857513ca4117f` |
 | `src/zombie/investigation.ts` | 4662 | `21b43b83a6cab15f26feeaa3471ddcb06cb05384387b736667d63bdd26ff1c79` |
 | `src/zombie/io.ts` | 5006 | `89b3f44e558f7b7d07735a9ac0a1fc3f610794c2ac10f50d3e7cd19b379d5dad` |
 | `src/zombie/lsp.ts` | 13112 | `4ad4e476d20812de3f93bb8182d535cd3e1ed2764a8e117083daa9511cb25604` |
@@ -151,18 +154,19 @@ npm run integrity:check
 | `src/zombie/runnerIdentity.ts` | 7631 | `7926e5533c287e0f757acd15623d4f0825a6eefa488379243059fd1f8ad659bc` |
 | `src/zombie/sanitize.ts` | 3325 | `c65236840a4e8b9f460149d3209f995171aa3535840e8882239ca2496d5a9ac5` |
 | `src/zombie/scan.ts` | 8082 | `3c5e756fede3cbf06fccdacb1f4606efd15f3b86a624c42a570b25473dbff081` |
-| `src/zombie/server.ts` | 81021 | `69ef9ba057583bf38fd0cbb94ba21ccf700b8ecc855f8410f2d88e2af91f35da` |
+| `src/zombie/server.ts` | 90395 | `b8c14816226ae0818f85352582f6a89adb3f5d450c478a913f76c663e5dda186` |
 | `src/zombie/shellGuard.ts` | 7546 | `5c77f8a4cb8395c8795dd80411b1553a884fda5c4c3f2c7de0738ce7b4a2687c` |
 | `src/zombie/skillCatalog.ts` | 23840 | `abb0ad8dbfa0ded08f3c2631da78deb2065ddc005c9f30acca7f43cb014b0325` |
 | `src/zombie/skills.ts` | 5815 | `0140442c49dfbe9ad7d02db80d310e314f5e126d9441dd33c4d6371894cba3d3` |
 | `src/zombie/ssot.ts` | 8026 | `f75f84fcff719115775c985fed8adacf6e4cb6f5f1c3c9e46e95de10bf60b857` |
 | `src/zombie/syllabus.ts` | 11725 | `2ec69619f8435234023ca5a194efc287934f45c7ff7ac923a1ddc7f0e48e244d` |
+| `src/zombie/symbols.ts` | 29260 | `33aa0a43c11a6d7466a51c5c20f558d18fcdaecc0b5b211f83730451b0278099` |
 | `src/zombie/transform.ts` | 3964 | `1c25f3eb1f6ecc9c8ed68b9894f2dfcffb75e233540be06b81f8bda78cc11ba2` |
 | `src/zombie/watchdog.ts` | 8617 | `4eb7c12c28bc6080ef224f2cc4acbc71fbf42812a46bfd69a73b65f6eedb8a57` |
 | `test/agents.test.ts` | 16193 | `86ebffdcf645c2d72669e145321293e8cb01610eb7133f5b4c9598ac9fc1e225` |
 | `test/audit-install.test.ts` | 4155 | `78ac9b2a258dba24cc55474ec8d03baf2ef4c66d1797e272717c0b369cfd8d44` |
 | `test/circuitBreaker.test.ts` | 5040 | `075d02b09d49f19206b242d8373dfac79413d90ac6211043b99b06814d5b1acb` |
-| `test/context.test.ts` | 36898 | `a7f32365543fbec6b1e0a397c9a1ac3d4881e14701a89dbf7d52c91eb6fb8374` |
+| `test/context.test.ts` | 37074 | `a3f45cf8b878c041346a6d2d1acfc99042cd760893f1dcd723364130ba0f01eb` |
 | `test/design.test.ts` | 4799 | `ce13246055690ddf813e9cc07cd6f108731b4cdd9d762f92941ea88d1b306e23` |
 | `test/docs.test.ts` | 3227 | `d3d6f18053c2561701291a4b03e38cc00d96b31fcecfdec5fdc0c0a58cd5f85a` |
 | `test/focus.test.ts` | 4051 | `47d93d65959c80c0b1ebb99b7cc5445d5dfbef536c9d3bc51bc90937b0e8b3a1` |
@@ -185,16 +189,19 @@ npm run integrity:check
 | `test/onboarding.test.ts` | 6117 | `9e45cc4cbeaed79e4f5644f28d4faea87ee34152e96972973c93774c9ae344ae` |
 | `test/opencodeRuntime.test.ts` | 3366 | `bf0c644e9ffe3e572d49c3e2ccab99cf752e88f27cd4b9cf4596ddbc16434fdd` |
 | `test/origin.test.ts` | 4002 | `d75f26822785389c2c9a3b1213c74555ced930c374797d2e702c80fad6788b9f` |
-| `test/plugin.test.ts` | 95573 | `1b75ac96664a00adca68c9d86e75b30489e2ae0b09580aad08d6ea27bf466222` |
-| `test/repo.test.ts` | 2929 | `259c2d03f3261d3392fb1898f590b9bd6ce6248614a5b6d8d6f319e60b4d01e0` |
+| `test/plugin.test.ts` | 95964 | `839e003489b0c443d910dd8655aad9351591ba39a3e91ac7e7e623e7a0256e30` |
+| `test/repo.test.ts` | 3262 | `bb2c2c93f3fe71dcbd05fdcaaecb7f8592ccf3b136cfd01fe4240fc8bf9c3444` |
 | `test/roster.test.ts` | 4444 | `1a37243b871c1d85ceaf91beadffba6347051344860701fe9268841ba3acd57c` |
+| `test/route.test.ts` | 4480 | `9f26a8254fa16da3121e46d3614b63f015d5d9a8b090c2c359e436bcb0bc629d` |
 | `test/runnerIdentity.test.ts` | 4145 | `0a0bbe76c848d5c43bab93165cdc7cfbf5a1d813f75e063e1678ced8792738c9` |
 | `test/sanitize.test.ts` | 2020 | `caad202b8910f05c0ad655650b7fca3212242938a7d9122c7c83a6025fa9111d` |
 | `test/shellGuard.test.ts` | 2554 | `43433de488ad0d9dccfc07f9a860288b88f02d67737293e8ebab5786282351d1` |
 | `test/skillCatalog.test.ts` | 9051 | `ac93c08c7a44cb36cf4d46742c0f0b19362ea873447d52737ec8f840c36460c2` |
+| `test/symbols.test.ts` | 3929 | `7fc1034d154ef986be98ddb509b3b716500642e9a5608049e1b938d39fc834ac` |
 | `test/tools.test.ts` | 5560 | `74eee0129d493f99d50af154ebc7ddc12cb897346acaeb9ee5a9e3f982af2c89` |
 | `test/turn.test.ts` | 4179 | `e5e4c1f1bf7530393223a4fbe563d1e3bb9e5f0e68283c47146224d57cf1a513` |
 | `test/watchdog.test.ts` | 4197 | `cf522fe217f804c45fc55c1b405a1f7d4cda0d4f3134c7a3388202e9a3ae0b53` |
+| `test/wiring.test.ts` | 9059 | `93782353d4a5a99ec8c0391953d80e91fa83c5a925cb06e83b3eb7fbaa117a2e` |
 
 ## Footer
 

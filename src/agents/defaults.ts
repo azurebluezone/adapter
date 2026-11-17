@@ -9,6 +9,38 @@ import type {
   ToolPolicy,
 } from "./types.ts";
 
+// The mounted missionbarisal aggregator exposes writes, shells, DB access and
+// credential reads next to useful research verbs. Grant the read-only slice by
+// exact name and deny the dangerous verbs explicitly, so the boundary is visible
+// instead of depending on a wildcard that could widen later.
+export const MISSIONBARISAL_READONLY: readonly string[] = [
+  "missionbarisal_read_file",
+  "missionbarisal_read_ssot",
+  "missionbarisal_glob",
+  "missionbarisal_grep",
+  "missionbarisal_list_directory",
+  "missionbarisal_memory_search",
+  "missionbarisal_memory_recent",
+  "missionbarisal_get_memory",
+  "missionbarisal_get_working_dir",
+  "missionbarisal_system_info",
+];
+
+export const DENIED_TOOLS: readonly string[] = [
+  "missionbarisal_exec",
+  "missionbarisal_terminal",
+  "missionbarisal_write_file",
+  "missionbarisal_delete_file",
+  "missionbarisal_rename_file",
+  "missionbarisal_set_working_dir",
+  "missionbarisal_remote_mcp_call",
+  "missionbarisal_call_agent",
+  "missionbarisal_agent_mission",
+  "missionbarisal_agent_single",
+  "missionbarisal_db_query",
+  "missionbarisal_env_get",
+];
+
 export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> = {
   intake: [
     "get_working_directory",
@@ -55,6 +87,7 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     // Read-only research tools may be used wherever facts are gathered.
     "image-brand_*",
     "public-api_*",
+    ...MISSIONBARISAL_READONLY,
     "project_onboarding",
     "project_fingerprint",
   ],
@@ -96,6 +129,7 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "read",
     "image-brand_*",
     "public-api_*",
+    ...MISSIONBARISAL_READONLY,
   ],
   respond: ["context_status", "append_syllabus"],
 };
@@ -139,7 +173,7 @@ export function phaseTools(
   return {
     phases,
     mutating: MUTATING_TOOLS,
-    denied: [...new Set(["task", ...denied])].filter(Boolean),
+    denied: [...new Set(["task", ...DENIED_TOOLS, ...denied])].filter(Boolean),
   };
 }
 

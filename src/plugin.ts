@@ -97,7 +97,7 @@ import {
 import type { AgentRun, ReleaseCheck } from "./agents/types.ts";
 import type { GateOptions } from "./zombie/responseGate.ts";
 import { buildRunnerIdentity } from "./zombie/runnerIdentity.ts";
-import { openContracts } from "./zombie/goalContract.ts";
+import { openContracts, parseContract } from "./zombie/goalContract.ts";
 import { applyResponseGate } from "./zombie/responseGate.ts";
 import {
   BREAKER_LIMIT,
@@ -1107,12 +1107,13 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
       "register-tools",
       registration.applied,
       (result) => {
-        report.outputs.tools = `${result.registered.length} registered${
+        const own = result.surface.filter((id) => id.startsWith("zombiecoder_")).length;
+        report.outputs.tools = `${result.registered.length} registered, ${own} live${
           result.error ? ` (${result.error})` : ""
         }`;
         updateStep("register-tools", {
           ok: !result.error || result.registered.length > 0,
-          detail: `${result.registered.length} registered`,
+          detail: `${result.registered.length} registered, ${own} live`,
           error: result.error,
         });
       },
@@ -1315,6 +1316,11 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
               const focusFiles = pack.focus
                 ? [...pack.focus.primary, ...pack.focus.related].map((item) => item.path)
                 : [];
+              // The syllabus is the durable contract record. Carry an open
+              // contract into this new turn instead of starting with null and
+              // leaving write tools blocked in investigate forever.
+              const openNow = openContracts(syllabus, sessionID)[0] ?? null;
+              const openFields = openNow ? parseContract(syllabus, openNow.id) : null;
               const turn = beginTurn({
                 sessionID,
                 agentID,
@@ -1323,6 +1329,15 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
                 previous,
                 freshSyllabus,
                 turnIndex: userTurnCount,
+                openContract: openNow
+                  ? {
+                      id: openNow.id,
+                      status: "open",
+                      at: new Date().toISOString(),
+                      ...(openFields?.check ? { check: openFields.check } : {}),
+                      ...(openFields?.expected ? { expected: openFields.expected } : {}),
+                    }
+                  : null,
               });
               routeRun = turn.run;
               await saveRun(ctx.storage, routeRun);
@@ -1606,18 +1621,22 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           limit: BREAKER_LIMIT,
           ...input.extra,
         });
-        if (typeof session?.synthetic !== "function") {
+        // Cards go through the surface helper, which records the text before
+        // sending it. A direct session.synthetic call bypassed that record and
+        // the next request treated the breaker card as a brand-new user turn.
+        const notify = deps.synthetic;
+        if (typeof notify !== "function") {
           audit(projectRoot, "plugin", {
             kind: "agent.escalation",
             sessionID,
             from: agentID,
             ok: false,
-            reason: "session.synthetic unavailable",
+            reason: "synthetic card door unavailable",
           });
           return;
         }
         if (decision.action === "stop") {
-          await session.synthetic({
+          await notify({
             sessionID,
             text: unresolvedMessage(nextState, decision.limit),
             description: "zombiecoder circuit breaker",
@@ -1633,7 +1652,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
         }
         // Same agent, same model, same accountability. The retry carries the
         // failure evidence; there is no switchAgent and no delegation.
-        await session.synthetic({
+        await notify({
           sessionID,
             text: statusMessage(trackedFailure, decision),
           description: "zombiecoder circuit breaker",

@@ -1498,6 +1498,57 @@ Test labels:
 
 ---
 
+## ১৭.১ Delivery — এক লাইনের installer, fallback ও Desktop/1 audit
+
+`ZC_DELIVERY_DOCS` — এই section-টা release verification-এর চুক্তি: প্রতিটি দাবি
+একটা ফাইল, command বা live result দিয়ে প্রমাণ করতে হবে; প্রমাণ না থাকলে
+`UNVERIFIED`।
+
+**এক লাইনের installer (non-TTY pipe সহ):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/azurebluezone/adapter/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/azurebluezone/adapter/main/install.sh | bash -s -- --no-lsp
+```
+
+Piped stdin non-TTY হলেও script থামে না: `bin/install.mjs` সব প্রশ্নে
+`--yes` পায়। আগে থেকেই installed থাকলে একই command update হিসেবে চলে এবং
+generated state একই থাকে (idempotence proof)।
+
+**কোথায় আটকাতে পারে, আর fallback কী:**
+
+| আটকানোর জায়গা | Fallback | Marker |
+| --- | --- | --- |
+| GitHub tarball CDN | তিনটি endpoint, তারপর `git clone --depth 1` | `FALLBACK_DOWNLOAD`, `FALLBACK_CHECKOUT` |
+| সম্পূর্ণ offline | `ZOMBIECODER_SOURCE_DIR=/path/to/checkout` | `FALLBACK_CHECKOUT` |
+| `npm install @opencode/plugin` | আগের resolvable dependency রেখে এগোয় | `FALLBACK_NPM` |
+| LSP server download | PATH-এ যেটা resolves, সেটাই config-এ যায় | `FALLBACK_LSP` |
+| MCP `tools/list` | অন্তত একটা server উত্তর দিলে install চলবে | `FALLBACK_MCP` |
+
+`ZOMBIECODER_TARBALL=/path/source.tar.gz` দিলে download পুরো বাদ যায় — offline
+test ও reproducible release proof-এর জন্য।
+
+**নতুন example folder:** `examples/desktop-1/` — `input.md` হলো
+pre-registered brief (goal contract, আট specialist-এর sequential কল, report-এর
+চারটি exact heading), আর `verify-delivery.mjs` হলো delivery verifier।
+
+```bash
+mkdir -p /home/sahon/Desktop/1
+cd /home/sahon/Desktop/1
+opencode run --agent zombiecoder --auto --format json --archived \
+  "$(cat /home/sahon/adapter/examples/desktop-1/input.md)" | tee run.log
+
+node /home/sahon/adapter/examples/desktop-1/verify-delivery.mjs
+# ZC_DELIVERY_OK
+```
+
+Verifier যাচাই করে: `HEAD == origin/<branch> == origin/main`, docs marker,
+inline-install proof `PASS`, পাঁচটি fallback marker, test suite, config audit
+(9 agents / 3 MCP / 7 LSP), `examples/desktop-1`, `report.html`-এ নয় এজেন্ট ও
+চারটি heading, `run.json`, এবং browser-এ report খোলার record (`browser.json`)।
+
+---
+
 ## ১৮. License — Local Freedom, Non-Commercial
 
 **সংক্ষেপে:** নিজের কম্পিউটারে, localhost-এ, শেখার ও ব্যক্তিগত কাজে ব্যবহার
@@ -1543,8 +1594,8 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  8b9396d1f23f50be20fc692dc1548d5eb2a17d2c9d2c02d811be691bcd06b4f8  ║
-║  files 148 · bytes 1392996 · base c35d470 · dirty                        ║
+║  root  d31dab6c29dc27502836e62fc6876086a04d6c6c51005505080b5bda9248829d  ║
+║  files 155 · bytes 1480438 · base 8004453 · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -1552,7 +1603,7 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-13T22:22:15.675Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-17T22:47:46.870Z
 
 </div>
 <!-- INTEGRITY:END -->

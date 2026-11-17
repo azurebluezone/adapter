@@ -4,3 +4,8 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Local secrets and the nested historical git copy. Neither belongs in the
+# published adapter tree; both are machine-local artifacts.
+/.environment
+/adapter/

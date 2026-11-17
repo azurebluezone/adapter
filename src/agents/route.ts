@@ -4,6 +4,7 @@
 // parameter set (agent / kind / phase), not a prompt suggestion.
 
 import { createHash } from "node:crypto";
+import { classifyIntentKind, stripQuotedText } from "../zombie/intentRules.ts";
 import type {
   AgentID,
   AgentRun,
@@ -68,12 +69,6 @@ export function hashMessage(message: string): string {
 
 const TRIVIAL = /^(?:hi|hello|hey|thanks?|thank you|ok(?:ay)?|হাই|হ্যালো|ধন্যবাদ|ওকে|ঠিক আছে|হুম|হাঁ|হ্যাঁ)[\s!।.,?]*$/i;
 
-const WRITE_INTENT =
-  /\b(?:build|create|make|add|implement|fix|refactor|rewrite|write|delete|remove|update|change|install|deploy|migrate|generate|patch|edit|convert|rename|scaffold)\b|(?:বানাও|বানাতে|তৈরি|লিখে|লিখো|ঠিক\s*কর|ফিলাপ|যোগ\s*কর|বদল|মুছে|ইনস্টল|চালু\s*কর|করে\s*দে|সংযোজন|পরিবর্তন|টেস্ট\s*কর)/i;
-
-const READ_INTENT =
-  /\b(?:check|inspect|audit|analy[sz]e|review|explain|find|search|read|show|trace|diagnose|verify|test|run|compare)\b|(?:চেক|দেখ|বিশ্লেষণ|পর্যালোচনা|খুঁজ|বুঝিয়ে|বলো|কী|কেন|কোথায়|কেমন|যাচাই|পরীক্ষা)/i;
-
 const CONSENT =
   /^(?:yes|yep|ok(?:ay)?|go(?: ahead)?|proceed|approved?|do it|start|continue|হ্যাঁ|হা|ওকে|ঠিক আছে|করো|করে\s*ফেলো|শুরু\s*করো|এগিয়ে\s*যাও|সম্মতি)[\s!।.,?]*$/i;
 
@@ -81,12 +76,15 @@ export function classifyTask(message: string): TaskKind {
   const text = String(message ?? "").trim();
   if (!text) return "trivial";
   if (TRIVIAL.test(text)) return "trivial";
-  if (WRITE_INTENT.test(text)) return "substantive";
-  if (READ_INTENT.test(text)) return "readonly";
+  // `stripQuotedText` runs inside `classifyIntentKind`; the route only maps the
+  // shared verdict. `verify` stays read-only: a check never earns write tools.
+  if (classifyIntentKind(text) === "change") return "substantive";
   // Questions and conversation are read-only: they must never be forced through
   // a contract, but they also never earn write tools.
   return "readonly";
 }
+
+export { stripQuotedText };
 
 export function isConsent(message: string): boolean {
   const text = String(message ?? "").trim();

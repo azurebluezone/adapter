@@ -27,13 +27,21 @@ test("installer/runtime sources do not duplicate provider defaults or credential
   const relative = (file: string) => path.relative(ROOT, file);
   const contents = files.map((file) => ({ file: relative(file), text: fs.readFileSync(file, "utf8") }));
 
-  const onlyInDefaults = (pattern: RegExp, allowed: string) => {
-    const hits = contents.filter(({ text }) => pattern.test(text)).map(({ file }) => file);
-    assert.deepEqual(hits, [allowed], `${pattern} must live only in ${allowed}`);
+  const onlyIn = (pattern: RegExp, allowed: readonly string[]) => {
+    const hits = contents.filter(({ text }) => pattern.test(text)).map(({ file }) => file).sort();
+    assert.deepEqual(hits, [...allowed].sort(), `${pattern} must live only in ${allowed.join(", ")}`);
   };
 
   assert.doesNotMatch(contents.find(({ file }) => file === "src/zombie/defaults.ts")?.text ?? "", /127\.0\.0\.1:49374/);
-  onlyInDefaults(/missionbarisal/, "src/zombie/defaults.ts");
+  // The MCP server identifier is not a provider default or a credential. It is
+  // allowed in the tool policy and the shared prompt that must name the mounted
+  // surface; the provider form (`missionbarisal/...`) stays in defaults only.
+  onlyIn(/missionbarisal/, [
+    "src/zombie/defaults.ts",
+    "src/agents/defaults.ts",
+    "src/agents/shared.ts",
+  ]);
+
   assert.doesNotMatch(contents.find(({ file }) => file === "src/roster.ts")?.text ?? "", /opencode\/big-pickle/);
 
   for (const { file, text } of contents) {
