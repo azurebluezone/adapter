@@ -222,7 +222,11 @@ export function noteContract(run: AgentRun, contract: ContractSnapshot, now?: Da
 
 export function noteOnboarding(run: AgentRun, ok: boolean, now?: Date): AgentRun {
   if (!ok || run.phase !== "footprint") return run;
-  return advance(run, "investigate", now);
+  let next = advance(run, "investigate", now);
+  // An attached open contract still needs write tools; onboarding is the last
+  // gate, not a detour back to read-only.
+  if (next.contract?.status === "open") next = walk(next, ["contract", "work"], now);
+  return next;
 }
 
 export function noteAnswer(run: AgentRun, hasToolCalls: boolean, now?: Date): AgentRun {

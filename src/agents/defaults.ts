@@ -83,6 +83,12 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "patch_preview",
     "memory_archive",
     "skill_catalog",
+    // Read-only symbol/LSP queries gather facts; without them the registered
+    // tools are denied in every phase and the agent cannot diagnose code.
+    "symbol_overview",
+    "find_symbols",
+    "find_references",
+    "diagnostics_for_file",
     // MCP servers mounted by OpenCode are exposed as `<server>_<tool>`.
     // Read-only research tools may be used wherever facts are gathered.
     "image-brand_*",
@@ -127,6 +133,12 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "syntax_check",
     "shell",
     "read",
+    // Diagnostics belong to verification: after an edit, the same agent must
+    // be able to read the real LSP errors it is claiming to have fixed.
+    "symbol_overview",
+    "find_symbols",
+    "find_references",
+    "diagnostics_for_file",
     "image-brand_*",
     "public-api_*",
     ...MISSIONBARISAL_READONLY,

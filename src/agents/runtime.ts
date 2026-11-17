@@ -167,8 +167,25 @@ export function beginTurn(input: {
 
   // A new user turn must not orphan an open contract. The syllabus is the
   // durable record; re-attaching it returns the run to the phase that can
-  // finish it instead of stranding write tools in investigate.
-  if (input.openContract && run.taskKind === "substantive") {
+  // finish it instead of stranding write tools in investigate. The contract
+  // also keeps the run substantive: a short question or a status message in
+  // the same session cannot re-classify it as read-only and block its own
+  // write path.
+  if (input.openContract) {
+    if (run.taskKind !== "substantive") {
+      run = startRun({
+        sessionID: input.sessionID,
+        agentID: input.agentID,
+        message,
+        focus: input.focus,
+        kind: "substantive",
+        freshSyllabus: input.freshSyllabus,
+        turnIndex: input.turnIndex,
+        now: input.now,
+      });
+      run = walk(run, ["footprint"], input.now);
+      if (!run.freshSyllabus) run = walk(run, ["investigate"], input.now);
+    }
     run = noteContract(run, input.openContract, input.now);
   }
 
