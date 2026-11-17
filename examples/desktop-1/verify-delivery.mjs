@@ -94,8 +94,8 @@ try {
     { cwd: REPO, encoding: "utf8", timeout: 300000 },
   );
   const out = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-  const passed = /# pass (\d+)/.exec(out)?.[1] ?? "0";
-  const failed = /# fail (\d+)/.exec(out)?.[1] ?? "?";
+  const passed = /(?:#|ℹ)\s*pass (\d+)/.exec(out)?.[1] ?? "0";
+  const failed = /(?:#|ℹ)\s*fail (\d+)/.exec(out)?.[1] ?? "?";
   record("tests", result.status === 0, `exit ${result.status}; pass ${passed}, fail ${failed}`);
 } catch (error) {
   record("tests", false, String(error?.message ?? error));
