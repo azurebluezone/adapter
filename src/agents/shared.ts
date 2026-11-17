@@ -49,6 +49,18 @@ export const SHARED_EXPERTISE = [
   "- Code Mode: `tools[\"<server>\"].<tool>`; direct mode: `<server>_<tool>`.",
 ].join("\n");
 
+// Roster-only capability map. The shared persona is also merged into OpenCode
+// builtin runners, and its 5000-byte ceiling keeps it project-scoped, so this
+// block is appended by renderAgentPrompt for the nine ZombieCoder agents only.
+// Keep it compact: the full schemas live in the MCP servers, not in the prompt.
+export const AGENT_CAPABILITIES = [
+  "## Capabilities",
+  "- Skills: scan `skill`; no match → `skill_catalog` action=auto (this stack) or install the best id; fetches + registers.",
+  "- `image-brand_image_brand` {input, title, canvas:{width,height}}; `image-brand_image_fit` {input, width, height} exact, no text; search/fetch/batch/decorate.",
+  "- `public-api_*`: wiki_search, wiki_page, wiki_onthisday, wiki_featured, weather, currency, country, qr {data, size}.",
+  "- Exact size: read px/columns/ratio from the project (CSS, brief, screenshot) before header/footer copy or images; never invent; verify real pixels.",
+].join("\n");
+
 export const SHARED_EXECUTION = [
   "## Short Execution Loop (every agent)",
   "",

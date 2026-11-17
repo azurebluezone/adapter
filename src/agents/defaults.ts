@@ -122,6 +122,9 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "goal_contract",
     "append_syllabus",
     "context_status",
+    // A skill discovered mid-task must be loadable here: investigate can list
+    // the catalog, but installation and reload belong to the work phase.
+    "skill_catalog",
     // MCP research/branding tools, same namespace shape as the host.
     "image-brand_*",
     "public-api_*",

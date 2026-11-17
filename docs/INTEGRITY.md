@@ -7,21 +7,21 @@
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  f4b5ad10758255998d9259abe6b85c09bba55e433ee958d9e0842aec69c75942  ║
-║  files 156 · bytes 1484914 · base 7673f0a · dirty                        ║
+║  root  89bfe95755898b73ae9a7426763ef91f85a66c378d8bc15aa3f7e698bc2d5c50  ║
+║  files 157 · bytes 1489715 · base 085f427 · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
 | Field | Value |
 |---|---|
 | Schema | `zombiecoder-integrity/v1` |
-| Generated (UTC) | `2026-11-17T23:21:36.423Z` |
-| Base commit | `7673f0a` |
+| Generated (UTC) | `2026-11-17T23:41:02.639Z` |
+| Base commit | `085f427` |
 | Branch | `agent-runtime-audit-20261114` |
 | Code tree | `dirty` |
-| Files | 156 |
-| Bytes | 1484914 |
-| Root SHA-256 | `f4b5ad10758255998d9259abe6b85c09bba55e433ee958d9e0842aec69c75942` |
+| Files | 157 |
+| Bytes | 1489715 |
+| Root SHA-256 | `89bfe95755898b73ae9a7426763ef91f85a66c378d8bc15aa3f7e698bc2d5c50` |
 
 ## Scope
 
@@ -102,9 +102,9 @@ npm run integrity:check
 | `scripts/symbol-probe.mjs` | 3452 | `f9377dbe1d9f199a6d0a139ee46dc2ef4708fadc2dc1441ae5475c550dddc8fe` |
 | `scripts/verify-wiring.mjs` | 17096 | `8d27e5e86cd42ee3a7f378ffcb8f696bef2310472bfef8d8c976c049cd10682c` |
 | `src/agents.ts` | 13479 | `0e9fc2b22e375579fb2e77d8772717aec58cf31bd0bad91795cbd0dd4b46574e` |
-| `src/agents/base.ts` | 8318 | `a03474c4beb11e3d51e5f5cac67dd98062f83d744da97ceb22b478858ff70925` |
+| `src/agents/base.ts` | 8372 | `cbdad3adb062ed405b783a665af8dcf521be0934a41205ba0f7123df2840d7e8` |
 | `src/agents/brishti.ts` | 1905 | `1a894e846c733aac9c61b3c22b7d5f3254dc3063bdd0b604b2e697763f087de5` |
-| `src/agents/defaults.ts` | 5667 | `dd6b3f79abb9292c9891101514d17537c21e83854bfd4d6440c6f4ca3ba34e5c` |
+| `src/agents/defaults.ts` | 5841 | `c5b83ea2a507c203c03c5362effd67eae65891c8c30ca17f2a1a69abddaeef52` |
 | `src/agents/halim.ts` | 1935 | `2ddc0f5097e4d703b0e64548f4e6e1f930ec2e0dcfa6b5743ab117421e5ec83f` |
 | `src/agents/index.ts` | 4509 | `245c6de43f295d406536b2bfb48f414781f7345d55dd16c55039ed067e538aac` |
 | `src/agents/jarin.ts` | 1650 | `ff791ee47845d672a9dc86754d6f046a57e6b919395246015b8ed97241a6f603` |
@@ -114,7 +114,7 @@ npm run integrity:check
 | `src/agents/rashed.ts` | 1748 | `75fe74123f35f4f3e447ffab619d19b20aa6be3dce4e6931db9645ec3f6e83b3` |
 | `src/agents/route.ts` | 10411 | `6292f261637c50130ee06d9de4af12ca22e9339f727ead8a5086b75e195f7091` |
 | `src/agents/runtime.ts` | 9769 | `233b6eecbf7b22972d62803c634453b9a00f13261476603aa7459afd77d0c98c` |
-| `src/agents/shared.ts` | 6864 | `a15edd43568cbcf3e989a37d8aec738f6ced53acf933562fe9f2d11656567720` |
+| `src/agents/shared.ts` | 7824 | `d57368dc692b66b0554d1b732963fec78c6782c42548af567a31b22b168350f0` |
 | `src/agents/tuhin.ts` | 1964 | `9ff9a03166f09d8909ae2da277e30d62fd0f81e1f6deb68f8f103d811a031f14` |
 | `src/agents/turn.ts` | 2848 | `36ef7e546f9c8131ab2780af0b8c29ace3082b676b13bd885ef7e9b11bcab0ac` |
 | `src/agents/types.ts` | 3255 | `bdb1c56d01faf589429cda6bd017797716ffe98569963fbfe0fc87b5849ba9f9` |
@@ -165,6 +165,7 @@ npm run integrity:check
 | `src/zombie/watchdog.ts` | 8617 | `4eb7c12c28bc6080ef224f2cc4acbc71fbf42812a46bfd69a73b65f6eedb8a57` |
 | `test/agents.test.ts` | 16193 | `86ebffdcf645c2d72669e145321293e8cb01610eb7133f5b4c9598ac9fc1e225` |
 | `test/audit-install.test.ts` | 4155 | `78ac9b2a258dba24cc55474ec8d03baf2ef4c66d1797e272717c0b369cfd8d44` |
+| `test/capabilities.test.ts` | 3613 | `d9cec364770b766bb0cacc3a7d72b71974eb3f7be269c2a9b4f48869846407f2` |
 | `test/circuitBreaker.test.ts` | 5040 | `075d02b09d49f19206b242d8373dfac79413d90ac6211043b99b06814d5b1acb` |
 | `test/context.test.ts` | 37074 | `a3f45cf8b878c041346a6d2d1acfc99042cd760893f1dcd723364130ba0f01eb` |
 | `test/design.test.ts` | 4799 | `ce13246055690ddf813e9cc07cd6f108731b4cdd9d762f92941ea88d1b306e23` |

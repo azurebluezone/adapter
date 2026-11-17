@@ -5,6 +5,7 @@
 
 import { createHash } from "node:crypto";
 import {
+  AGENT_CAPABILITIES,
   SHARED_EXECUTION,
   SHARED_EXPERTISE,
   SHARED_RULES,
@@ -117,6 +118,8 @@ export function renderAgentPrompt(profile: AgentProfile): string {
     SHARED_EXECUTION,
     "",
     SHARED_EXPERTISE,
+    "",
+    AGENT_CAPABILITIES,
     "",
   ]
     .filter((line, index, all) => !(line === "" && all[index - 1] === ""))
