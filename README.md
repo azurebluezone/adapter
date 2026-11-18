@@ -1084,8 +1084,8 @@ VS Code-এ OpenCode session দেখতে [`formulahendry.acp-client`](https:
 
 **সংক্ষেপে:** `patch` কোনো MCP tool নয়। এটি OpenCode V2-এর built-in tool
 (`opencode.tool.patch`; UI/persistence-এ `apply_patch`), আর ইনপুট একটাই—
-`patchText`। `mcp/image-brand` (6 tools) ও `mcp/public-api` (8 tools)-এ কোনো
-`patch` নেই; দুটোই আলাদা কাজের server।
+`patchText`। `mcp/image-brand` (6 tools), `mcp/public-api` (8 tools) ও `mcp/cdp`
+(12 tools)-এ কোনো `patch` নেই; তিনটাই আলাদা কাজের server।
 
 **কোন model-এ দেখা যাবে:** OpenCode 2.2.5-এ tool list model-এর উপর নির্ভর করে।
 `model.id`-তে `gpt-` থাকলে (কিন্তু `oss` বা `gpt-4` নয়) `patch` থাকে এবং
@@ -1139,9 +1139,9 @@ VS Code-এ OpenCode session দেখতে [`formulahendry.acp-client`](https:
 → apply → `git diff` → targeted check → full check**। `patch` tool execute না
 হলে `৬.৫ Native tool calls` দেখুন।
 
-### MCP — দুটি local server (installer নিজেই register করে)
+### MCP — তিনটি local server (installer নিজেই register করে)
 
-`mcp/` ফোল্ডারে দুটি আলাদা local stdio MCP server আছে; কোনো LLM বা API key নেই।
+`mcp/` ফোল্ডারে তিনটি আলাদা local stdio MCP server আছে; কোনো LLM বা API key নেই।
 Installer clone থেকে চালালে এগুলো install root-এ কপি হয় এবং `opencode.json`-এর
 `mcp.servers`-এ absolute path সহ নিজে থেকেই বসে (`node bin/install.mjs --yes`)।
 
@@ -1149,13 +1149,22 @@ Installer clone থেকে চালালে এগুলো install root-এ
 |---|---|---|
 | `image-brand` | 6 | PD/CC0 ছবি search (`image_search`), provenance সহ download (`image_fetch`), বাংলা title+logo branding (`image_brand`), exact-size clean crop (`image_fit`), batch (`image_batch`), site decoration (`web_decorate`: logo, hero, OG, card, HTML/CSS, sha256 manifest) |
 | `public-api` | 8 | Wikipedia search/page/onthisday/featured, weather, currency, country, QR PNG |
+| `cdp` | 12 | আসল Chromium-এর CDP backend: `status`, `launch`, `targets`, `navigate`, `dom`, `markers` (headings/landmarks/data-*/aria-*/missing-alt/unnamed controls/duplicate ids), `audit` (markers + console + exceptions + network errors এক pass-এ), `screenshot` (exact viewport PNG/JPEG + real pixel size), `console`, `network`, `act` (click/focus/fill), `eval` |
 
-`opencode mcp list` → `✓ image-brand connected`, `✓ public-api connected`।
+`cdp` কোনো browser চালু না করেই boot হয় (`status` শুধু পড়ে)। Chromium খোঁজার ক্রম:
+`CDP_ENDPOINT` (আগে থেকে চলা browser), `CDP_BROWSER_PATH`, PATH-এর
+`chromium`/`google-chrome`/`chrome`, তারপর Playwright-এর cache। Ubuntu-র snap stub
+wrapper-কে browser ধরা হয় না (real ELF/Mach-O/PE binary লাগে)। কোথাও Chromium না
+থাকলে tool honest ভাবে `CDP_UNAVAILABLE` + `editor_fallback: "browser"` ফেরত দেয়;
+তখন OpenCode editor-এর নিজস্ব `browser` tools (Chromium-backed) ব্যবহার করতে হয়।
+
+`opencode mcp list` → `✓ image-brand connected`, `✓ public-api connected`, `✓ cdp connected`।
 Install-এর পরে কনফিগ যাচাই: `node scripts/audit-install.mjs`।
 কোনো MCP server-এ `patch` tool নেই; multi-file edit OpenCode-এর native
 `patch` (উপরে দেখুন), আর `patch_preview` শুধু single-file।
 বিস্তারিত: [`mcp/image-brand/README.md`](mcp/image-brand/README.md),
-[`mcp/public-api/README.md`](mcp/public-api/README.md)।
+[`mcp/public-api/README.md`](mcp/public-api/README.md),
+[`mcp/cdp/README.md`](mcp/cdp/README.md)।
 
 ---
 
@@ -1594,8 +1603,8 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  89bfe95755898b73ae9a7426763ef91f85a66c378d8bc15aa3f7e698bc2d5c50  ║
-║  files 157 · bytes 1489715 · base 085f427 · dirty                        ║
+║  root  3d8b34eeb510adf779120cb6d893ab6a5f866308c9c75d26bc7a5fcce8519157  ║
+║  files 163 · bytes 1557572 · base aebe25c · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -1603,7 +1612,7 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-17T23:41:02.639Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-18T00:15:53.759Z
 
 </div>
 <!-- INTEGRITY:END -->

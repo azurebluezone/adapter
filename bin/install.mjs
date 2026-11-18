@@ -1931,6 +1931,9 @@ if (DO_PROVIDER_CONFIG && DO_MCP_CHECK) {
         if (server.name === "image-brand" && !names.includes("web_decorate")) {
           throw new Error("image-brand: web_decorate missing from tools/list");
         }
+        if (server.name === "cdp" && !names.includes("markers")) {
+          throw new Error("cdp: cdp_markers missing from tools/list");
+        }
         parts.push(`${server.name}=${names.length}`);
       } catch (error) {
         failures.push(`${server.name}: ${String(error?.message ?? error)}`);

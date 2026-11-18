@@ -7,21 +7,21 @@
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  89bfe95755898b73ae9a7426763ef91f85a66c378d8bc15aa3f7e698bc2d5c50  ║
-║  files 157 · bytes 1489715 · base 085f427 · dirty                        ║
+║  root  3d8b34eeb510adf779120cb6d893ab6a5f866308c9c75d26bc7a5fcce8519157  ║
+║  files 163 · bytes 1557572 · base aebe25c · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
 | Field | Value |
 |---|---|
 | Schema | `zombiecoder-integrity/v1` |
-| Generated (UTC) | `2026-11-17T23:41:02.639Z` |
-| Base commit | `085f427` |
+| Generated (UTC) | `2026-11-18T00:15:53.759Z` |
+| Base commit | `aebe25c` |
 | Branch | `agent-runtime-audit-20261114` |
 | Code tree | `dirty` |
-| Files | 157 |
-| Bytes | 1489715 |
-| Root SHA-256 | `89bfe95755898b73ae9a7426763ef91f85a66c378d8bc15aa3f7e698bc2d5c50` |
+| Files | 163 |
+| Bytes | 1557572 |
+| Root SHA-256 | `3d8b34eeb510adf779120cb6d893ab6a5f866308c9c75d26bc7a5fcce8519157` |
 
 ## Scope
 
@@ -47,7 +47,7 @@ npm run integrity:check
 
 | Path | Bytes | SHA-256 |
 |---|---:|---|
-| `bin/install.mjs` | 89971 | `b9ea26b019f20f609f425dbdd4f6b6359061433b4d25b33d4c5d60002f318d61` |
+| `bin/install.mjs` | 90119 | `79a9efff6b3cacfb0d5980b9d5f5683349645f66302fa863e6d50b2015f643d8` |
 | `bin/quick-install.mjs` | 5641 | `c6847f6d2dae8c70dfb2f03d665784e2f382884585a1f6e140b232dc8432bfcc` |
 | `docs/skills/bootstrap.md` | 574 | `0580d9dff2bf4a466597b5dcb41792ba7bba22175e37ff95dfa716acb057e51c` |
 | `docs/skills/cpanel.md` | 1867 | `f056fa581f9a0fa268556d8769fc2c5389a864fbd552e90b1692efde0c003537` |
@@ -71,6 +71,11 @@ npm run integrity:check
 | `docs/skills/web-delivery.md` | 4247 | `61ce13fc7897d4cb1a7bd59cfaa058ef6d94d6d7e7cb34295b179bc7e72cf0db` |
 | `install.sh` | 38130 | `c3785f31e1a7da6866ceadfa828afd165114cbcb2f2f7d6ff17e445d3daef002` |
 | `LICENSE` | 1961 | `d06b8b22307bf25fa4e3dba778ad2ccc1350c2e5cd1b5e6ed40c2de25b6cd95a` |
+| `mcp/cdp/e2e-live.mjs` | 6342 | `5bba9df285ffec88c07da877df772b4c7f08aeedee21adf7845e1b7d4b961a53` |
+| `mcp/cdp/README.md` | 4509 | `9be4ea29ff1173489eeebf66746ce5113070b11f6c17050c6ac4bd85c9e3e559` |
+| `mcp/cdp/selfcheck.mjs` | 2568 | `1379edf5498878c5d38aa39ab2d49593a3f1a8a265c3bb35e68826e9ab208c21` |
+| `mcp/cdp/server.mjs` | 44133 | `1cd7d6b76b37432b349ec08f5c7b9ad409292c36a8b459b9c008f3201168b6e6` |
+| `mcp/cdp/test/cdp.test.mjs` | 5175 | `939966e51585d6ed91f3ef0b97e97e93d530a20c1a1ae9027d38efc775078a26` |
 | `mcp/image-brand/e2e-live.mjs` | 2781 | `8ae7c8c7ce022cbb80f049d56aeec5719dfc69cc90ee87c3aed8006454ebc04f` |
 | `mcp/image-brand/fixtures.py` | 1731 | `bee4ffeed922dafa6a11c47dfca4ff1c9e647dbf12038cc8cff3d6d31ff1ea44` |
 | `mcp/image-brand/mcp-client.mjs` | 296 | `131a4fcb5d60dff790af5ba3aaedd9d919cea7ea96140e73c4d616947925fbd6` |
@@ -85,14 +90,14 @@ npm run integrity:check
 | `mcp/public-api/sources.mjs` | 17211 | `bd18b936496f7cc34e390f2d3f8b5ac54a8cf412e7d447e40b42b26868ad55fc` |
 | `mcp/public-api/test/public-api.test.mjs` | 3599 | `eb0ffc399dfab82869c693130792b2da6c911e27126cffc8f4fbd5619c26ebd1` |
 | `mcp/shared/client.mjs` | 2609 | `acc65207ae92b58082f2ff1df8570d076c710b5303a6ea7fe51f6ac1a62c088c` |
-| `package.json` | 2454 | `fe75c51a2a1efe7f1d15115500055f2575fac828037c8e7f2f1c770ddd7e42b3` |
+| `package.json` | 2738 | `3dd74e5999c3824bc56800598bb232567eb33f5a87fa8e6c98d236ba6f4ab510` |
 | `scripts/agents-check.mjs` | 6808 | `b7f71c2350aaf9a9b42652907ee204fe673baac6b0164473cba87f70cd50ef3f` |
 | `scripts/allow-always-check.mjs` | 3138 | `514642a97a4f3a3a3f67b68789d8b2e1665680d2623e79d14ba640c6d395c257` |
 | `scripts/audit-install.mjs` | 5982 | `99d67513dc9f47c3942fd7a9122801d3e58614d02a4e132bff43957b3c848bf5` |
 | `scripts/configure.mjs` | 14570 | `53c62929b01c0cc5bddc1a21935e88790c6f67a8d5b7989711b894a6da0faf18` |
 | `scripts/docs-check.mjs` | 779 | `391e4b5f418b6357a67bba6019b2c2818fb3e86889a4eaba0722dc49802917e7` |
 | `scripts/e2e-install.mjs` | 14358 | `a6aded4609362a02aa239f8a632d6c02c1fdd61decad1fe7c2054ff7eea3761b` |
-| `scripts/e2e-modules.mjs` | 10876 | `ef1396e87669b2e833eae4685974b421266aa988d34d72403c460653e77bfa03` |
+| `scripts/e2e-modules.mjs` | 11543 | `1694ac11608f0d270a9d4f9b4495477a6faca49a75394f9ea5d639845eeba8a8` |
 | `scripts/identity.mjs` | 4840 | `6cd9ec01f95af6a376745b4db047abd8ae77e5867fd5d6a91a99c82f1033f32d` |
 | `scripts/integrity.mjs` | 10479 | `365f6335c685680a0062f86ea27ee3f10c3181662216a5e9d4ac2cc5a149983a` |
 | `scripts/lsp-diagnostics.mjs` | 8920 | `9ee3431929bf4fec4e39d822e0a1876380229fda3408b7fa8c2f326a51ab4121` |
@@ -102,19 +107,19 @@ npm run integrity:check
 | `scripts/symbol-probe.mjs` | 3452 | `f9377dbe1d9f199a6d0a139ee46dc2ef4708fadc2dc1441ae5475c550dddc8fe` |
 | `scripts/verify-wiring.mjs` | 17096 | `8d27e5e86cd42ee3a7f378ffcb8f696bef2310472bfef8d8c976c049cd10682c` |
 | `src/agents.ts` | 13479 | `0e9fc2b22e375579fb2e77d8772717aec58cf31bd0bad91795cbd0dd4b46574e` |
-| `src/agents/base.ts` | 8372 | `cbdad3adb062ed405b783a665af8dcf521be0934a41205ba0f7123df2840d7e8` |
+| `src/agents/base.ts` | 8332 | `a4cae880b25e3c0b8fbe15af765f20f4c1ef354533942d6dd257663cab396817` |
 | `src/agents/brishti.ts` | 1905 | `1a894e846c733aac9c61b3c22b7d5f3254dc3063bdd0b604b2e697763f087de5` |
-| `src/agents/defaults.ts` | 5841 | `c5b83ea2a507c203c03c5362effd67eae65891c8c30ca17f2a1a69abddaeef52` |
+| `src/agents/defaults.ts` | 6151 | `d5b9aa6ff08242db53702eb043f64514ab28a84ba19bc86bbbb4280d4c1e836a` |
 | `src/agents/halim.ts` | 1935 | `2ddc0f5097e4d703b0e64548f4e6e1f930ec2e0dcfa6b5743ab117421e5ec83f` |
 | `src/agents/index.ts` | 4509 | `245c6de43f295d406536b2bfb48f414781f7345d55dd16c55039ed067e538aac` |
 | `src/agents/jarin.ts` | 1650 | `ff791ee47845d672a9dc86754d6f046a57e6b919395246015b8ed97241a6f603` |
 | `src/agents/majnu.ts` | 1820 | `d3f0aa732c87dadd00cac7866b19e4a08440e5d56e86066e5d0ee79334f3e61a` |
 | `src/agents/manu.ts` | 1781 | `04d229ac7298a076a5db7673d8bf0a76cfe5d6cf8931ef9f64f5570a03c8aeca` |
-| `src/agents/nila.ts` | 2242 | `c18bfb99f7333607e89de8cc8ea7258ec399df4a9d2169e5cbed2d1a4c710446` |
+| `src/agents/nila.ts` | 2034 | `a93a830cfe43253033106aecab81a3106b0c84daf2c0e2b1d7c959c6450a717b` |
 | `src/agents/rashed.ts` | 1748 | `75fe74123f35f4f3e447ffab619d19b20aa6be3dce4e6931db9645ec3f6e83b3` |
 | `src/agents/route.ts` | 10411 | `6292f261637c50130ee06d9de4af12ca22e9339f727ead8a5086b75e195f7091` |
 | `src/agents/runtime.ts` | 9769 | `233b6eecbf7b22972d62803c634453b9a00f13261476603aa7459afd77d0c98c` |
-| `src/agents/shared.ts` | 7824 | `d57368dc692b66b0554d1b732963fec78c6782c42548af567a31b22b168350f0` |
+| `src/agents/shared.ts` | 7948 | `8d31d5f7a41a98ab080a7c7aa99705235d9ddb7db97ed6ce6ef6edf8e2de8002` |
 | `src/agents/tuhin.ts` | 1964 | `9ff9a03166f09d8909ae2da277e30d62fd0f81e1f6deb68f8f103d811a031f14` |
 | `src/agents/turn.ts` | 2848 | `36ef7e546f9c8131ab2780af0b8c29ace3082b676b13bd885ef7e9b11bcab0ac` |
 | `src/agents/types.ts` | 3255 | `bdb1c56d01faf589429cda6bd017797716ffe98569963fbfe0fc87b5849ba9f9` |
@@ -124,7 +129,7 @@ npm run integrity:check
 | `src/identity.ts` | 11767 | `e0a07f913823045857b811ed7cf87e9bc34172cd0fb0662ce75a92691cc49ffd` |
 | `src/install/space.ts` | 3813 | `098fe34dfe34003f1ad66cb1e6aa32f4ef8415bc9d81f198c61776fbd31f4931` |
 | `src/plugin.ts` | 102622 | `b1a14cbcce351894127242b549990e9f6bcc2e54f09183150d39f05acf6dec86` |
-| `src/roster.ts` | 10259 | `c77ed9c1fcadc658411915fad178780a2847fcd2ca3e5dbb524ebe0564fb3cd8` |
+| `src/roster.ts` | 10219 | `0ba21ba8f371bee14e67cdf8be7caf13a4430a182b4525ad78faedb57621dea6` |
 | `src/runtime.ts` | 16007 | `e1abe71ca259e56f6465d9a4e884e645901bd234007cd71664feb6b72b43b567` |
 | `src/zombie/circuitBreaker.ts` | 8526 | `a786855b8c6146dacc4d366976516883456d1c2644094cc773c70c4c63a0dba7` |
 | `src/zombie/context.ts` | 20913 | `6c724c234c57b27fc8b27aa6d0c7430a06c058a9b49918488044d8c901a10661` |
@@ -166,6 +171,7 @@ npm run integrity:check
 | `test/agents.test.ts` | 16193 | `86ebffdcf645c2d72669e145321293e8cb01610eb7133f5b4c9598ac9fc1e225` |
 | `test/audit-install.test.ts` | 4155 | `78ac9b2a258dba24cc55474ec8d03baf2ef4c66d1797e272717c0b369cfd8d44` |
 | `test/capabilities.test.ts` | 3613 | `d9cec364770b766bb0cacc3a7d72b71974eb3f7be269c2a9b4f48869846407f2` |
+| `test/cdp.test.ts` | 3831 | `f39dccbf69be243cf7d584e3692485c03d036b11770e7bf37f6f28d68fef4875` |
 | `test/circuitBreaker.test.ts` | 5040 | `075d02b09d49f19206b242d8373dfac79413d90ac6211043b99b06814d5b1acb` |
 | `test/context.test.ts` | 37074 | `a3f45cf8b878c041346a6d2d1acfc99042cd760893f1dcd723364130ba0f01eb` |
 | `test/design.test.ts` | 4799 | `ce13246055690ddf813e9cc07cd6f108731b4cdd9d762f92941ea88d1b306e23` |
@@ -175,7 +181,7 @@ npm run integrity:check
 | `test/frontmatter.test.ts` | 3204 | `5b20743b544ef7c3be3f77c3d9377f577c31a1f30fadc9462a4ad22760ddadc2` |
 | `test/goalContract.test.ts` | 7061 | `40c37c245ab17721c28799aaf59cc2422429510a00c66e6c7563228c13c73cba` |
 | `test/identity.test.ts` | 4431 | `7656158eb5b4af30939741bc4a1515095400e10a1da999bb40f2339e821ddaea` |
-| `test/install.test.ts` | 35233 | `73b0bf063e96b1b2b959a996671379afab2322512ce707b4d556565c019839d2` |
+| `test/install.test.ts` | 35287 | `acfd069b16bfdf6a02aa3172d98a158efcd32d72875b6e666cce1589e3973354` |
 | `test/installSpace.test.ts` | 2234 | `8d589c1d8e2423869c788c11435e0fc23be6abc5145d7b66c9fb54cc09671c71` |
 | `test/investigation.test.ts` | 1551 | `e6a4a95033f27fef486f8709762e650919c3ae429c50af5a3877243cd4e1d2b2` |
 | `test/io.test.ts` | 959 | `c483a9c9f9a4ca51e595df125fb36a8a23627a331ac9fbe871f1c404f858fe4a` |

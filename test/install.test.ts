@@ -156,6 +156,7 @@ test("installer never writes provider/undefined when /models is empty", async ()
 
         // The bundled MCP servers answered a real tools/list handshake.
         assert.match(result.stdout, /verify MCP tools \(stdio\).*image-brand=6/);
+        assert.match(result.stdout, /cdp=12/);
         // Native global skill: SKILL.md, not only the legacy flat file.
         const nativeSkill = path.join(
           root,
@@ -804,7 +805,7 @@ test("installer copies and registers the in-repo MCP servers", async () => {
         const config = JSON.parse(
           fs.readFileSync(path.join(result.root, "opencode.json"), "utf8"),
         );
-        for (const name of ["image-brand", "public-api"]) {
+        for (const name of ["image-brand", "public-api", "cdp"]) {
           const entry = config.mcp?.servers?.[name];
           assert.ok(entry, `mcp.${name} missing`);
           assert.equal(entry.type, "local");

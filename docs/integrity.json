@@ -1,6 +1,6 @@
 {
   "schema": "zombiecoder-integrity/v1",
-  "generated_at": "2026-11-17T23:41:02.639Z",
+  "generated_at": "2026-11-18T00:15:53.759Z",
   "scope": [
     "src",
     "bin",
@@ -12,19 +12,19 @@
     "package.json",
     "LICENSE"
   ],
-  "root_sha256": "89bfe95755898b73ae9a7426763ef91f85a66c378d8bc15aa3f7e698bc2d5c50",
-  "file_count": 157,
-  "total_bytes": 1489715,
+  "root_sha256": "3d8b34eeb510adf779120cb6d893ab6a5f866308c9c75d26bc7a5fcce8519157",
+  "file_count": 163,
+  "total_bytes": 1557572,
   "git": {
-    "commit": "085f427",
+    "commit": "aebe25c",
     "branch": "agent-runtime-audit-20261114",
     "dirty": true
   },
   "files": [
     {
       "path": "bin/install.mjs",
-      "bytes": 89971,
-      "sha256": "b9ea26b019f20f609f425dbdd4f6b6359061433b4d25b33d4c5d60002f318d61"
+      "bytes": 90119,
+      "sha256": "79a9efff6b3cacfb0d5980b9d5f5683349645f66302fa863e6d50b2015f643d8"
     },
     {
       "path": "bin/quick-install.mjs",
@@ -142,6 +142,31 @@
       "sha256": "d06b8b22307bf25fa4e3dba778ad2ccc1350c2e5cd1b5e6ed40c2de25b6cd95a"
     },
     {
+      "path": "mcp/cdp/e2e-live.mjs",
+      "bytes": 6342,
+      "sha256": "5bba9df285ffec88c07da877df772b4c7f08aeedee21adf7845e1b7d4b961a53"
+    },
+    {
+      "path": "mcp/cdp/README.md",
+      "bytes": 4509,
+      "sha256": "9be4ea29ff1173489eeebf66746ce5113070b11f6c17050c6ac4bd85c9e3e559"
+    },
+    {
+      "path": "mcp/cdp/selfcheck.mjs",
+      "bytes": 2568,
+      "sha256": "1379edf5498878c5d38aa39ab2d49593a3f1a8a265c3bb35e68826e9ab208c21"
+    },
+    {
+      "path": "mcp/cdp/server.mjs",
+      "bytes": 44133,
+      "sha256": "1cd7d6b76b37432b349ec08f5c7b9ad409292c36a8b459b9c008f3201168b6e6"
+    },
+    {
+      "path": "mcp/cdp/test/cdp.test.mjs",
+      "bytes": 5175,
+      "sha256": "939966e51585d6ed91f3ef0b97e97e93d530a20c1a1ae9027d38efc775078a26"
+    },
+    {
       "path": "mcp/image-brand/e2e-live.mjs",
       "bytes": 2781,
       "sha256": "8ae7c8c7ce022cbb80f049d56aeec5719dfc69cc90ee87c3aed8006454ebc04f"
@@ -213,8 +238,8 @@
     },
     {
       "path": "package.json",
-      "bytes": 2454,
-      "sha256": "fe75c51a2a1efe7f1d15115500055f2575fac828037c8e7f2f1c770ddd7e42b3"
+      "bytes": 2738,
+      "sha256": "3dd74e5999c3824bc56800598bb232567eb33f5a87fa8e6c98d236ba6f4ab510"
     },
     {
       "path": "scripts/agents-check.mjs",
@@ -248,8 +273,8 @@
     },
     {
       "path": "scripts/e2e-modules.mjs",
-      "bytes": 10876,
-      "sha256": "ef1396e87669b2e833eae4685974b421266aa988d34d72403c460653e77bfa03"
+      "bytes": 11543,
+      "sha256": "1694ac11608f0d270a9d4f9b4495477a6faca49a75394f9ea5d639845eeba8a8"
     },
     {
       "path": "scripts/identity.mjs",
@@ -298,8 +323,8 @@
     },
     {
       "path": "src/agents/base.ts",
-      "bytes": 8372,
-      "sha256": "cbdad3adb062ed405b783a665af8dcf521be0934a41205ba0f7123df2840d7e8"
+      "bytes": 8332,
+      "sha256": "a4cae880b25e3c0b8fbe15af765f20f4c1ef354533942d6dd257663cab396817"
     },
     {
       "path": "src/agents/brishti.ts",
@@ -308,8 +333,8 @@
     },
     {
       "path": "src/agents/defaults.ts",
-      "bytes": 5841,
-      "sha256": "c5b83ea2a507c203c03c5362effd67eae65891c8c30ca17f2a1a69abddaeef52"
+      "bytes": 6151,
+      "sha256": "d5b9aa6ff08242db53702eb043f64514ab28a84ba19bc86bbbb4280d4c1e836a"
     },
     {
       "path": "src/agents/halim.ts",
@@ -338,8 +363,8 @@
     },
     {
       "path": "src/agents/nila.ts",
-      "bytes": 2242,
-      "sha256": "c18bfb99f7333607e89de8cc8ea7258ec399df4a9d2169e5cbed2d1a4c710446"
+      "bytes": 2034,
+      "sha256": "a93a830cfe43253033106aecab81a3106b0c84daf2c0e2b1d7c959c6450a717b"
     },
     {
       "path": "src/agents/rashed.ts",
@@ -358,8 +383,8 @@
     },
     {
       "path": "src/agents/shared.ts",
-      "bytes": 7824,
-      "sha256": "d57368dc692b66b0554d1b732963fec78c6782c42548af567a31b22b168350f0"
+      "bytes": 7948,
+      "sha256": "8d31d5f7a41a98ab080a7c7aa99705235d9ddb7db97ed6ce6ef6edf8e2de8002"
     },
     {
       "path": "src/agents/tuhin.ts",
@@ -408,8 +433,8 @@
     },
     {
       "path": "src/roster.ts",
-      "bytes": 10259,
-      "sha256": "c77ed9c1fcadc658411915fad178780a2847fcd2ca3e5dbb524ebe0564fb3cd8"
+      "bytes": 10219,
+      "sha256": "0ba21ba8f371bee14e67cdf8be7caf13a4430a182b4525ad78faedb57621dea6"
     },
     {
       "path": "src/runtime.ts",
@@ -617,6 +642,11 @@
       "sha256": "d9cec364770b766bb0cacc3a7d72b71974eb3f7be269c2a9b4f48869846407f2"
     },
     {
+      "path": "test/cdp.test.ts",
+      "bytes": 3831,
+      "sha256": "f39dccbf69be243cf7d584e3692485c03d036b11770e7bf37f6f28d68fef4875"
+    },
+    {
       "path": "test/circuitBreaker.test.ts",
       "bytes": 5040,
       "sha256": "075d02b09d49f19206b242d8373dfac79413d90ac6211043b99b06814d5b1acb"
@@ -663,8 +693,8 @@
     },
     {
       "path": "test/install.test.ts",
-      "bytes": 35233,
-      "sha256": "73b0bf063e96b1b2b959a996671379afab2322512ce707b4d556565c019839d2"
+      "bytes": 35287,
+      "sha256": "acfd069b16bfdf6a02aa3172d98a158efcd32d72875b6e666cce1589e3973354"
     },
     {
       "path": "test/installSpace.test.ts",

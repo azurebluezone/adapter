@@ -5,7 +5,7 @@
 //
 // Every check is a live observation, not a fixture:
 //   opencode          a V2 binary answers --version
-//   mcp_tools         image-brand/public-api answer initialize + tools/list over stdio
+//   mcp_tools         image-brand/public-api/cdp answer initialize + tools/list over stdio
 //   web_decorate      a real Pillow decoration pack is written and read back
 //   design_sketch     sketch.md + design.json are written for a real brief
 //   skills            a bundled skill is installed as skills/<name>/SKILL.md and parsed
@@ -103,9 +103,31 @@ await check("mcp_tools", async () => {
       throw new Error(`unexpected public-api serverInfo: ${JSON.stringify(pub.init?.serverInfo)}`);
     }
     if (pub.names.length < 4) throw new Error(`public-api tools=${pub.names.length}, expected >=4`);
-    return `image-brand=${image.names.length}, public-api=${pub.names.length}`;
   } finally {
     await pub.client.close();
+  }
+
+  const cdp = await rpcTools(path.join(ROOT, "mcp", "cdp", "server.mjs"));
+  try {
+    if (cdp.init?.serverInfo?.name !== "cdp") {
+      throw new Error(`unexpected cdp serverInfo: ${JSON.stringify(cdp.init?.serverInfo)}`);
+    }
+    if (cdp.names.length !== 12) throw new Error(`cdp tools=${cdp.names.length}, expected 12`);
+    for (const required of [
+      "status",
+      "launch",
+      "navigate",
+      "markers",
+      "screenshot",
+      "console",
+      "network",
+      "act",
+    ]) {
+      if (!cdp.names.includes(required)) throw new Error(`cdp missing ${required}`);
+    }
+    return `image-brand=${image.names.length}, public-api=${pub.names.length}, cdp=${cdp.names.length}`;
+  } finally {
+    await cdp.client.close();
   }
 });
 

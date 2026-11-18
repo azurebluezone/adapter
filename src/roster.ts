@@ -181,7 +181,7 @@ function legacyAgentSystemPrompt(a: AgentDef): string {
     a.voice ? "**Voice:** " + a.voice : "",
     a.skillFocus?.length ? "**Skill Focus:** " + a.skillFocus.join(", ") : "",
     a.skillFocus?.length
-      ? "Full 15–20 skill map: `docs/skill-map.md` — websearch to extend it when a new domain appears."
+      ? "Full skill map: `docs/skill-map.md`; websearch to extend."
       : "",
     "",
     "**Responsibilities:** " + a.duties.join(", "),

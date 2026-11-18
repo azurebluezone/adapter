@@ -93,6 +93,9 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     // Read-only research tools may be used wherever facts are gathered.
     "image-brand_*",
     "public-api_*",
+    // Browser evidence: CDP reads the real page; launch/navigate only touch a
+    // disposable browser profile, never the project files.
+    "cdp_*",
     ...MISSIONBARISAL_READONLY,
     "project_onboarding",
     "project_fingerprint",
@@ -128,6 +131,9 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     // MCP research/branding tools, same namespace shape as the host.
     "image-brand_*",
     "public-api_*",
+    // Browser proof belongs in the work phase: DOM, markers, console, network,
+    // click/fill and screenshots of the real page.
+    "cdp_*",
   ],
   verify: [
     "goal_contract",
@@ -144,6 +150,7 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "diagnostics_for_file",
     "image-brand_*",
     "public-api_*",
+    "cdp_*",
     ...MISSIONBARISAL_READONLY,
   ],
   respond: ["context_status", "append_syllabus"],
