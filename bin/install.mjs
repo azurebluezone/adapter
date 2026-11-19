@@ -581,6 +581,9 @@ let providerSlow = false;
 let providerReachable = false;
 let candidates = [];
 let installAssignment = {};
+// The agent that owns the interactive session keeps the model selected in the
+// OpenCode UI, so no model pin is ever written for it.
+let mainAgentID = "zombiecoder";
 
 async function step(name, fn) {
   try {
@@ -1581,7 +1584,7 @@ await step("seed zombiecoder config", () => {
     modelStrategy: INSTALL_MODEL_STRATEGY,
     responseGate: existing.responseGate ?? true,
     autoSkills: existing.autoSkills ?? true,
-    agentModelPins: existing.agentModelPins ?? false,
+    agentModelPins: existing.agentModelPins ?? true,
     skillRepo: existing.skillRepo ?? DEFAULT_SKILL_REPO,
     createdAt: existing.createdAt ?? new Date().toISOString(),
   };
@@ -1604,7 +1607,7 @@ await step("probe MCP", async () => {
 // ---- 7. probe provider + resolve this install's model plan -------------------
 await step("probe provider + assign models", async () => {
   const roster = await import(path.join(PACKAGE_ROOT, "src", "roster.ts"));
-  const { assignModels } = await import(path.join(PACKAGE_ROOT, "src", "zombie", "models.ts"));
+  const { assignModels, MAIN_AGENT_ID } = await import(path.join(PACKAGE_ROOT, "src", "zombie", "models.ts"));
 
   // A re-install over a live location keeps the runtime's resolved plan.
   try {
@@ -1681,9 +1684,35 @@ await step("probe provider + assign models", async () => {
       Object.entries(installAssignment).filter(([, ref]) => allowed.has(ref)),
     );
   }
+  // The owner's current primary agent is the one that must keep the UI model.
+  const requestedDefaultAgent = (() => {
+    try {
+      const config = JSON.parse(fs.readFileSync(OPENCODE_JSON, "utf8"));
+      return typeof config.default_agent === "string" ? config.default_agent : "";
+    } catch {
+      return "";
+    }
+  })();
+  mainAgentID = roster.ROSTER.some((agent) => agent.id === requestedDefaultAgent)
+    ? requestedDefaultAgent
+    : MAIN_AGENT_ID;
+
   if (!freeMode && Object.keys(installAssignment).length === 0) {
-    installAssignment = assignModels(roster.ROSTER, candidates, false, BASELINE_MODEL);
+    installAssignment = assignModels(
+      roster.ROSTER,
+      candidates,
+      false,
+      Math.random,
+      modelRef(PROVIDER_ID, providerProbe?.models[0]) ?? "",
+      mainAgentID,
+    );
   }
+
+  // The main agent follows the model the owner selected in the OpenCode UI. Keep
+  // an explicit empty entry: it tells the renderer "unpinned" even when an env
+  // baseline would otherwise supply a roster-wide model. A previous plan may
+  // still carry a pin for it; overwriting it is what keeps /models authoritative.
+  installAssignment[mainAgentID] = "";
 
   // A dead or slow provider must not be recorded as a deliberate baseline pin.
   // "free-fallback" tells the runtime resolver to spread the OpenCode free
@@ -1720,8 +1749,9 @@ await step("probe provider + assign models", async () => {
     /* step 5 already reported a malformed config; do not mask it here */
   }
 
+  const pinnedCount = new Set(Object.values(installAssignment).filter(Boolean)).size;
   const summary = freeMode
-    ? `modelStrategy: free — gateway probe skipped; ${new Set(Object.values(installAssignment)).size} free model(s) kept`
+    ? `modelStrategy: free — gateway probe skipped; ${pinnedCount} free model(s) kept`
     : !PROVIDER_URL
     ? "custom provider disabled (free/baseline models)"
     : providerReachable
@@ -1735,7 +1765,7 @@ await step("probe provider + assign models", async () => {
         : `provider not usable: ${
             chatProbe?.error ?? toolProbe?.error ?? providerProbe?.error ?? "not probed"
           }; free-model mapping resolved at first setup`;
-  return `${summary}; ${new Set(Object.values(installAssignment)).size} model(s) assigned`;
+  return `${summary}; ${pinnedCount} model(s) assigned`;
 });
 
 // ---- 8. opencode.json: provider + V2 agents + permissions + MCP --------------
@@ -1809,6 +1839,9 @@ await step("sync opencode.json (providers, agents, permissions, MCP)", async () 
     try {
       const current = JSON.parse(fs.readFileSync(OPENCODE_JSON, "utf8"));
       for (const agent of roster.ROSTER) {
+        // A previous pin on the UI owner is the one thing a re-install must not
+        // preserve: it would override the model chosen in /models.
+        if (agent.id === mainAgentID) continue;
         const ref = current?.agents?.[agent.id]?.model;
         if (typeof ref === "string" && ref.length > 0 && !ref.startsWith(`${providerID}/`)) {
           kept[agent.id] = ref;
@@ -1831,15 +1864,18 @@ await step("sync opencode.json (providers, agents, permissions, MCP)", async () 
       delete agents[id];
     }
   }
-  // Per-agent model pins are opt-in. With pins off (default) the agent entries
-  // carry no `model`: the model chosen in /models governs the session and a
-  // subagent inherits it. With pins on, the fixed agent -> model mapping wins.
+  // Per-agent model pins are on by default: the main agent stays unpinned so the
+  // model chosen in /models governs the session, and every other agent gets its
+  // own catalog model. With pins off, no agent entry carries `model`.
   const modelPins = modelPinsEnabled();
   for (const [id, entry] of Object.entries(
     roster.renderAgentsConfig(roster.ROSTER, installAssignment, modelPins),
   )) {
     agents[id] = { ...(agents[id] ?? {}), ...entry };
     if (!modelPins) delete agents[id].model;
+    // An older install may have pinned the main agent. A missing model in the
+    // rendered entry is the instruction to drop that pin, not to keep it.
+    else if (!entry.model) delete agents[id].model;
   }
   next.agents = agents;
 
@@ -2062,7 +2098,7 @@ await step("write agent markdown", async () => {
       pruned += 1;
     }
   }
-  const resolved = Object.keys(installAssignment).length > 0 ? "resolved" : "baseline";
+  const resolved = Object.values(installAssignment).some(Boolean) ? "resolved" : "baseline";
   return `${mod.ROSTER.length} agents (${written} changed, ${pruned} stale pruned, ${resolved} models)`;
 });
 

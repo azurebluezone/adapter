@@ -20,11 +20,13 @@ runtime state তৈরি করে; প্রজেক্টের ভিত�
 
 - ৯টি এজেন্ট, প্রত্যেকটি `mode: all`; dropdown-এ নির্বাচিত agent-ই primary,
   আর সে অনুমোদিত bounded subagent ব্যবহার করতে পারে।
-- OpenCode-এর session model-ই agent-দের shared transport; কোনো size/role-ভিত্তিক
-  model বিভাজন নেই।
+- UI-তে নির্বাচিত model-ই মূল এজেন্ট চালায় (কোনো pin নয়); বাকি প্রতিটি
+  subagent OpenCode catalog থেকে একটি করে আলাদা model পায় — কোনো hardcoded
+  model ref নেই।
 - OpenAI-compatible provider-এর `/v1/models` থেকে মডেল তালিকা নেওয়া হয়।
-- Provider URL অনুপস্থিত হলে OpenCode-এর সক্রিয় free/default model সব agent-এ
-  sync হয়; valid model ref না থাকলে session model-ই থাকে।
+- Provider URL অনুপস্থিত হলে OpenCode-এর সক্রিয় free/default model মূল এজেন্টের
+  জন্য থাকে, আর বাকি free models subagent-গুলোতে ভাগ হয়; valid model ref না
+  থাকলে কোনো pin লেখা হয় না এবং session model-ই থাকে।
 - প্রতিটি প্রজেক্টের জন্য `.zombiecoder/SSOT.md`, `syllabus.md`, memory ও
   audit state তৈরি হয়।
 - MCP server opt-in: `--with-local-mcp` বা `--mcp-url` দিলে এবং probe সফল হলে register হয়; কোনো server shipped default নয়।
@@ -114,13 +116,15 @@ plugin নিজে তৈরি করে।
    `/v1/chat/completions`-এ একটি ছোট chat probe এবং (ডিফল্ট) একটি tool-call
    probe চালায়।
 4. Chat fail, tool fail, অথবা prompt processing খুব ধীর (<20 tok/s) হলে
-   provider config-এ থাকলেও session OpenCode-এর free catalog থেকে একটিমাত্র
-   shared transport model বেছে নেয়। `--allow-slow` দিয়ে slow model জোর করে রাখা যায়।
-5. Provider URL অনুপস্থিত বা provider unreachable হলে OpenCode free catalog
-   থেকে session default-কে অগ্রাধিকার দিয়ে একটি shared model বেছে নেওয়া হয়;
-   model ref না থাকলে কোনো agent pin লেখা হয় না।
-6. Project ও global install—দুই ক্ষেত্রেই বর্তমান runtime plan agent-দের একই
-   model-এ sync করে; পুরোনো আলাদা per-agent pins রাখা হয় না।
+   provider config-এ থাকলেও মূল এজেন্ট UI-selected model-এই থাকে; subagent-গুলো
+   OpenCode-এর free catalog থেকে এক-একটি আলাদা model পায়। `--allow-slow` দিয়ে
+   slow model জোর করে রাখা যায়।
+5. Provider URL অনুপস্থিত বা provider unreachable হলে মূল এজেন্টের জন্য
+   OpenCode default/UI model অগ্রাধিকার পায়, আর বাকি catalog refs subagent-এ
+   deterministic ভাবে ভাগ হয়; ref না থাকলে কোনো agent pin লেখা হয় না।
+6. Project ও global install—দুই ক্ষেত্রেই runtime plan মূল এজেন্টকে unpinned
+   রাখে এবং বাকি agent-দের distinct model-এ sync করে; মূল এজেন্টের পুরোনো pin
+   বাদ যায়, subagent pin নতুন plan অনুযায়ী লেখা হয়।
 
 ### ২.৩ 100C runtime template
 
@@ -721,7 +725,10 @@ opencode models
 | `custom` | Custom provider; ব্যর্থ হলে explicit baseline env অথবা UI-selected model |
 | `free` | শুধু OpenCode-এর cost `0/0` model |
 | `baseline` | `ZOMBIECODER_BASELINE_MODEL`; সেট না থাকলে OpenCode default/session model |
-| `random` | একই roster-এর জন্য একটি shared model randomভাবে বেছে নেয় |
+| `random` | subagent-দের model pool randomize করে; pool শেষ হওয়ার আগে কেউ একই model পায় না |
+
+> সব strategy-তেই session-এর মূল এজেন্ট (UI-তে নির্বাচিত primary) কোনো model
+> pin পায় না; তার UI/OpenCode model-ই session চালায়।
 
 Environment override:
 
@@ -1606,8 +1613,8 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  66b7d258a2195d583638ff57fba2c6871547f54ae3813a578e88295a760680f1  ║
-║  files 178 · bytes 1629688 · base 6da6cf3 · dirty                        ║
+║  root  c49fb06951a71d73e0a5a23b4d6437d1bed7b6c2963756279f0558be8a90d7a5  ║
+║  files 179 · bytes 1646548 · base f457162 · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -1615,7 +1622,7 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-19T03:36:27.932Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-19T04:24:27.016Z
 
 </div>
 <!-- INTEGRITY:END -->

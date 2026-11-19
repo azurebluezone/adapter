@@ -60,6 +60,7 @@ import {
 import {
   resolveModels,
   normalizeModelRef,
+  MAIN_AGENT_ID,
   type CatalogDoors,
   type ModelStrategy,
 } from "./zombie/models.ts";
@@ -215,9 +216,10 @@ export type ZombieConfig = {
   // Owner-requested OpenCode agent modes: { "<agentID>": "primary" | "subagent" | "all" }.
   // Validated by modes.ts; a typo is rejected in the setup report, never guessed.
   agentModes: Record<string, string>;
-  // Per-agent model pins. false (default) leaves agent entries without `model`,
-  // so the model selected in /models governs the session and subagents inherit
-  // it. true restores the fixed agent -> model mapping for a multi-model gateway.
+  // Per-agent model pins. true (default) leaves the main agent unpinned so the
+  // model selected in /models governs the session, and syncs one distinct
+  // catalog model to every other agent (the subagent children). false removes
+  // every pin and lets the session model govern all agents.
   agentModelPins: boolean;
 };
 
@@ -236,7 +238,7 @@ export const DEFAULT_CONFIG: ZombieConfig = {
   strictAgentWorkflow: true,
   skillRepo: DEFAULT_SKILL_REPO,
   agentModes: {},
-  agentModelPins: false,
+  agentModelPins: true,
 };
 
 // Where the plugin itself lives decides where OpenCode-owned files belong.
@@ -307,6 +309,16 @@ export function globalAgentAssignment(
     if (typeof model === "string" && model.length > 0) out[a.id] = model;
   }
   return out;
+}
+
+// The UI's current primary agent owns the model the owner picked. Read it from
+// the host config when the installer/owner changed it, otherwise use the pack's
+// default. This agent is the one that must stay unpinned.
+export function mainAgentOnDisk(configFile: string, roster: AgentDef[]): string {
+  const config = readJson<Record<string, any>>(configFile) ?? {};
+  const id = typeof config.default_agent === "string" ? config.default_agent.trim() : "";
+  const agent = roster.find((entry) => entry.id === id);
+  return agent && agent.mode !== "subagent" ? agent.id : MAIN_AGENT_ID;
 }
 
 type Ctx = {
@@ -553,6 +565,9 @@ export function verifyAgentMarkdownAt(
     if (pins) {
       const expected = assignment[a.id] ?? a.model;
       if (expected && !raw.includes(`model: ${expected}`)) missing.push(`${a.id}=${expected}`);
+      // Explicit empty assignment = unpinned (the UI session owner). A stale
+      // model line from an older install must be reported, not ignored.
+      else if (!expected && /^model:/m.test(raw)) missing.push(`${a.id}=pinned-model`);
     } else if (/^model:/m.test(raw)) {
       missing.push(`${a.id}=pinned-model`);
     }
@@ -614,7 +629,9 @@ export function syncAgentConfig(
     agents[id] = { ...(agents[id] ?? {}), ...entry };
     // Pins off: an older install may still carry `model` on the agent. Leaving it
     // would silently override the owner's /models choice, so drop it here.
-    if (!pins) delete agents[id].model;
+    // Pins on: a rendered entry without `model` means "unpinned" (the main
+    // agent), so an older pin for it must be dropped too.
+    if (!pins || entry.model === undefined) delete agents[id].model;
     if (JSON.stringify(agents[id]) !== before) updated.push(id);
   }
 
@@ -641,6 +658,7 @@ export function verifyAgentConfig(
     const entry = config.agents[a.id];
     if (!entry) missing.push(`${a.id}=missing`);
     else if (pins && expected && entry.model !== expected) missing.push(`${a.id}=model`);
+    else if (pins && !expected && entry.model !== undefined) missing.push(`${a.id}=pinned-model`);
     else if (!pins && entry.model !== undefined) missing.push(`${a.id}=pinned-model`);
     else if (!Array.isArray(entry.permissions) || entry.permissions.length === 0) missing.push(`${a.id}=permissions`);
   }
@@ -887,6 +905,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
       providerConfigured: providerConfiguredOnDisk(root!, config.customProviderID),
       strategy: config.modelStrategy,
       baselineModel: config.baselineModel,
+      mainAgentID: mainAgentOnDisk(layout.configFile, ROSTER),
     });
     return resolved;
   });
@@ -899,9 +918,9 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
   // free models cannot rewrite the global agents. Project installs keep the
   // project plan.
   const globalAssignment = layout.global ? globalAgentAssignment(layout.configFile, ROSTER) : {};
-  // Every agent shares the same runtime-selected transport. A global install
-  // must also follow the current catalog/default rather than retaining stale
-  // per-agent model pins from an older installer run.
+  // The runtime plan is authoritative: it knows the current catalog and leaves
+  // the main agent unpinned so the owner's /models choice still wins. A global
+  // install must not retain stale per-agent pins from an older installer run.
   const runtimePlanWins =
     plan?.strategy === "custom-provider" ||
     plan?.strategy === "baseline" ||

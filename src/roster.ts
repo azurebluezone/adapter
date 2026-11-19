@@ -221,7 +221,8 @@ export function agentConfigEntry(
     description: a.description,
     mode: a.mode,
   };
-  const selected = model || a.model;
+  // Explicit "" = unpinned (main agent keeps the UI/session model).
+  const selected = model ?? a.model;
   if (pins && typeof selected === "string" && selected.includes("/") && !/\s/.test(selected)) entry.model = selected;
   entry.system = agentSystemPrompt(a);
   entry.permissions = agentPermissions(a);
@@ -270,11 +271,14 @@ export function agentMarkdown(a: AgentDef, model?: string, pins = true): string 
   const rules = agentPermissions(a)
     .map((r) => `  - action: ${r.action}\n    resource: "${r.resource}"\n    effect: ${r.effect}`)
     .join("\n");
+  // An explicit "" means "do not pin": the agent inherits the session model the
+  // owner picked. `undefined` still falls back to the roster default.
+  const selected = model ?? a.model;
   const frontmatter = [
     "---",
     'description: "' + a.description + '"',
     "mode: " + a.mode,
-    ...(pins && (model || a.model).includes("/") ? ["model: " + (model || a.model)] : []),
+    ...(pins && selected.includes("/") ? ["model: " + selected] : []),
     "permissions:",
     rules,
     "---",

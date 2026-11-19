@@ -1,8 +1,6 @@
 // ZombieCoder — Runtime Operations generator
 // One plugin. URL-driven. No separate server.
 
-import { BASELINE_MODEL } from "./zombie/defaults.ts";
-
 const F = String.fromCharCode(96, 96, 96);
 
 export function renderRuntime(): string {
@@ -76,13 +74,11 @@ export function renderRuntime(): string {
   out.push("## ৩. Model Fallback Resolver");
   out.push("");
   out.push(F + "text");
-  out.push(BASELINE_MODEL
-    ? `১) explicit last-resort: ${BASELINE_MODEL}`
-    : "১) কোনো hard-coded model নেই; UI-selected/OpenCode default model অক্ষত থাকে");
+  out.push("১) মূল এজেন্ট (UI-তে নির্বাচিত যে agent session চালাচ্ছে) কোনো model pin পায় না; UI-selected/OpenCode default model অক্ষত থাকে");
   out.push("২) কোনো shipped provider নেই; মালিক `--provider-url` / `ZOMBIECODER_PROVIDER_URL` দিলে এবং তার baseURL live probe-এ সাড়া দিলে: <provider-id>/<model-id>");
   out.push("   (`--provider-id` / `ZOMBIECODER_PROVIDER_ID` না দিলে installer URL host থেকে id বানায়)");
   out.push("৩) URL না থাকলে: OpenCode catalog → সক্রিয় cost[0].input == 0 && output == 0");
-  out.push("৪) প্রতিটি agent একই নির্বাচিত model-কে transport component হিসেবে ব্যবহার করে");
+  out.push("৪) মূল এজেন্ট বাদে প্রতিটি subagent একটি distinct model পায় — deterministic stable hash অনুযায়ী; pool শেষ হলে wrap-around, আর ref না থাকলে কোনো pin নয়");
   out.push("৫) catalog/default ref না থাকলে model pin নয়; session-এর model selection বহাল থাকে");
   out.push("৬) ফলাফল cache: install root-এর `zombiecoder/models.json` (default `~/.config/opencode`, `--config-dir` হলে সেই root); প্রকল্পে কোনো models/config ফাইল auto-create হয় না।");
   out.push(F);

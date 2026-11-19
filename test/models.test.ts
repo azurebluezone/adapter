@@ -5,6 +5,7 @@ import {
   assignModels,
   extractBaseUrl,
   freeModels,
+  MAIN_AGENT_ID,
   modelRef,
   modelsUrl,
   probeOpenAiCompatible,
@@ -38,44 +39,53 @@ test("stableHash is deterministic", () => {
   assert.notEqual(stableHash("manu"), stableHash("jarin"));
 });
 
-test("assignModels is deterministic by default and random when asked", () => {
-  const candidates = ["a/1", "b/2", "c/3"];
-  const first = assignModels(ROSTER, candidates);
-  const second = assignModels(ROSTER, candidates);
-  assert.deepEqual(first, second);
-  for (const model of Object.values(first)) assert.ok(candidates.includes(model));
-
-  const random = assignModels(ROSTER, candidates, true);
-  for (const model of Object.values(random)) assert.ok(candidates.includes(model));
+test("assignModels keeps the main agent unpinned and syncs a distinct model to every subagent", () => {
+  const candidates = Array.from({ length: 9 }, (_, index) => `a/m${index + 1}`);
+  const assigned = assignModels(ROSTER, candidates, false, Math.random, "a/m1");
+  assert.equal(assigned[MAIN_AGENT_ID], "", "the main agent keeps the UI-selected model");
+  const subagents = Object.entries(assigned).filter(([id]) => id !== MAIN_AGENT_ID);
+  assert.equal(subagents.length, ROSTER.length - 1);
+  const refs = subagents.map(([, ref]) => ref);
+  assert.equal(new Set(refs).size, refs.length, "every subagent gets its own model while the pool lasts");
+  assert.ok(!refs.includes("a/m1"), "the owner's UI model is not reused for subagents");
+  for (const ref of refs) assert.ok(candidates.includes(ref));
 });
 
-test("assignModels treats the model as one shared transport for every agent", () => {
+test("assignModels is deterministic and only shuffles when asked", () => {
   const candidates = ["a/1", "b/2", "c/3"];
-  const assigned = assignModels(ROSTER, candidates);
-  const used = new Set(Object.values(assigned));
-  assert.equal(used.size, 1, "agents must share one selected model, without size/role mapping");
+  assert.deepEqual(assignModels(ROSTER, candidates), assignModels(ROSTER, candidates));
+  const first = assignModels(ROSTER, candidates, true, () => 0);
+  const second = assignModels(ROSTER, candidates, true, () => 0);
+  assert.deepEqual(first, second, "an injected random source must be reproducible");
+  for (const ref of Object.values(first)) if (ref) assert.ok(candidates.includes(ref));
 });
 
-test("assignModels leaves the session model unpinned when no model ref is available", () => {
+test("assignModels wraps when the catalog is smaller than the roster", () => {
+  const assigned = assignModels(ROSTER, ["a/1", "b/2"], false, Math.random, "a/1");
+  const refs = Object.entries(assigned)
+    .filter(([id]) => id !== MAIN_AGENT_ID)
+    .map(([, ref]) => ref);
+  assert.deepEqual([...new Set(refs)].sort(), ["b/2"]);
+  assert.equal(assigned[MAIN_AGENT_ID], "");
+});
+
+test("assignModels leaves every agent unpinned when no model ref is available", () => {
   const assigned = assignModels(ROSTER, []);
   assert.equal(assigned.manu, "");
+  assert.equal(assigned[MAIN_AGENT_ID], "");
   assert.equal(new Set(Object.values(assigned)).size, 1);
 });
 
-test("random assignment selects one shuffled shared model for the whole roster", () => {
+test("random assignment still spawns no duplicate subagent model while the pool lasts", () => {
   const candidates = ["a/1", "b/2", "c/3"];
-  const first = assignModels(ROSTER, candidates, true, undefined, () => 0);
-  const second = assignModels(ROSTER, candidates, true, undefined, () => 0);
-  assert.deepEqual(first, second, "an injected random source must be reproducible");
-  assert.equal(new Set(Object.values(first)).size, 1, "all agents share one selected model");
-  for (const model of Object.values(first)) assert.ok(candidates.includes(model));
-
-  const three = assignModels(ROSTER.slice(0, 3), candidates, true, undefined, () => 0.5);
-  assert.equal(new Set(Object.values(three)).size, 1);
-  assert.equal(Object.keys(three).length, 3);
+  const assigned = assignModels(ROSTER, candidates, true, () => 0.5);
+  assert.equal(assigned[MAIN_AGENT_ID], "");
+  const refs = Object.entries(assigned).filter(([id]) => id !== MAIN_AGENT_ID).map(([, ref]) => ref);
+  assert.equal(refs.length, ROSTER.length - 1);
+  assert.equal(new Set(refs).size, candidates.length, "the pool is exhausted before any model repeats");
 });
 
-test("free strategy synchronizes every agent to one shared OpenCode free model", async () => {
+test("free strategy syncs one distinct OpenCode free model to each subagent", async () => {
   const free = Array.from({ length: 9 }, (_, index) => ({
     providerID: "opencode",
     modelID: `free-${index}`,
@@ -87,16 +97,21 @@ test("free strategy synchronizes every agent to one shared OpenCode free model",
   const plan = await resolveModels(
     {
       provider: { list: async () => ({ data: [] }) },
-      model: { list: async () => ({ data: free }) },
+      model: {
+        list: async () => ({ data: free }),
+        default: async () => ({ data: { providerID: "opencode", modelID: "free-0" } }),
+      },
     },
     ROSTER,
     { customProviderUrl: "", strategy: "free" },
   );
   assert.equal(plan.strategy, "free-fallback");
   assert.equal(plan.candidates.length, 9);
-  const used = new Set(Object.values(plan.assignment));
-  assert.equal(used.size, 1, "all agents use one shared transport model");
-  assert.ok([...used][0].startsWith("opencode/free-"));
+  assert.equal(plan.assignment[MAIN_AGENT_ID], "", "the main agent follows the UI model");
+  const refs = Object.values(plan.assignment).filter(Boolean);
+  assert.equal(refs.length, ROSTER.length - 1);
+  assert.equal(new Set(refs).size, refs.length, "subagents are spread across distinct free models");
+  assert.ok(!refs.includes("opencode/free-0"), "the UI default model is not assigned to subagents");
 });
 
 test("freeModels keeps only cost 0/0 active models", () => {
@@ -277,8 +292,9 @@ test("a non-reference baselineModel never turns the roster baseline into a pin",
   );
   assert.equal(plan.strategy, "free-fallback");
   assert.deepEqual(plan.candidates, ["opencode/big-pickle", "opencode/second-free"]);
-  const used = new Set(Object.values(plan.assignment));
-  assert.equal(used.size, 1, "both free candidates remain visible but one shared model is selected");
+  assert.equal(plan.assignment[MAIN_AGENT_ID], "", "the UI/default model stays with the main agent");
+  const refs = [...new Set(Object.values(plan.assignment).filter(Boolean))];
+  assert.deepEqual(refs, ["opencode/second-free"], "subagents take the remaining catalog model");
   assert.equal(normalizeModelRef("inherit"), null);
   assert.equal(normalizeModelRef("opencode/big-pickle"), "opencode/big-pickle");
   assert.equal(normalizeModelRef("/model"), null);
@@ -311,8 +327,9 @@ test("resolveModels respects modelStrategy: free without probing the custom prov
       );
       assert.equal(plan.strategy, "free-fallback");
       assert.deepEqual(plan.candidates, ["opencode/free-one", "opencode/free-z-default"]);
-      assert.equal(new Set(Object.values(plan.assignment)).size, 1);
-      assert.equal(plan.assignment.zombiecoder, "opencode/free-z-default");
+      assert.equal(plan.assignment[MAIN_AGENT_ID], "", "the UI model is not pinned on the main agent");
+      const refs = [...new Set(Object.values(plan.assignment).filter(Boolean))];
+      assert.deepEqual(refs, ["opencode/free-one"], "subagents use the remaining free model");
     },
   );
   assert.equal(requests, 0, "strategy=free must not call the custom provider");

@@ -10,9 +10,16 @@
 //   2. OpenCode's own catalog, filtered to cost 0 / cost 0
 //   3. an explicit environment fallback, otherwise OpenCode's session default
 //
-// A model is a shared transport component, not an agent size/role. Every agent
-// receives the same selected model; the user's UI model remains authoritative
-// when no catalog/default ref is available.
+// The owner's model choice and the agents' models are two different jobs:
+//
+//   - the main agent runs on the model the owner picked in the OpenCode UI, so it
+//     is never pinned here; a pin would override a later /models choice.
+//   - every other agent (the subagents the main agent launches) is synced to one
+//     distinct catalog model, deterministically. The child session gets its own
+//     configured model; the main session keeps the UI model.
+//
+// No model reference is hardcoded: the pool is whatever OpenCode's catalog
+// exposes at cost 0/0, and the UI model wins for the main session.
 
 import type { AgentDef } from "../roster.ts";
 import { isLocalBaseUrl, type LocalProvider } from "./runnerIdentity.ts";
@@ -269,24 +276,37 @@ export function shuffle<T>(pool: readonly T[], random: () => number = Math.rando
   return out;
 }
 
+/** The interactive session owner. It follows the model the owner picks in the
+ *  OpenCode UI, so it is never pinned by the installer or the runtime plan. */
+export const MAIN_AGENT_ID = "zombiecoder";
+
 export function assignModels(
   agents: AgentDef[],
   candidates: string[],
   randomize = false,
-  baseline = BASELINE_MODEL,
   random: () => number = Math.random,
   preferred = "",
+  mainAgentID = MAIN_AGENT_ID,
 ): Record<string, string> {
   const assignment: Record<string, string> = {};
-  const sorted = [...new Set(candidates.filter((value) => normalizeModelRef(value)))].sort();
-  const pool = randomize ? shuffle(sorted, random) : sorted;
+  const normalized = [
+    ...new Set(candidates.map((value) => normalizeModelRef(value)).filter((value): value is string => value !== null)),
+  ].sort();
+  const order = randomize ? shuffle(normalized, random) : normalized;
   const preferredRef = normalizeModelRef(preferred);
-  const selected = (!randomize && preferredRef && pool.includes(preferredRef)
-    ? preferredRef
-    : pool[0]) ?? normalizeModelRef(baseline) ?? "";
-  for (const a of agents) {
-    assignment[a.id] = selected;
-  }
+  // The UI/default model belongs to the main agent. Subagents split the other
+  // catalog refs, so a child session gets its own model and the main session is
+  // never dragged onto one. With nothing left to share, every agent stays
+  // unpinned and inherits the session model.
+  const pool = order.filter((ref) => ref !== preferredRef);
+  const workers = agents
+    .filter((agent) => agent.id !== mainAgentID)
+    .sort((a, b) => stableHash(a.id) - stableHash(b.id) || a.id.localeCompare(b.id));
+  for (const agent of agents) assignment[agent.id] = "";
+  workers.forEach((agent, index) => {
+    if (pool.length === 0) return;
+    assignment[agent.id] = pool[index % pool.length];
+  });
   return assignment;
 }
 
@@ -304,6 +324,8 @@ export type ResolveOptions = {
   randomize?: boolean;
   /** Optional environment-configured fallback; otherwise retain OpenCode's session model. */
   baselineModel?: string;
+  /** Agent that owns the interactive session (defaults to zombiecoder). It keeps the UI model. */
+  mainAgentID?: string;
 };
 
 // A model reference is `providerID/modelID`. Anything else (a stray "inherit",
@@ -458,11 +480,22 @@ export async function resolveModels(
       : "no catalog/default model ref available — preserve the UI-selected session model; no model pins written");
   }
 
-  const assignment = assignModels(agents, candidates, randomize, baselineModel, Math.random, defaultModel ?? undefined);
+  const requestedMain = String(options.mainAgentID ?? "").trim();
+  const mainAgentID = agents.some((agent) => agent.id === requestedMain) ? requestedMain : MAIN_AGENT_ID;
+  const assignment = assignModels(
+    agents,
+    candidates,
+    randomize,
+    Math.random,
+    defaultModel ?? undefined,
+    mainAgentID,
+  );
+  const pinned = Object.entries(assignment).filter(([id, ref]) => id !== mainAgentID && ref);
+  const distinct = new Set(pinned.map(([, ref]) => ref)).size;
   notes.push(
     randomize
-      ? `one shuffled shared transport model selected from ${candidates.length} candidate(s)`
-      : `one stable shared transport model selected from ${candidates.length} candidate(s)`,
+      ? `${mainAgentID} keeps the UI model (unpinned); ${distinct} shuffled model(s) synced to ${pinned.length} subagent(s)`
+      : `${mainAgentID} keeps the UI model (unpinned); ${distinct} distinct model(s) synced to ${pinned.length} subagent(s) from ${candidates.length} candidate(s)`,
   );
 
   return {

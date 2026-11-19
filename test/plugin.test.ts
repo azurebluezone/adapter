@@ -1610,7 +1610,7 @@ test("global install writes agents/config at the global root and leaves the work
   }
 });
 
-test("global install synchronizes all agents to the selected free fallback model", async () => {
+test("global install keeps the UI model on the main agent and syncs one model per subagent", async () => {
   const root = tempProject();
   const globalDir = tempProject();
   const roster = await import("../src/roster.ts");
@@ -1623,8 +1623,19 @@ test("global install synchronizes all agents to the selected free fallback model
   };
   fs.writeFileSync(path.join(globalDir, "opencode.json"), JSON.stringify(globalConfig, null, 2));
 
-  // With no configured custom provider, all agents should share the OpenCode
-  // free/default model, even when an older global config contains per-agent pins.
+  // One UI default plus eight free models: the main agent keeps the UI model and
+  // every subagent is synced to a different free model, even though the old
+  // global config pinned all agents to a dead gateway.
+  const freeModels = ["big-pickle", ...Array.from({ length: 8 }, (_, index) => `free-${index + 1}`)].map(
+    (modelID) => ({
+      providerID: "opencode",
+      modelID,
+      cost: [{ input: 0, output: 0 }],
+      status: "active",
+      capabilities: { tools: true },
+      enabled: true,
+    }),
+  );
   fs.mkdirSync(path.join(root, ".zombiecoder"), { recursive: true });
   fs.writeFileSync(
     path.join(root, ".zombiecoder", "config.json"),
@@ -1643,15 +1654,22 @@ test("global install synchronizes all agents to the selected free fallback model
   const previous = process.env.ZOMBIECODER_INSTALL_PARENT;
   process.env.ZOMBIECODER_INSTALL_PARENT = globalDir;
   try {
-    const fake = makeContext(root);
+    const fake = makeContext(root, { models: freeModels });
     const cleanup = await pluginModule.setup(fake.ctx);
     await new Promise((resolve) => setTimeout(resolve, 60));
 
     const after = JSON.parse(fs.readFileSync(path.join(globalDir, "opencode.json"), "utf8"));
-    assert.equal(after.agents.zombiecoder.model, "opencode/big-pickle");
-    assert.equal(after.agents.manu.model, "opencode/big-pickle", "agents must share one selected transport model");
+    assert.equal(after.agents.zombiecoder.model, undefined, "the main agent keeps the UI model");
+    const subagents = roster.ROSTER.filter((agent) => agent.id !== "zombiecoder");
+    const refs = subagents.map((agent) => after.agents[agent.id].model);
+    assert.equal(new Set(refs).size, subagents.length, "each subagent is synced to its own model");
+    for (const ref of refs) {
+      assert.match(ref, /^opencode\/free-\d+$/, "pins come from the free catalog, not the dead gateway");
+    }
     const markdown = fs.readFileSync(path.join(globalDir, "agents", "zombiecoder.md"), "utf8");
-    assert.match(markdown, /^model: opencode\/big-pickle$/m);
+    assert.doesNotMatch(markdown, /^model:/m, "the main agent must stay unpinned");
+    const subMarkdown = fs.readFileSync(path.join(globalDir, "agents", "manu.md"), "utf8");
+    assert.match(subMarkdown, /^model: opencode\/free-\d+$/m, "a subagent carries its own model");
 
     const report = JSON.parse(fs.readFileSync(path.join(root, ".zombiecoder", ".state", "setup-report.json"), "utf8"));
     assert.equal(report.outputs.modelStrategy, "free-fallback");
@@ -1703,8 +1721,8 @@ test("global install falls back to free models when the configured provider is d
     await new Promise((resolve) => setTimeout(resolve, 60));
 
     const after = JSON.parse(fs.readFileSync(path.join(globalDir, "opencode.json"), "utf8"));
-    assert.equal(after.agents.zombiecoder.model, "opencode/big-pickle");
-    assert.equal(after.agents.manu.model, "opencode/big-pickle");
+    assert.equal(after.agents.zombiecoder.model, undefined, "the main agent keeps the UI model");
+    assert.equal(after.agents.manu.model, undefined, "a single catalog model leaves nothing to split");
     const report = JSON.parse(fs.readFileSync(path.join(root, ".zombiecoder", ".state", "setup-report.json"), "utf8"));
     assert.equal(report.outputs.modelStrategy, "free-fallback");
     assert.match(report.outputs.agentAssignmentSource, /^runtime model plan /);
@@ -2008,8 +2026,8 @@ test("pins on: the breaker never moves the model or the agent", async () => {
 
   assert.deepEqual(fake.agentSwitches, [], "the breaker never hands the task to another agent");
   const config = JSON.parse(fs.readFileSync(path.join(root, "opencode.json"), "utf8"));
-  assert.equal(config.agents.manu.model, "opencode/big-pickle", "pins still configure the agent list");
-  assert.equal(config.agents.jarin.model, "opencode/big-pickle", "all agents share one selected model");
+  assert.equal(config.agents.manu.model, "opencode/second-free", "a subagent is pinned to the remaining model");
+  assert.equal(config.agents.zombiecoder.model, undefined, "the main agent keeps the UI model");
   assert.equal(fake.modelSwitches.length, 0, "pins on: the runtime model must not follow a breaker");
   assert.equal(fake.prompts.length, 1, "the same agent gets the retry prompt");
   assert.match(fake.prompts[0].text, /তুমি এখনো `manu`/);

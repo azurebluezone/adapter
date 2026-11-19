@@ -456,21 +456,33 @@ test("installer uses free agent assignments when the project environment URL is 
   try {
     assert.equal(result.status, 0, String(result.stderr || result.stdout || ""));
     const config = JSON.parse(fs.readFileSync(path.join(root, "opencode.json"), "utf8"));
-    // Pins off (default): one root default, no per-agent model. The agent models
-    // the fixture wrote are removed so they cannot override a /models choice.
+    // Pins on (default): the owner's primary agent stays unpinned so /models
+    // governs the session, and every other agent keeps its own catalog model.
     assert.equal(config.model, undefined, "without a provider/catalog ref the installer leaves the UI-selected model alone");
     assert.equal(config.default_agent, "manu", "installer must preserve the UI owner's selected primary agent");
     for (const agent of roster.ROSTER) {
-      assert.equal(config.agents[agent.id].model, undefined);
+      if (agent.id === "manu") {
+        assert.equal(config.agents[agent.id].model, undefined, "the primary agent keeps the UI model");
+        continue;
+      }
+      assert.equal(config.agents[agent.id].model, assignment[agent.id]);
     }
     const state = JSON.parse(fs.readFileSync(path.join(root, ".zombiecoder", "config.json"), "utf8"));
     assert.equal(state.customProviderUrl, "");
     assert.equal(state.modelStrategy, "free");
     const plan = JSON.parse(fs.readFileSync(path.join(root, ".zombiecoder", "models.json"), "utf8"));
     assert.equal(plan.strategy, "free-fallback");
+    assert.equal(plan.assignment.manu, "", "the primary agent is explicitly unpinned in the plan");
+    assert.equal(plan.assignment.zombiecoder, assignment.zombiecoder);
     assert.match(result.stdout, /modelStrategy: free/);
     const markdown = fs.readFileSync(path.join(root, ".opencode", "agents", "manu.md"), "utf8");
-    assert.doesNotMatch(markdown, /^model:/m, "pins off: markdown must not pin a model");
+    assert.doesNotMatch(markdown, /^model:/m, "the primary agent must not pin a model");
+    const subagent = fs.readFileSync(path.join(root, ".opencode", "agents", "zombiecoder.md"), "utf8");
+    assert.match(
+      subagent,
+      new RegExp(`^model: ${assignment.zombiecoder}$`, "m"),
+      "a subagent carries its own model",
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -511,13 +523,18 @@ test("installer keeps per-agent model pins when agentModelPins is true", async (
   try {
     assert.equal(result.status, 0, String(result.stderr || result.stdout || ""));
     const config = JSON.parse(fs.readFileSync(path.join(root, "opencode.json"), "utf8"));
-    // Pins on: the agent -> model mapping is authoritative, so no root model.
+    // Pins on: the agent -> model mapping is authoritative for every subagent,
+    // but the UI session owner (zombiecoder here, no default_agent) stays
+    // unpinned so /models still governs the main session.
     assert.equal(config.model, undefined);
     for (const agent of roster.ROSTER) {
-      assert.equal(config.agents[agent.id].model, assignment[agent.id]);
+      const expected = agent.id === "zombiecoder" ? undefined : assignment[agent.id];
+      assert.equal(config.agents[agent.id].model, expected);
     }
     const markdown = fs.readFileSync(path.join(root, ".opencode", "agents", "manu.md"), "utf8");
     assert.match(markdown, /^model: opencode\/free-model-1$/m);
+    const main = fs.readFileSync(path.join(root, ".opencode", "agents", "zombiecoder.md"), "utf8");
+    assert.doesNotMatch(main, /^model:/m, "the session owner must not be pinned");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -782,7 +799,7 @@ test("a slow provider is saved but not selected, and stale models are removed", 
         );
         assert.equal(plan.providerUsable, false);
         assert.equal(plan.providerSlow, true);
-        assert.equal(plan.assignment.manu, BASELINE);
+        assert.equal(plan.assignment.manu, "", "a dead provider must not leave a pin behind");
       } finally {
         fs.rmSync(root, { recursive: true, force: true });
       }

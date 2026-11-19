@@ -38,8 +38,9 @@ export const RUNTIME_OPERATIONS = Object.freeze({
     "Configured provider: probe its own base URL, not a catalog guess.",
     "Empty /v1/models is unusable; do not map an agent to a dead provider.",
     "OpenCode catalog: keep models with cost.input == 0 and cost.output == 0.",
-    "Baseline: opencode/big-pickle, used only when no free model exists.",
-    "Mapping: deterministic stable hash of the agent id by default.",
+    "Main agent: never pinned; it keeps the model selected in the OpenCode UI.",
+    "Subagents: one distinct catalog ref each, ordered by stable hash of the agent id.",
+    "Wrap-around only after the pool is exhausted; no pool means no pin.",
     "Never emit provider/undefined.",
   ],
   blockers_to_report: [
