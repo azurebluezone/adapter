@@ -35,14 +35,23 @@ test("installer/runtime sources do not duplicate provider defaults or credential
   assert.doesNotMatch(contents.find(({ file }) => file === "src/zombie/defaults.ts")?.text ?? "", /127\.0\.0\.1:49374/);
   // The MCP server identifier is not a provider default or a credential. It is
   // allowed in the tool policy and the shared prompt that must name the mounted
-  // surface; the provider form (`missionbarisal/...`) stays in defaults only.
+  // surface; the provider form (`missionbarisal/...`) must not ship as a default.
   onlyIn(/missionbarisal/, [
-    "src/zombie/defaults.ts",
     "src/agents/defaults.ts",
     "src/agents/shared.ts",
   ]);
-
+  assert.doesNotMatch(
+    contents.find(({ file }) => file === "src/zombie/defaults.ts")?.text ?? "",
+    /missionbarisal/,
+    "src/zombie/defaults.ts still ships the vendor provider id",
+  );
   assert.doesNotMatch(contents.find(({ file }) => file === "src/roster.ts")?.text ?? "", /opencode\/big-pickle/);
+
+  // A shipped vendor gateway host is a hardcoded decision the owner cannot see.
+  const shippedHost = contents
+    .filter(({ text }) => /gpu\.zombiecoder\.my\.id/.test(text))
+    .map(({ file }) => file);
+  assert.deepEqual(shippedHost, [], "runtime sources still ship the vendor gateway host");
 
   for (const { file, text } of contents) {
     assert.doesNotMatch(text, /apiKey\s*:\s*["']public["']/, `${file} still hardcodes a fake credential`);

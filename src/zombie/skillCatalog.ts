@@ -216,6 +216,30 @@ export const SKILL_CATALOG: SkillSpec[] = [
     file: "scrape-verify.md",
     tags: ["scraping", "playwright", "provenance", "validation", "security"],
   },
+  {
+    id: "root-cause",
+    name: "Root Cause Analysis",
+    description:
+      "Separate symptom, trigger and cause with a minimal reproduction before proposing a fix; use when a failure repeats, a fix did not hold, or the obvious cause feels borrowed.",
+    file: "root-cause.md",
+    tags: ["debug", "diagnosis", "evidence", "reproduction"],
+  },
+  {
+    id: "threat-model",
+    name: "Threat Modeling",
+    description:
+      "Map trust boundaries, assets and abuse paths before accepting a change; use for auth, files, network calls, tool output, installers and any untrusted input.",
+    file: "threat-model.md",
+    tags: ["security", "trust-boundary", "prompt-injection", "secrets"],
+  },
+  {
+    id: "test-planning",
+    name: "Test Planning",
+    description:
+      "Turn an acceptance claim into real-path checks with explicit pass criteria, fixtures and failure paths; use before implementation and again at release.",
+    file: "test-planning.md",
+    tags: ["testing", "acceptance", "release-gate", "quality"],
+  },
 ];
 
 const CORE_IDS = ["first-principles", "evidence-before-confidence", "resource-optimization", "server"];

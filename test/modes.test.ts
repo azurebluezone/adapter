@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   AGENT_MODES,
-  BUILTIN_AGENTS,
   MODE_REGISTRY,
   applyModeOverrides,
   isAgentMode,
@@ -24,17 +23,9 @@ test("the registry contains only OpenCode V2 modes", () => {
   assert.equal(isAgentMode("wizard"), false);
 });
 
-test("builtin agents are the documented V2 set and never invent scout", () => {
-  const ids = BUILTIN_AGENTS.map((agent) => agent.id);
-  assert.ok(ids.includes("build"));
-  assert.ok(ids.includes("plan"));
-  assert.ok(ids.includes("general"));
-  assert.ok(ids.includes("explore"));
-  assert.ok(!ids.includes("scout"), "V2 has no scout agent");
-  for (const id of ["compaction", "title", "summary"]) {
-    assert.equal(BUILTIN_AGENTS.find((agent) => agent.id === id)?.hidden, true);
-  }
-  assert.equal(BUILTIN_AGENTS.find((agent) => agent.id === "general")?.canLaunchSubagents, false);
+test("the pack owns three modes and does not copy the host's builtin agent list", async () => {
+  const modes = await import("../src/zombie/modes.ts");
+  assert.equal("BUILTIN_AGENTS" in modes, false, "the host agent inventory must not be hardcoded");
 });
 
 test("planModeSwitch refuses an unknown mode and a subagent-only default agent", () => {

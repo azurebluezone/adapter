@@ -207,7 +207,7 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
     JSON.stringify({
       version: "0.0.0-test",
       customProviderUrl: "",
-      customProviderID: "missionbarisal",
+      customProviderID: "gateway",
       mcpUrl: "",
       opencodeApiUrl: "",
       ssotRefreshMs: 300000,
@@ -335,8 +335,10 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   assert.doesNotMatch(ssot, /^## .*Model plan/m);
   assert.doesNotMatch(ssot, /^## .*MCP/m);
 
-  assert.equal(fake.tools.length, 26);
+  assert.equal(fake.tools.length, 28);
   assert.ok(fake.tools.every((tool) => tool.output), "every tool must declare an output schema");
+  assert.ok(fake.tools.some((tool) => tool.name === "subagent_context"), "subagent_context tool missing");
+  assert.ok(fake.tools.some((tool) => tool.name === "tool_result_read"), "tool_result_read tool missing");
   assert.ok(fake.tools.some((tool) => tool.name === "memory_archive"));
   assert.ok(fake.tools.some((tool) => tool.name === "project_onboarding"), "project_onboarding tool missing");
   assert.ok(fake.tools.some((tool) => tool.name === "project_investigation"), "project_investigation tool missing");
@@ -363,7 +365,7 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   assert.equal(sameOutput.plan.changed, false);
   assert.equal(sameOutput.apply, null);
   assert.equal(sameOutput.reload.required, false);
-  assert.ok(modesOutput.builtins.some((builtin: any) => builtin.id === "explore"));
+  assert.equal("builtins" in modesOutput, false, "host builtin agent inventory must not be hardcoded");
   assert.deepEqual(
     modesOutput.modes.map((mode: any) => mode.id),
     ["primary", "subagent", "all"],
@@ -729,7 +731,7 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   const report = JSON.parse(fs.readFileSync(path.join(root, ".zombiecoder", ".state", "setup-report.json"), "utf8"));
   const toolStep = report.steps.find((step: any) => step.step === "register-tools");
   assert.equal(toolStep.ok, true);
-  assert.equal(toolStep.detail, "26 registered, 26 live");
+  assert.equal(toolStep.detail, "28 registered, 28 live");
   assert.ok(fs.existsSync(path.join(root, ".zombiecoder", ".state", "audit.jsonl")));
 
   await cleanup();
@@ -744,7 +746,7 @@ test("context hook resolves a session's own project root and scaffolds it", asyn
     JSON.stringify({
       version: "0.0.0-test",
       customProviderUrl: "",
-      customProviderID: "missionbarisal",
+      customProviderID: "gateway",
       mcpUrl: "",
       opencodeApiUrl: "",
       ssotRefreshMs: 300000,
@@ -827,7 +829,7 @@ test("agentModes config switches a valid mode and rejects unknown ones", async (
     JSON.stringify({
       version: "0.0.0-test",
       customProviderUrl: "",
-      customProviderID: "missionbarisal",
+      customProviderID: "gateway",
       mcpUrl: "",
       opencodeApiUrl: "",
       ssotRefreshMs: 300000,
@@ -1206,6 +1208,8 @@ test("a primary agent cannot be launched through the subagent tool", async () =>
   assert.match(audit, /"kind":"agent\.mode\.block"/);
   assert.match(audit, /"target":"manu"/);
 
+  const envelope =
+    "## SUBAGENT ENVELOPE\n- Intent: review the install path\n- Goal: none (read-only)\n- Files: src/plugin.ts\n- Prior failures: none\n- Constraints: none\n";
   // Reviewer launches are restricted to each caller's explicit target list.
   await assert.rejects(
     before({
@@ -1220,19 +1224,19 @@ test("a primary agent cannot be launched through the subagent tool", async () =>
     sessionID: "ses_mode",
     agent: "nila",
     tool: "subagent",
-    input: { agent: "majnu" },
+    input: { agent: "majnu", prompt: envelope },
   });
   await before({
     sessionID: "ses_mode",
     agent: "nila",
     tool: "subagent",
-    input: { agent: "brishti" },
+    input: { agent: "brishti", prompt: envelope },
   });
   await before({
     sessionID: "ses_mode",
     agent: "jarin",
     tool: "subagent",
-    input: { agent: "majnu" },
+    input: { agent: "majnu", prompt: envelope },
   });
   await assert.rejects(
     before({ sessionID: "ses_mode", agent: "majnu", tool: "subagent", input: { agent: "nila" } }),
@@ -1256,11 +1260,21 @@ test("a primary agent cannot be launched through the subagent tool", async () =>
     }),
     /at most 4 specialists/,
   );
+  await assert.rejects(
+    before({
+      sessionID: "ses_mode",
+      agent: "zombiecoder",
+      tool: "subagent",
+      input: { agent: "nila" },
+    }),
+    /bounded context envelope/,
+    "a launch without the intent/goal envelope must be refused",
+  );
   await before({
     sessionID: "ses_mode",
     agent: "zombiecoder",
     tool: "subagent",
-    input: { agent: "nila" },
+    input: { agent: "nila", prompt: envelope },
   });
   await assert.rejects(
     before({ sessionID: "ses_mode", agent: "manu", tool: "subagent", input: { agent: "manu" } }),
@@ -1392,6 +1406,7 @@ test("context hook archives overflow without waiting for session.idle", async ()
   assert.doesNotMatch(injected, /big-pickle/);
   assert.match(injected, /Finish your own slice/);
   assert.match(injected, /Active agent retains task ownership/);
+  const firstRoute = (await fake.storage.get("agent/route/ses_ctx")) as any;
 
   const switchedEvent = {
     agent: "nila",
@@ -1405,7 +1420,7 @@ test("context hook archives overflow without waiting for session.idle", async ()
   assert.match(switchedText, /Active agent: Nila \(nila\)/);
   const switchedRoute = (await fake.storage.get("agent/route/ses_ctx")) as any;
   assert.equal(switchedRoute.agentID, "nila");
-  assert.equal(switchedRoute.phase, "investigate", "the same turn keeps its existing phase");
+  assert.equal(switchedRoute.phase, firstRoute.phase, "the same turn keeps its existing phase");
   assert.equal(switchedRoute.steps.at(-1)?.kind, "agent_handoff");
 
   // Generic builtins receive the shared ZombieCoder identity and rules.
@@ -1544,7 +1559,7 @@ test("global install writes agents/config at the global root and leaves the work
     JSON.stringify({
       version: "0.0.0-test",
       customProviderUrl: "",
-      customProviderID: "missionbarisal",
+      customProviderID: "gateway",
       mcpUrl: "",
       opencodeApiUrl: "",
       ssotRefreshMs: 300000,
@@ -1599,7 +1614,7 @@ test("global install synchronizes all agents to the selected free fallback model
   const root = tempProject();
   const globalDir = tempProject();
   const roster = await import("../src/roster.ts");
-  const custom = "missionbarisal/llama3-groq-tool-use:8b";
+  const custom = "gateway/llama3-groq-tool-use:8b";
   const customAssignment = Object.fromEntries(roster.ROSTER.map((agent) => [agent.id, custom]));
   const globalConfig = {
     $schema: "https://opencode.ai/config.json",
@@ -1616,7 +1631,7 @@ test("global install synchronizes all agents to the selected free fallback model
     JSON.stringify({
       version: "0.0.0-test",
       customProviderUrl: "",
-      customProviderID: "missionbarisal",
+      customProviderID: "gateway",
       mcpUrl: "",
       opencodeApiUrl: "",
       ssotRefreshMs: 300000,
@@ -1654,7 +1669,7 @@ test("global install falls back to free models when the configured provider is d
   const root = tempProject();
   const globalDir = tempProject();
   const roster = await import("../src/roster.ts");
-  const custom = "missionbarisal/dead-model";
+  const custom = "gateway/dead-model";
   const customAssignment = Object.fromEntries(roster.ROSTER.map((agent) => [agent.id, custom]));
   fs.writeFileSync(
     path.join(globalDir, "opencode.json"),
@@ -1671,7 +1686,7 @@ test("global install falls back to free models when the configured provider is d
     JSON.stringify({
       version: "0.0.0-test",
       customProviderUrl: "http://127.0.0.1:1/v1",
-      customProviderID: "missionbarisal",
+      customProviderID: "gateway",
       mcpUrl: "",
       opencodeApiUrl: "",
       ssotRefreshMs: 300000,
@@ -1817,7 +1832,7 @@ test("syncProviderBaseUrl touches only settings.baseURL", () => {
     JSON.stringify(
       {
         providers: {
-          missionbarisal: {
+          gateway: {
             settings: { baseURL: "https://old.example/v1", apiKey: "zc-test-key" },
             models: { m1: { name: "m1" } },
           },
@@ -1830,12 +1845,12 @@ test("syncProviderBaseUrl touches only settings.baseURL", () => {
     { mode: 0o600 },
   );
 
-  const result = pluginModule.syncProviderBaseUrl(file, "missionbarisal", "https://new.example/v1");
+  const result = pluginModule.syncProviderBaseUrl(file, "gateway", "https://new.example/v1");
   assert.equal(result.updated, true);
   const after = JSON.parse(fs.readFileSync(file, "utf8"));
-  assert.equal(after.providers.missionbarisal.settings.baseURL, "https://new.example/v1");
-  assert.equal(after.providers.missionbarisal.settings.apiKey, "zc-test-key");
-  assert.deepEqual(after.providers.missionbarisal.models, { m1: { name: "m1" } });
+  assert.equal(after.providers.gateway.settings.baseURL, "https://new.example/v1");
+  assert.equal(after.providers.gateway.settings.apiKey, "zc-test-key");
+  assert.deepEqual(after.providers.gateway.models, { m1: { name: "m1" } });
   assert.equal(after.agents.manu.mode, "all");
   assert.equal(fs.statSync(file).mode & 0o777, 0o600, "provider config mode must be preserved");
   fs.rmSync(root, { recursive: true, force: true });
@@ -1938,7 +1953,7 @@ test("pins on: the breaker never moves the model or the agent", async () => {
     JSON.stringify({
       version: "0.0.0-test",
       customProviderUrl: "",
-      customProviderID: "missionbarisal",
+      customProviderID: "gateway",
       mcpUrl: "",
       opencodeApiUrl: "",
       ssotRefreshMs: 300000,

@@ -39,19 +39,32 @@ export function ensureDir(dir: string): void {
   fs.mkdirSync(dir, { recursive: true });
 }
 
+// Write through a symlink instead of replacing it: the shared install keeps
+// ~/.config/opencode/opencode.json linked to ~/.opencode/opencode.json, and an
+// atomic rename on the link path would fork the two roots.
+function resolveWriteTarget(file: string): string {
+  try {
+    if (fs.lstatSync(file).isSymbolicLink()) return fs.realpathSync(file);
+  } catch {
+    /* missing file: the caller's path is the target */
+  }
+  return file;
+}
+
 export function writeAtomic(file: string, content: string): void {
-  ensureDir(path.dirname(file));
-  const tmp = file + "." + process.pid + ".tmp";
+  const target = resolveWriteTarget(file);
+  ensureDir(path.dirname(target));
+  const tmp = target + "." + process.pid + ".tmp";
   // Preserve an existing mode so a secret-bearing config never becomes
   // world-readable just because the plugin rewrote it.
   let mode = 0o644;
   try {
-    if (fs.existsSync(file)) mode = fs.statSync(file).mode & 0o777;
+    if (fs.existsSync(target)) mode = fs.statSync(target).mode & 0o777;
   } catch {
     /* keep the default */
   }
   fs.writeFileSync(tmp, content, { encoding: "utf8", mode });
-  fs.renameSync(tmp, file);
+  fs.renameSync(tmp, target);
 }
 
 export function readText(file: string): string | undefined {

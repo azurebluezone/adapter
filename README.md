@@ -27,7 +27,7 @@ runtime state তৈরি করে; প্রজেক্টের ভিত�
   sync হয়; valid model ref না থাকলে session model-ই থাকে।
 - প্রতিটি প্রজেক্টের জন্য `.zombiecoder/SSOT.md`, `syllabus.md`, memory ও
   audit state তৈরি হয়।
-- MCP server শুধু probe সফল হলে register হয়।
+- MCP server opt-in: `--with-local-mcp` বা `--mcp-url` দিলে এবং probe সফল হলে register হয়; কোনো server shipped default নয়।
 - Origin handshake (URL-only): trusted origin থেকে শুধু base URL sync করা যায়;
   API key, cookie বা browser session transfer হয় না।
 - API key, provider URL, provider ID, model strategy ও baseline model
@@ -1139,11 +1139,13 @@ VS Code-এ OpenCode session দেখতে [`formulahendry.acp-client`](https:
 → apply → `git diff` → targeted check → full check**। `patch` tool execute না
 হলে `৬.৫ Native tool calls` দেখুন।
 
-### MCP — তিনটি local server (installer নিজেই register করে)
+### MCP — তিনটি local server (opt-in)
 
 `mcp/` ফোল্ডারে তিনটি আলাদা local stdio MCP server আছে; কোনো LLM বা API key নেই।
-Installer clone থেকে চালালে এগুলো install root-এ কপি হয় এবং `opencode.json`-এর
-`mcp.servers`-এ absolute path সহ নিজে থেকেই বসে (`node bin/install.mjs --yes`)।
+কোনো server আর shipped default নয়। চাইলে `--with-local-mcp` দিয়ে install করুন;
+তখন এগুলো install root-এ কপি হয় এবং `opencode.json`-এর `mcp.servers`-এ absolute
+path সহ বসে (`node bin/install.mjs --yes --with-local-mcp`)। আগের install থেকে
+থাকা server মুছে ফেলা হয় না।
 
 | Server | Tools | কাজ |
 |---|---|---|
@@ -1158,7 +1160,7 @@ wrapper-কে browser ধরা হয় না (real ELF/Mach-O/PE binary ল
 থাকলে tool honest ভাবে `CDP_UNAVAILABLE` + `editor_fallback: "browser"` ফেরত দেয়;
 তখন OpenCode editor-এর নিজস্ব `browser` tools (Chromium-backed) ব্যবহার করতে হয়।
 
-`opencode mcp list` → `✓ image-brand connected`, `✓ public-api connected`, `✓ cdp connected`।
+`--with-local-mcp` দিলে `opencode mcp list` → `✓ image-brand connected`, `✓ public-api connected`, `✓ cdp connected`।
 Install-এর পরে কনফিগ যাচাই: `node scripts/audit-install.mjs`।
 কোনো MCP server-এ `patch` tool নেই; multi-file edit OpenCode-এর native
 `patch` (উপরে দেখুন), আর `patch_preview` শুধু single-file।
@@ -1259,7 +1261,8 @@ Plugin-এর `ctx.rpc` door `POST /api/rpc/zombiecoder/<method>`-এ reachable�
 | `--no-opencode` | `--opencode none`-এর সমান |
 | `--opencode-path <bin>` | PATH discovery বাদ দিয়ে নির্দিষ্ট OpenCode binary ব্যবহার |
 | `--opencode-prefix <dir>` | `--opencode install`-এ npm global prefix |
-| `--no-mcp-check` | local MCP server-এর `initialize` + `tools/list` verification skip |
+| `--with-local-mcp` | bundled stdio MCP server copy + register করে (default বন্ধ) |
+| `--no-mcp-check` | `--with-local-mcp`-এর `initialize` + `tools/list` verification skip |
 | `--no-space-check` | free-space preflight skip |
 | `--keep-cache` | npm cache স্বয়ংক্রিয়ভাবে পরিষ্কার করবে না |
 | `--force-low-space` | জায়গা কম হলেও install চালিয়ে যাবে (ঝুঁকিসহ) |
@@ -1603,8 +1606,8 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  3d8b34eeb510adf779120cb6d893ab6a5f866308c9c75d26bc7a5fcce8519157  ║
-║  files 163 · bytes 1557572 · base aebe25c · dirty                        ║
+║  root  66b7d258a2195d583638ff57fba2c6871547f54ae3813a578e88295a760680f1  ║
+║  files 178 · bytes 1629688 · base 6da6cf3 · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -1612,7 +1615,7 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-18T00:15:53.759Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-19T03:36:27.932Z
 
 </div>
 <!-- INTEGRITY:END -->

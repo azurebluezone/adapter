@@ -20,6 +20,9 @@ import { appendSyllabus, readSyllabus } from "./syllabus.ts";
 import { scanProject } from "./scan.ts";
 import { keepTransform, type TransformDoor } from "./transform.ts";
 import { buildContextPack, resolveAllowedPath } from "./context.ts";
+import { buildSubagentEnvelope, renderEnvelope } from "./subagentEnvelope.ts";
+import { readArchivedResult } from "./toolArchive.ts";
+import { investigationDigest, validateInvestigation } from "./investigationPackage.ts";
 import { loadRun } from "../agents/runtime.ts";
 import {
   contractStatus,
@@ -52,7 +55,7 @@ import {
   listSkillCatalog,
 } from "./skillCatalog.ts";
 import { ROSTER } from "../roster.ts";
-import { AGENT_MODES, BUILTIN_AGENTS, MODE_REGISTRY, applyModeOverrides, planModeSwitch, type AgentMode } from "./modes.ts";
+import { AGENT_MODES, MODE_REGISTRY, applyModeOverrides, planModeSwitch, type AgentMode } from "./modes.ts";
 
 export const RPC_ID = "zombiecoder";
 /** Safety cap for the real check command close runs. Not a work budget. */
@@ -466,6 +469,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           expected: { type: "string", description: "Literal distinctive success marker emitted by the check only when all requirements pass; do not use a prose summary." },
           check: { type: "string", description: "Runnable command that proves the requirements and prints the expected marker only on success. close runs it." },
           pass: { type: "string", description: "Required for open: observable pass criteria that the check enforces." },
+          investigation: { type: "object", description: "Optional typed investigation package (version 1); validated before the permission door." },
           match: {
             type: "string",
             enum: ["contains", "equals", "regex", "json"],
@@ -517,6 +521,14 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           if (outcomeError) throw new Error(outcomeError);
           const checkError = validateCheck(check);
           if (checkError) throw new Error(checkError);
+          let investigationSummary = "";
+          if (input?.investigation !== undefined) {
+            const check = validateInvestigation(input.investigation);
+            if (!check.ok) {
+              throw new Error(`investigation is invalid: ${check.errors.slice(0, 5).join("; ")}`);
+            }
+            investigationSummary = investigationDigest(check.value!);
+          }
           const sessionID = String(context?.sessionID ?? "").trim();
           const currentSyllabus = readSyllabus(projectRoot) ?? "";
           // One open contract per session. A second open is how an agent would
@@ -580,6 +592,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             `তুমি চাইছ: ${goal}`,
             `আসল ইনপুট: ${realInput}`,
             `আমি তোমাকে দেব: ${expected}`,
+            ...(investigationSummary ? [`Investigation: ${investigationSummary}`] : []),
             `যাচাই: \`${check}\` → ${pass}`,
             `মিলানোর নিয়ম: ${mode}`,
             "",
@@ -1161,6 +1174,8 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
                 routeKey: run.routeKey,
                 taskKind: run.taskKind,
                 phase: run.phase,
+                complexity: run.complexity ?? null,
+                fastPath: Boolean(run.fastPath),
                 contract: run.contract
                   ? { id: run.contract.id, status: run.contract.status }
                   : null,
@@ -1168,6 +1183,56 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
               }
             : null,
         };
+      },
+    },
+    {
+      name: "subagent_context",
+      description:
+        "Render the bounded SUBAGENT ENVELOPE that every subagent launch must carry: original intent, approved goal, relevant files, prior failures and optionally the typed investigation package. The plugin blocks a launch whose prompt lacks this block, so call this first and pass its text as the prompt prefix.",
+      input: {
+        type: "object" as const,
+        properties: {
+          intent: { type: "string", description: "The user's original request, not the subtask." },
+          goal: { type: "string", description: "The approved goal_contract goal, or 'none' for a read-only helper." },
+          files: { type: "array", items: { type: "string" }, description: "Relevant files, capped at 12." },
+          priorFailures: { type: "array", items: { type: "string" }, description: "Earlier failed attempts, capped at 3." },
+          constraints: { type: "array", items: { type: "string" }, description: "Hard limits the child must respect." },
+          investigation: { type: "object", description: "Optional typed investigation package (version 1)." },
+        },
+        required: ["intent"],
+        additionalProperties: false,
+      },
+      run: (input: any) => {
+        const envelope = buildSubagentEnvelope({
+          intent: String(input?.intent ?? ""),
+          goal: String(input?.goal ?? ""),
+          files: input?.files,
+          priorFailures: input?.priorFailures,
+          constraints: input?.constraints,
+          investigation: input?.investigation,
+        });
+        const prompt = renderEnvelope(envelope);
+        return { prompt, chars: prompt.length, envelope };
+      },
+    },
+    {
+      name: "tool_result_read",
+      description:
+        "Read a full tool result archived by the plugin under .zombiecoder/tool-results/. Use it when a preview was truncated; paths outside that directory are refused.",
+      input: {
+        type: "object" as const,
+        properties: {
+          file: { type: "string", description: "Project-relative archive path returned by a tool.archive audit row." },
+        },
+        required: ["file"],
+        additionalProperties: false,
+      },
+      run: (input: any, context?: ToolContextLike) => {
+        const projectRoot = rootFor(context);
+        const file = String(input?.file ?? "").trim();
+        const body = readArchivedResult(projectRoot, file);
+        if (body === null) throw new Error(`no archived tool result at ${file}`);
+        return { file, bytes: Buffer.byteLength(body, "utf8"), body };
       },
     },
     {
@@ -1559,7 +1624,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
     {
       name: "agent_modes",
       description:
-        "OpenCode V2 agent modes. Lists the real modes (primary | subagent | all), the builtin agents, the caller's current mode, and plans a validated switch. Read-only: it writes nothing — apply the returned patch through zombiecoder/config.json agentModes and reload.",
+        "OpenCode V2 agent modes. Lists the pack's three modes (primary | subagent | all), the caller's current mode, and plans a validated switch. Read-only: it writes nothing — apply the returned patch through zombiecoder/config.json agentModes and reload. The host's builtin agent inventory is not copied into this tool.",
       input: {
         type: "object" as const,
         properties: {
@@ -1580,7 +1645,6 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
         const changed = Boolean(plan?.ok && plan.changed);
         return {
           modes: AGENT_MODES.map((id) => MODE_REGISTRY[id]),
-          builtins: BUILTIN_AGENTS,
           rejected: effective.rejected,
           agent: agent
             ? {

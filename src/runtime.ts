@@ -1,10 +1,7 @@
 // ZombieCoder — Runtime Operations generator
 // One plugin. URL-driven. No separate server.
 
-import {
-  BASELINE_MODEL,
-  DEFAULT_CUSTOM_PROVIDER_ID,
-} from "./zombie/defaults.ts";
+import { BASELINE_MODEL } from "./zombie/defaults.ts";
 
 const F = String.fromCharCode(96, 96, 96);
 
@@ -82,7 +79,8 @@ export function renderRuntime(): string {
   out.push(BASELINE_MODEL
     ? `১) explicit last-resort: ${BASELINE_MODEL}`
     : "১) কোনো hard-coded model নেই; UI-selected/OpenCode default model অক্ষত থাকে");
-  out.push(`২) কাস্টম প্রোভাইডার শুধু \`ZOMBIECODER_PROVIDER_URL\` দেওয়া থাকলে probe হয়: <${DEFAULT_CUSTOM_PROVIDER_ID}>/<model-id>`);
+  out.push("২) কোনো shipped provider নেই; মালিক `--provider-url` / `ZOMBIECODER_PROVIDER_URL` দিলে এবং তার baseURL live probe-এ সাড়া দিলে: <provider-id>/<model-id>");
+  out.push("   (`--provider-id` / `ZOMBIECODER_PROVIDER_ID` না দিলে installer URL host থেকে id বানায়)");
   out.push("৩) URL না থাকলে: OpenCode catalog → সক্রিয় cost[0].input == 0 && output == 0");
   out.push("৪) প্রতিটি agent একই নির্বাচিত model-কে transport component হিসেবে ব্যবহার করে");
   out.push("৫) catalog/default ref না থাকলে model pin নয়; session-এর model selection বহাল থাকে");

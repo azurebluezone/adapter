@@ -95,7 +95,6 @@ const { redact } = await import(
 );
 const {
   DEFAULT_CUSTOM_PROVIDER_URL,
-  DEFAULT_CUSTOM_PROVIDER_ID,
   DEFAULT_CUSTOM_PROVIDER_KEY,
   DEFAULT_OPENCODE_API_URL,
   DEFAULT_MCP_URL: DEFAULT_MCP_URL_FROM_DEFAULTS,
@@ -121,6 +120,7 @@ const {
   inspectVersion,
   npmInstallArgs,
   parseMode: parseOpenCodeMode,
+  parseOpenCodeVersion,
 } = await import(pathToFileURL(path.join(PACKAGE_ROOT, "src", "zombie", "opencodeRuntime.ts")).href);
 // V2 puts every MCP server under mcp.servers and uses `disabled`; a V1-shaped
 // entry is silently ignored, which shows up as "no tools" in the agent.
@@ -160,7 +160,8 @@ Options:
   --fast                 free/baseline model; disables the custom provider
   --allow-slow           keep a provider even when prompt throughput is below 20 tok/s
   --no-probe-tools       skip the tool-call capability probe
-  --mcp-url <url>        optional MCP server URL
+  --mcp-url <url>        optional remote MCP server URL
+  --with-local-mcp       copy and register the bundled stdio MCP servers (off by default)
   --origin-url <url>     optional public origin handshake URL
   --no-install           skip npm install
   --no-lsp               skip LSP server install + lsp config generation
@@ -380,6 +381,9 @@ if (DO_SPACE_CHECK) {
 const FAST_MODE = flag("--fast");
 const ALLOW_SLOW = flag("--allow-slow");
 const PROBE_TOOLS = !flag("--no-probe-tools");
+// The bundled stdio servers stay in the package, but registering them by
+// default made every install advertise tools the owner never asked for.
+const WITH_LOCAL_MCP = flag("--with-local-mcp");
 const MODEL_STRATEGY_FLAG = value("--model-strategy", null);
 const ALLOWED_STRATEGIES = new Set(["auto", "custom", "free", "baseline", "random"]);
 if (MODEL_STRATEGY_FLAG !== null && !ALLOWED_STRATEGIES.has(String(MODEL_STRATEGY_FLAG))) {
@@ -504,12 +508,24 @@ if (FAST_MODE) PROVIDER_URL = "";
 const INSTALL_MODEL_STRATEGY = MODEL_STRATEGY_FLAG ?? (PROVIDER_URL ? "auto" : "free");
 
 // Provider identity and credential, resolved once. A flag wins, then the
-// environment, then the previous install, then the shipped default. The key is
-// never printed.
-const PROVIDER_ID =
-  String(
-    providerIdFlag ?? envProviderId ?? previous.customProviderID ?? DEFAULT_CUSTOM_PROVIDER_ID,
-  ).trim() || DEFAULT_CUSTOM_PROVIDER_ID;
+// environment, then the previous install. When the owner supplies only a URL,
+// the id comes from the URL host; no vendor id is shipped as a fallback.
+function deriveProviderID(url) {
+  try {
+    const host = new URL(String(url)).hostname
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return host || "custom";
+  } catch {
+    return "custom";
+  }
+}
+const explicitProviderID = String(providerIdFlag ?? envProviderId ?? "").trim();
+const rememberedProviderID = PROVIDER_URL ? String(previous.customProviderID ?? "").trim() : "";
+const PROVIDER_ID = PROVIDER_URL
+  ? explicitProviderID || rememberedProviderID || deriveProviderID(PROVIDER_URL)
+  : "";
 let PROVIDER_KEY =
   providerKeyFlag !== null
     ? String(providerKeyFlag).trim()
@@ -593,21 +609,35 @@ function ensureDir(dir) {
   }
 }
 
+// OpenCode configs are often symlinks: ~/.config/opencode/opencode.json points at
+// ~/.opencode/opencode.json on a shared install. Renaming tmp onto the link path
+// replaces the link with a real file, silently forking the config into two roots
+// that drift apart. Write through the link instead.
+function resolveWriteTarget(file) {
+  try {
+    if (fs.lstatSync(file).isSymbolicLink()) return fs.realpathSync(file);
+  } catch {
+    /* missing file: the caller's path is the target */
+  }
+  return file;
+}
+
 function writeIfChanged(file, content) {
-  ensureDir(path.dirname(file));
-  const current = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
+  const target = resolveWriteTarget(file);
+  ensureDir(path.dirname(target));
+  const current = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : null;
   if (current === content) return false;
   // Preserve an existing mode: opencode.json and zombiecoder/config.json carry
   // the provider key and must not become world-readable after an install.
   let mode = 0o644;
   try {
-    if (fs.existsSync(file)) mode = fs.statSync(file).mode & 0o777;
+    if (fs.existsSync(target)) mode = fs.statSync(target).mode & 0o777;
   } catch {
     /* keep the default */
   }
-  const tmp = file + "." + process.pid + ".tmp";
+  const tmp = target + "." + process.pid + ".tmp";
   fs.writeFileSync(tmp, content, { encoding: "utf8", mode });
-  fs.renameSync(tmp, file);
+  fs.renameSync(tmp, target);
   return true;
 }
 
@@ -1116,17 +1146,33 @@ await step("ensure OpenCode runtime", () => {
   if (OPENCODE_MODE === "none") return "skipped (--opencode none)";
 
   const runVersion = (binary) => {
-    const probe = spawnSync(binary, ["--version"], {
-      encoding: "utf8",
-      timeout: 20000,
-      shell: process.platform === "win32" && /\.cmd$/i.test(binary),
-    });
-    if (probe.error) return { error: String(probe.error.message ?? probe.error) };
-    const output = `${probe.stdout ?? ""}\n${probe.stderr ?? ""}`.trim();
-    if (probe.status !== 0) {
-      return { error: `exited ${probe.status}: ${output || "(no output)"}` };
+    let lastError = "no output";
+    // A concurrent install/test run can catch the CLI mid-startup and return an
+    // empty line with exit 0. One short retry separates that from a broken
+    // binary; the final error carries the real output instead of a bare guess.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const probe = spawnSync(binary, ["--version"], {
+        encoding: "utf8",
+        timeout: 20000,
+        shell: process.platform === "win32" && /\.cmd$/i.test(binary),
+      });
+      if (probe.error) {
+        lastError = String(probe.error.message ?? probe.error);
+      } else {
+        const output = `${probe.stdout ?? ""}\n${probe.stderr ?? ""}`.trim();
+        if (probe.status !== 0) {
+          lastError = `exited ${probe.status}: ${output || "(no output)"}`;
+        } else if (parseOpenCodeVersion(output)) {
+          return { output };
+        } else {
+          lastError = `exited 0 with unparseable output: ${JSON.stringify(output)}`;
+        }
+      }
+      if (attempt === 0) {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+      }
     }
-    return { output };
+    return { error: lastError };
   };
 
   const accept = (binary) => {
@@ -1348,12 +1394,12 @@ await step("seed native skills", async () => {
   )}/ (${SKILL_CATALOG.length} catalog)`;
 });
 
-// ---- 2c. in-repo MCP servers -------------------------------------------------
-// The package ships stdio MCP servers under mcp/. Copy them into the install
-// root so the clone can be deleted, and register each one in opencode.json in
-// the config step below. A fresh remote clone therefore gets the tooling
-// without hand-written JSON.
+// ---- 2c. optional in-repo MCP servers ----------------------------------------
+// The package still ships stdio MCP servers under mcp/, but they are opt-in:
+// registering them by default polluted every config with tools the owner never
+// requested. --with-local-mcp copies and registers them explicitly.
 await step("copy MCP servers", () => {
+  if (!WITH_LOCAL_MCP) return "skipped (opt-in: --with-local-mcp)";
   const source = path.join(PACKAGE_ROOT, "mcp");
   if (!fs.existsSync(source)) return "none (this package has no mcp/ directory)";
   const target = path.join(CONFIG_DIR, "mcp");
@@ -1372,7 +1418,15 @@ await step("copy MCP servers", () => {
 
 // The same server name in both config roots means the older copy can answer.
 // Keep the alternate root's generated copy byte-current with this install.
-await step("sync alternate MCP copies", syncAlternateMcpCopy);
+if (WITH_LOCAL_MCP) {
+  await step("sync alternate MCP copies", syncAlternateMcpCopy);
+} else {
+  report.steps.push({
+    step: "sync alternate MCP copies",
+    ok: true,
+    detail: "skipped (opt-in: --with-local-mcp)",
+  });
+}
 
 // ---- 3. declare the dependency ------------------------------------------------
 await step("declare @opencode/plugin dependency", () => {
@@ -1836,37 +1890,38 @@ await step("sync opencode.json (providers, agents, permissions, MCP)", async () 
     else delete next.model;
   }
 
-  // Local stdio servers copied from mcp/ are always registered: they ship with
-  // the install and need no network. The remote ZombieCoder MCP is registered
+  // Bundled stdio servers are registered only with --with-local-mcp; they need
+  // no network but they are not a default surface. The remote MCP is registered
   // only when the probe actually reached it — a dead default URL in
   // opencode.json slows every boot and teaches the user to ignore errors.
   //
   // V2 shape first: direct `mcp.<name>` entries are moved under `mcp.servers`
   // and `enabled:false` becomes `disabled:true`. A V1-shaped entry is ignored by
   // V2, which looks exactly like "the tools disappeared".
-  const localMcp = listMcpServers(path.join(CONFIG_DIR, "mcp"));
+  const mcpRoot = path.join(CONFIG_DIR, "mcp");
+  const localMcp = WITH_LOCAL_MCP ? listMcpServers(mcpRoot) : [];
   const migratedMcp = migrateMcpConfig(existing.mcp);
-  if (
-    mcpProbe?.ok ||
-    localMcp.length > 0 ||
-    Object.keys(migratedMcp.mcp.servers).length > 0
-  ) {
-    next.mcp = migratedMcp.mcp;
-  }
+  const mcpServers = migratedMcp.mcp.servers;
+  // Opt-in means "do not add by default", not "delete what the owner already
+  // has". A bundled server registered by an earlier install (for example the
+  // cdp server) survives an install without the flag; the owner may still be
+  // running it.
   if (mcpProbe?.ok) {
-    next.mcp.servers.zombiecoder = {
-      ...(next.mcp.servers.zombiecoder ?? {}),
+    mcpServers.zombiecoder = {
+      ...(mcpServers.zombiecoder ?? {}),
       type: "remote",
       url: MCP_URL,
     };
   }
   for (const server of localMcp) {
-    next.mcp.servers[server.name] = {
-      ...(next.mcp.servers[server.name] ?? {}),
+    mcpServers[server.name] = {
+      ...(mcpServers[server.name] ?? {}),
       type: "local",
       command: ["node", server.entry],
     };
   }
+  if (Object.keys(mcpServers).length > 0) next.mcp = migratedMcp.mcp;
+  else delete next.mcp;
 
   writeIfChanged(OPENCODE_JSON, JSON.stringify(next, null, 2) + "\n");
   secureSecretFile(OPENCODE_JSON);
@@ -1902,7 +1957,7 @@ await step("sync opencode.json (providers, agents, permissions, MCP)", async () 
 // ---- 8a. MCP tools/list ------------------------------------------------------
 // Reading opencode.json proves the file, not the server. Speak one real
 // initialize + tools/list handshake over stdio for every bundled server.
-if (DO_PROVIDER_CONFIG && DO_MCP_CHECK) {
+if (DO_PROVIDER_CONFIG && DO_MCP_CHECK && WITH_LOCAL_MCP) {
   await step("verify MCP tools (stdio)", async () => {
     const servers = listMcpServers(path.join(CONFIG_DIR, "mcp"));
     if (servers.length === 0) return "skipped (no local MCP servers)";
@@ -1962,7 +2017,11 @@ if (DO_PROVIDER_CONFIG && DO_MCP_CHECK) {
   report.steps.push({
     step: "verify MCP tools (stdio)",
     ok: true,
-    detail: DO_MCP_CHECK ? "skipped (--no-provider-config)" : "skipped (--no-mcp-check)",
+    detail: !WITH_LOCAL_MCP
+      ? "skipped (opt-in: --with-local-mcp)"
+      : DO_MCP_CHECK
+        ? "skipped (--no-provider-config)"
+        : "skipped (--no-mcp-check)",
   });
 }
 

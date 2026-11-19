@@ -42,7 +42,7 @@ test("tool registration survives MCP names that shadow a ZombieCoder tool", asyn
 
   const applied = await registration.applied;
   assert.equal(applied.error, undefined);
-  assert.equal(applied.registered.length, 26, "all 26 ZombieCoder tools must register");
+  assert.equal(applied.registered.length, 28, "all 28 ZombieCoder tools must register");
   for (const name of ["append_syllabus", "read_ssot", "env_get"]) {
     assert.ok(
       applied.registered.includes(`zombiecoder_${name}`),
@@ -56,7 +56,7 @@ test("tool registration survives MCP names that shadow a ZombieCoder tool", asyn
   );
   assert.ok(ids.includes("missionbarisal_append_syllabus"), "the MCP tool keeps its own id");
   assert.ok(ids.includes("zombiecoder_append_syllabus"), "the plugin tool must be present too");
-  assert.equal(ids.length, 29, "3 MCP tools + 26 ZombieCoder tools");
+  assert.equal(ids.length, 31, "3 MCP tools + 28 ZombieCoder tools");
 
   // The release-phase tools must be direct calls: a route gate sees the
   // top-level tool name, and the Code Mode wrapper is denied in respond.
@@ -75,7 +75,7 @@ test("tool registration survives MCP names that shadow a ZombieCoder tool", asyn
   const surface = JSON.parse(
     fs.readFileSync(path.join(root, ".zombiecoder", ".state", "tool-surface.json"), "utf8"),
   );
-  assert.equal(surface.zombiecoder.length, 26);
+  assert.equal(surface.zombiecoder.length, 28);
   assert.ok(surface.zombiecoder.includes("zombiecoder_append_syllabus"));
   assert.ok(surface.surface.includes("missionbarisal_append_syllabus"));
 
@@ -108,10 +108,10 @@ test("respond phase receives the release tools as direct calls, not the Code Mod
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test("the source surface has 26 tools including the shadowed and symbol tools", () => {
+test("the source surface has 28 tools including the shadowed and symbol tools", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "zc-specs-"));
   const names = toolSpecs(depsFor(root)).map((spec) => spec.name);
-  assert.equal(names.length, 26);
+  assert.equal(names.length, 28);
   for (const name of [
     "append_syllabus",
     "read_ssot",

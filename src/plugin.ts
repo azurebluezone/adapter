@@ -74,6 +74,8 @@ import {
 } from "./zombie/defaults.ts";
 import { fetchOriginHandshake } from "./zombie/origin.ts";
 import { applyModeOverrides } from "./zombie/modes.ts";
+import { validateEnvelopePrompt } from "./zombie/subagentEnvelope.ts";
+import { archiveToolResult, extractToolOutput } from "./zombie/toolArchive.ts";
 import { probeMcp } from "./zombie/mcp.ts";
 import { registerSkills } from "./zombie/skills.ts";
 import { ensureSharedSkills, DEFAULT_SKILL_REPO } from "./zombie/skillCatalog.ts";
@@ -481,13 +483,12 @@ function loadConfig(projectRoot: string): ZombieConfig {
   if (externalUrlPresent) {
     merged.customProviderUrl = externalUrl;
     if (!env.modelStrategy) merged.modelStrategy = externalUrl ? "auto" : "free";
-  } else if (
-    merged.customProviderUrl === DEFAULT_CUSTOM_PROVIDER_URL &&
-    merged.modelStrategy === "auto"
-  ) {
-    merged.customProviderUrl = "";
-    if (!env.modelStrategy) merged.modelStrategy = "free";
   }
+  // No shipped provider URL exists anymore, so there is no legacy default to
+  // neutralize here. An empty URL with strategy "auto" is already handled as a
+  // free fallback by resolveModels; forcing the strategy to "free" here made a
+  // project auto-plan look like an explicit owner choice and overwrite the
+  // installer-owned global agent models.
   return merged;
 }
 
@@ -1395,7 +1396,8 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
                 : `Decision rule: no specialist roster entry for "${agentID}"; the shared ZombieCoder contract above is authoritative.`,
               ...(routeRun
                 ? [
-                    `Agent route: \`${routeRun.routeKey}\` — task ${routeRun.taskKind}, phase ${routeRun.phase}. ` +
+                    `Agent route: \`${routeRun.routeKey}\` — task ${routeRun.taskKind}, phase ${routeRun.phase}` +
+                      `, class ${routeRun.complexity ?? "unclassified"}${routeRun.fastPath ? " (fast path)" : ""}. ` +
                       "A substantive answer is releasable only after goal_contract PASS; do not claim completion before that.",
                     ...(routeRun.freshSyllabus && routeRun.phase === "footprint"
                       ? [
@@ -2083,6 +2085,35 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
               throw new Error(verdict.reason);
             }
           }
+          // A child without the envelope restarts the investigation from zero.
+          // Require the rendered block before the host spends a model call.
+          const prompts: string[] = [];
+          const directPrompt = input.prompt ?? input.message;
+          if (typeof directPrompt === "string" && directPrompt.trim()) prompts.push(directPrompt);
+          for (const group of [input.tasks, input.agents, input.subagents]) {
+            if (!Array.isArray(group)) continue;
+            for (const item of group) {
+              if (!item || typeof item !== "object") continue;
+              const value = (item as any).prompt ?? (item as any).message;
+              if (typeof value === "string" && value.trim()) prompts.push(value);
+            }
+          }
+          const check = prompts.length > 0
+            ? prompts.map(validateEnvelopePrompt).find((result) => !result.ok)
+            : { ok: false, missing: ["prompt with SUBAGENT ENVELOPE"] };
+          if (check && !check.ok) {
+            audit(projectRoot, agentID, {
+              kind: "agent.envelope.block",
+              sessionID,
+              tool,
+              targets: unique,
+              missing: check.missing,
+            });
+            throw new Error(
+              `subagent launch needs a bounded context envelope (missing: ${check.missing.join(", ")}). ` +
+                "Call `subagent_context` with the original intent and approved goal, then pass its text as the prompt prefix.",
+            );
+          }
           return;
         }
 
@@ -2099,22 +2130,31 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
             });
             throw new Error(`agent route missing for ${agentID}; refresh the request before using tools`);
           }
-          if (!controller.allows(tool, activeAgentRun.phase)) {
-            const nextPhases = legalNext(activeAgentRun.taskKind, activeAgentRun.phase);
+          // The read-only fast path keeps the run at intake so it can answer
+          // without the forced footprint walk. The tool surface stays the one
+          // the same turn would have had at investigate; writes are still
+          // blocked by the goal-contract gate below.
+          const policyPhase =
+            activeAgentRun.taskKind === "readonly" && activeAgentRun.fastPath && activeAgentRun.phase === "intake"
+              ? "investigate"
+              : activeAgentRun.phase;
+          if (!controller.allows(tool, policyPhase)) {
+            const nextPhases = legalNext(activeAgentRun.taskKind, policyPhase);
             audit(projectRoot, agentID, {
               kind: "agent.tool_policy.block",
               sessionID,
               tool,
               phase: activeAgentRun.phase,
+              ...(policyPhase === activeAgentRun.phase ? {} : { policyPhase }),
               reason: "tool is not allowed in this agent phase",
             });
-            const next = activeAgentRun.taskKind === "substantive" && activeAgentRun.phase === "investigate"
+            const next = activeAgentRun.taskKind === "substantive" && policyPhase === "investigate"
               ? "Investigate with read-only tools, then call goal_contract(action=\"open\") and wait for status=open; after user approval the route advances to work. Do not retry this write."
-              : activeAgentRun.phase === "work"
+              : policyPhase === "work"
                 ? "Use only the tools allowed in work; if this is a different task, finish or hand off the current contract first."
                 : `Allowed next route phase(s): ${nextPhases.join(", ") || "none"}.`;
             throw new Error(
-              `tool "${tool}" is not allowed for ${agentID} during ${activeAgentRun.phase}. ${next}`,
+              `tool "${tool}" is not allowed for ${agentID} during ${policyPhase}. ${next}`,
             );
           }
         }
@@ -2254,6 +2294,33 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           status: event?.status ?? "unknown",
           consecutiveFailures: count,
         });
+
+        // Keep the full body when it is too large for a prompt. The audit row
+        // names the artifact so a later answer can cite it instead of guessing.
+        try {
+          const output = extractToolOutput(event);
+          if (output !== undefined && output !== null) {
+            const archived = archiveToolResult({
+              root: projectRoot,
+              tool: String(event?.tool ?? ""),
+              output,
+              sessionID,
+            });
+            if (archived.archived) {
+              audit(projectRoot, agentID, {
+                kind: "tool.archive",
+                sessionID,
+                tool: event?.tool,
+                file: archived.file,
+                bytes: archived.bytes,
+                sha256: archived.sha256,
+                preview: archived.preview.slice(0, 200),
+              });
+            }
+          }
+        } catch {
+          // Archiving is an evidence aid; a disk error must not fail the tool.
+        }
 
         // Route state follows real tool results, not agent prose. Opening a
         // contract moves the run to work; closing PASS is the only edge into

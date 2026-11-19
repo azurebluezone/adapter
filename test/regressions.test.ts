@@ -74,7 +74,10 @@ test("without an open contract the same message stays read-only", () => {
     message: "Continue kor.",
   });
   assert.equal(turn.run.taskKind, "readonly");
-  assert.equal(turn.run.phase, "investigate");
+  // Small read-only turns take the fast path and stay at intake; the tool
+  // surface is still the read-only one and edit stays denied.
+  assert.equal(turn.run.fastPath, true);
+  assert.equal(turn.run.phase, "intake");
   assert.equal(turn.run.contract, null);
   assert.equal(controller("zombiecoder").allows("edit", turn.run.phase), false);
 });
