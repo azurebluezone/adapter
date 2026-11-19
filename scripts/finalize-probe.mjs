@@ -59,14 +59,27 @@ step("AUDIO_OK new MP3 has real duration and a transcript", () => {
     "-show_entries",
     "format=format_name,duration,size,bit_rate",
     "-of",
-    "json",
+    "default=nw=1",
     MP3,
   ], 20_000);
   must(probe.status === 0, `ffprobe exited ${probe.status}: ${probe.stderr.trim()}`);
-  const format = JSON.parse(probe.stdout).format ?? {};
-  must(String(format.format_name ?? "").includes("mp3"), `format is ${format.format_name}`);
-  must(Number(format.duration) > 60, `duration is ${format.duration}s`);
-  console.log(`  file=${path.basename(MP3)} bytes=${stat.size} duration=${format.duration}s bitrate=${format.bit_rate}`);
+  // This ffprobe build ignores -of json and always prints key=value lines, so
+  // parse the stable default format instead of assuming JSON.
+  const fields = Object.fromEntries(
+    (probe.stdout ?? "")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const index = line.indexOf("=");
+        return index === -1 ? [line, ""] : [line.slice(0, index), line.slice(index + 1)];
+      }),
+  );
+  must(String(fields.format_name ?? "").includes("mp3"), `format is ${fields.format_name}`);
+  must(Number(fields.duration) > 60, `duration is ${fields.duration}s`);
+  console.log(
+    `  file=${path.basename(MP3)} bytes=${stat.size} duration=${fields.duration}s bitrate=${fields.bit_rate ?? "n/a"}`,
+  );
 });
 
 step("AGENT_VERDICT_OK a live subagent checked the delivery", () => {

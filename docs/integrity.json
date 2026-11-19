@@ -1,6 +1,6 @@
 {
   "schema": "zombiecoder-integrity/v1",
-  "generated_at": "2026-11-19T00:19:30.351Z",
+  "generated_at": "2026-11-19T00:24:51.390Z",
   "scope": [
     "src",
     "bin",
@@ -12,12 +12,12 @@
     "package.json",
     "LICENSE"
   ],
-  "root_sha256": "09e944b11daffe1df8c6130bd2b0bb562fce12759df5f4cd0b6ac31b4e186aa2",
+  "root_sha256": "b20aa06140900e9dcdd06f9ce1f9ede79c6f8f6bf31844065590947a3713845c",
   "file_count": 154,
-  "total_bytes": 1403711,
+  "total_bytes": 1404110,
   "git": {
-    "commit": "beac29a",
-    "branch": "main",
+    "commit": "c614700",
+    "branch": "feat/five-step-enhancement",
     "dirty": true
   },
   "files": [
@@ -268,8 +268,8 @@
     },
     {
       "path": "scripts/finalize-probe.mjs",
-      "bytes": 4299,
-      "sha256": "d96d080ed69636cd7f76a5bb6d4b78b3faac4d5303677ba1aec365d1468f1a40"
+      "bytes": 4698,
+      "sha256": "ed5db5c8fcad94430a996a2897087e78bd03c19613784fc61e8480e656d8f9a8"
     },
     {
       "path": "scripts/five-steps-probe.mjs",
