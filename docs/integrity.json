@@ -1,6 +1,6 @@
 {
   "schema": "zombiecoder-integrity/v1",
-  "generated_at": "2026-11-19T04:24:27.016Z",
+  "generated_at": "2026-11-19T04:37:40.931Z",
   "scope": [
     "src",
     "bin",
@@ -12,11 +12,11 @@
     "package.json",
     "LICENSE"
   ],
-  "root_sha256": "c49fb06951a71d73e0a5a23b4d6437d1bed7b6c2963756279f0558be8a90d7a5",
+  "root_sha256": "c18f1cf6a630d0aab06ce0c3935c9f5bbbe0db5367e56c36062239dbefdee4a3",
   "file_count": 179,
-  "total_bytes": 1646548,
+  "total_bytes": 1646808,
   "git": {
-    "commit": "f457162",
+    "commit": "9455a23",
     "branch": "main",
     "dirty": true
   },
@@ -828,8 +828,8 @@
     },
     {
       "path": "test/plugin.test.ts",
-      "bytes": 97668,
-      "sha256": "3c27695762c1816556f993461503a7f45f281d21b6d5fc9076df164565bb7189"
+      "bytes": 97928,
+      "sha256": "3c8d3a55721bcf922f4c8bbcf4e9b84e363e8290eab15f9f05501b166244099b"
     },
     {
       "path": "test/promptBudget.test.ts",

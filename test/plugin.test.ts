@@ -6,9 +6,12 @@ import path from "node:path";
 import type * as PluginModule from "../src/plugin.ts";
 import { ROSTER, allowedSpecialistTargets } from "../src/roster.ts";
 
-// Tests must not inherit the developer's installed originUrl. The setup tests
-// exercise local model plans, not a live origin handshake.
+// Tests must not inherit the developer's installed originUrl or the live
+// zombiecoder/config.json. The setup tests exercise local model plans, not a
+// live origin handshake; a real global config would silently flip
+// agentModelPins and make the suite order/environment dependent.
 process.env.ZOMBIECODER_ORIGIN_URL = "off";
+process.env.XDG_CONFIG_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "zombiecoder-plugin-config-"));
 
 // A top-level import used to turn a missing @opencode/plugin into one
 // file-level failure, hiding all 27 tests below. Load inside a hook so every
@@ -212,6 +215,7 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
       opencodeApiUrl: "",
       ssotRefreshMs: 300000,
       modelStrategy: "auto",
+      agentModelPins: false,
     }),
   );
   fs.writeFileSync(
@@ -238,7 +242,7 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   assert.ok(agents.includes("zombiecoder.md"), "renamed agent markdown missing");
   assert.ok(!agents.includes("kobir.md"), "old agent markdown must not survive the rename");
   const manu = fs.readFileSync(path.join(root, ".opencode", "agents", "manu.md"), "utf8");
-  assert.doesNotMatch(manu, /^model:/m, "pins are off by default: markdown must not pin a model");
+  assert.doesNotMatch(manu, /^model:/m, "pins off: markdown must not pin a model");
   assert.match(manu, /ZombieCoder Shared Rules/);
   assert.match(manu, /Project-Specific Baseline/);
   assert.match(manu, /ভাইয়া/);

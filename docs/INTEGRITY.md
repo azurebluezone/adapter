@@ -7,21 +7,21 @@
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  c49fb06951a71d73e0a5a23b4d6437d1bed7b6c2963756279f0558be8a90d7a5  ║
-║  files 179 · bytes 1646548 · base f457162 · dirty                        ║
+║  root  c18f1cf6a630d0aab06ce0c3935c9f5bbbe0db5367e56c36062239dbefdee4a3  ║
+║  files 179 · bytes 1646808 · base 9455a23 · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
 | Field | Value |
 |---|---|
 | Schema | `zombiecoder-integrity/v1` |
-| Generated (UTC) | `2026-11-19T04:24:27.016Z` |
-| Base commit | `f457162` |
+| Generated (UTC) | `2026-11-19T04:37:40.931Z` |
+| Base commit | `9455a23` |
 | Branch | `main` |
 | Code tree | `dirty` |
 | Files | 179 |
-| Bytes | 1646548 |
-| Root SHA-256 | `c49fb06951a71d73e0a5a23b4d6437d1bed7b6c2963756279f0558be8a90d7a5` |
+| Bytes | 1646808 |
+| Root SHA-256 | `c18f1cf6a630d0aab06ce0c3935c9f5bbbe0db5367e56c36062239dbefdee4a3` |
 
 ## Scope
 
@@ -208,7 +208,7 @@ npm run integrity:check
 | `test/onboarding.test.ts` | 6117 | `9e45cc4cbeaed79e4f5644f28d4faea87ee34152e96972973c93774c9ae344ae` |
 | `test/opencodeRuntime.test.ts` | 3366 | `bf0c644e9ffe3e572d49c3e2ccab99cf752e88f27cd4b9cf4596ddbc16434fdd` |
 | `test/origin.test.ts` | 4002 | `d75f26822785389c2c9a3b1213c74555ced930c374797d2e702c80fad6788b9f` |
-| `test/plugin.test.ts` | 97668 | `3c27695762c1816556f993461503a7f45f281d21b6d5fc9076df164565bb7189` |
+| `test/plugin.test.ts` | 97928 | `3c8d3a55721bcf922f4c8bbcf4e9b84e363e8290eab15f9f05501b166244099b` |
 | `test/promptBudget.test.ts` | 869 | `724625e71446ae15b982843d2f21bf3b79fa3ec14a7a305efb38d6ec67a7db44` |
 | `test/regressions.test.ts` | 3332 | `ea148ff8c584116dcf5b0e3c39bc34e9517dd2941ff4b2844440254e506e4925` |
 | `test/repo.test.ts` | 3729 | `750595c1e729e2152198f36c39a03427c0850854e54ef4060cc284806ed0726a` |
