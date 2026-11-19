@@ -117,9 +117,9 @@ test("modelsUrl handles base and /v1 URLs", () => {
 });
 
 test("modelRef never builds provider/undefined", () => {
-  assert.equal(modelRef("missionbarisal", "m1"), "missionbarisal/m1");
-  assert.equal(modelRef("missionbarisal", undefined), null);
-  assert.equal(modelRef("missionbarisal", ""), null);
+  assert.equal(modelRef("gateway", "m1"), "gateway/m1");
+  assert.equal(modelRef("gateway", undefined), null);
+  assert.equal(modelRef("gateway", ""), null);
   assert.equal(modelRef("", "m1"), null);
 });
 
@@ -196,10 +196,10 @@ test("resolveModels uses the live probe when the provider is configured but not 
           model: { list: async () => ({ data: [] }), default: async () => ({ data: null }) },
         },
         ROSTER,
-        { customProviderUrl: base, customProviderID: "missionbarisal", providerConfigured: true, probeTimeoutMs: 2000 },
+        { customProviderUrl: base, customProviderID: "gateway", providerConfigured: true, probeTimeoutMs: 2000 },
       );
       assert.equal(plan.strategy, "custom-provider");
-      assert.deepEqual(plan.candidates, ["missionbarisal/probe-model"]);
+      assert.deepEqual(plan.candidates, ["gateway/probe-model"]);
     },
   );
 });

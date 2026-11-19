@@ -21,6 +21,7 @@ import type {
   TaskKind,
 } from "./types.ts";
 import { AGENT_IDS, ROUTE_PHASES, TASK_KINDS } from "./types.ts";
+import { isTaskComplexity } from "../zombie/taskClass.ts";
 
 export type RunStore = {
   get(key: string): Promise<unknown>;
@@ -41,6 +42,8 @@ export function parseAgentRun(value: unknown): AgentRun | null {
   if (typeof raw.agentID !== "string" || !isAgentID(raw.agentID)) return null;
   if (!TASK_KINDS.includes(raw.taskKind as TaskKind)) return null;
   if (!ROUTE_PHASES.includes(raw.phase as AgentRun["phase"])) return null;
+  if (raw.complexity !== undefined && !isTaskComplexity(raw.complexity)) return null;
+  if (raw.fastPath !== undefined && typeof raw.fastPath !== "boolean") return null;
   if (typeof raw.routeKey !== "string") return null;
   if (!Array.isArray(raw.steps)) return null;
   return raw as AgentRun;
@@ -119,8 +122,10 @@ export function beginTurn(input: {
   });
 
   if (run.taskKind === "readonly") {
-    run = walk(run, ["footprint"], input.now);
-    if (!run.freshSyllabus) run = walk(run, ["investigate"], input.now);
+    // Fast path: small read-only turns skip the footprint walk, but a brand-new
+    // project still gets its footprint before any answer.
+    if (!run.fastPath || run.freshSyllabus) run = walk(run, ["footprint"], input.now);
+    if (!run.fastPath && !run.freshSyllabus) run = walk(run, ["investigate"], input.now);
   } else if (run.taskKind === "substantive") {
     run = walk(run, ["footprint"], input.now);
     // A brand-new syllabus must get Halim's full footprint before investigation.

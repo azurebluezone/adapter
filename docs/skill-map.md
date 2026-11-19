@@ -66,6 +66,9 @@ registered. A working directory never gets its own `skills/` tree.
 | `web-delivery` | `package.json`, `composer.json`/`artisan`, `public_html`; client site build | Manu, ZombieCoder, Nila |
 | `python-regex` | `requirements.txt`, `pyproject.toml`, `setup.py`, root `*.py` | Nila, Rashed |
 | `scrape-verify` | `playwright`/`beautifulsoup`/`scrapy`/`requests` in requirements or pyproject | Brishti, Jarin |
+| `root-cause` | any repeated failure, failed fix or ambiguous stack line | Jarin, Majnu |
+| `threat-model` | auth, files, sockets, tool output, installers, untrusted input | Brishti, Manu |
+| `test-planning` | any acceptance claim or release gate | Majnu, ZombieCoder |
 
 ### Research basis for the four delivery skills (websearch, 2026-10-23)
 

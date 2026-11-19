@@ -4,6 +4,7 @@
 // parameter set (agent / kind / phase), not a prompt suggestion.
 
 import { createHash } from "node:crypto";
+import { classifyComplexity, isTrivialMessage } from "../zombie/taskClass.ts";
 import type {
   AgentID,
   AgentRun,
@@ -33,7 +34,7 @@ const EDGES: Readonly<Record<TaskKind, Readonly<Record<RoutePhase, readonly Rout
     respond: [],
   },
   readonly: {
-    intake: ["footprint"],
+    intake: ["footprint", "respond"],
     footprint: ["investigate"],
     investigate: ["propose"],
     propose: ["respond"],
@@ -66,8 +67,6 @@ export function hashMessage(message: string): string {
   return createHash("sha256").update(String(message ?? ""), "utf8").digest("hex").slice(0, 16);
 }
 
-const TRIVIAL = /^(?:hi|hello|hey|thanks?|thank you|ok(?:ay)?|হাই|হ্যালো|ধন্যবাদ|ওকে|ঠিক আছে|হুম|হাঁ|হ্যাঁ)[\s!।.,?]*$/i;
-
 const WRITE_INTENT =
   /\b(?:build|create|make|add|implement|fix|refactor|rewrite|write|delete|remove|update|change|install|deploy|migrate|generate|patch|edit|convert|rename|scaffold)\b|(?:বানাও|বানাতে|তৈরি|লিখে|লিখো|ঠিক\s*করে|ঠিক\s*করো|যোগ\s*কর|বদল|মুছে|ইনস্টল|চালু\s*কর|করে\s*দে|সংযোজন|পরিবর্তন)/i;
 
@@ -77,10 +76,13 @@ const READ_INTENT =
 const CONSENT =
   /^(?:yes|yep|ok(?:ay)?|go(?: ahead)?|proceed|approved?|do it|start|continue|হ্যাঁ|হা|ওকে|ঠিক আছে|করো|করে\s*ফেলো|শুরু\s*করো|এগিয়ে\s*যাও|সম্মতি)[\s!।.,?]*$/i;
 
+export function hasWriteIntent(message: string): boolean {
+  return WRITE_INTENT.test(String(message ?? ""));
+}
+
 export function classifyTask(message: string): TaskKind {
   const text = String(message ?? "").trim();
-  if (!text) return "trivial";
-  if (TRIVIAL.test(text)) return "trivial";
+  if (isTrivialMessage(text)) return "trivial";
   if (WRITE_INTENT.test(text)) return "substantive";
   if (READ_INTENT.test(text)) return "readonly";
   // Questions and conversation are read-only: they must never be forced through
@@ -105,11 +107,18 @@ export function startRun(input: {
 }): AgentRun {
   const at = (input.now ?? new Date()).toISOString();
   const kind = input.kind ?? classifyTask(input.message);
+  const complexity = classifyComplexity({
+    message: input.message,
+    writeIntent: hasWriteIntent(input.message),
+    fileCount: input.focus?.length ?? 0,
+  });
   const run: AgentRun = {
     version: 1,
     sessionID: input.sessionID,
     agentID: input.agentID,
     taskKind: kind,
+    complexity: complexity.level,
+    fastPath: complexity.fastPath,
     phase: "intake",
     routeKey: routeKey(input.agentID, kind, "intake"),
     messageHash: hashMessage(input.message),
@@ -222,6 +231,10 @@ export function noteOnboarding(run: AgentRun, ok: boolean, now?: Date): AgentRun
 export function noteAnswer(run: AgentRun, hasToolCalls: boolean, now?: Date): AgentRun {
   if (hasToolCalls) return run;
   if (run.taskKind === "trivial" && run.phase === "intake") return advance(run, "respond", now);
+  // Fast path: a small read-only turn may answer without the footprint walk.
+  if (run.taskKind === "readonly" && run.fastPath && run.phase === "intake") {
+    return advance(run, "respond", now);
+  }
   if (run.taskKind !== "trivial" && run.phase === "investigate") {
     return advance(run, "propose", now);
   }
@@ -243,6 +256,11 @@ export function releaseCheck(run: AgentRun | null): ReleaseCheck {
     return { ...base, ok: true, reason: "trivial turn: no work contract needed" };
   }
   if (run.taskKind === "readonly") {
+    // A small/medium read-only turn skips the footprint/investigate walk; it
+    // still cannot write, and a substantive request never takes this path.
+    if (run.fastPath && run.phase === "intake") {
+      return { ...base, ok: true, reason: "fast path: small read-only turn, no contract needed" };
+    }
     if (run.phase === "propose" || run.phase === "respond") {
       return { ...base, ok: true, reason: "read-only turn: investigation only, no write claimed" };
     }

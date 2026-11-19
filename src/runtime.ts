@@ -1,11 +1,7 @@
 // ZombieCoder — Runtime Operations generator
 // One plugin. URL-driven. No separate server.
 
-import {
-  BASELINE_MODEL,
-  DEFAULT_CUSTOM_PROVIDER_ID,
-  DEFAULT_CUSTOM_PROVIDER_URL,
-} from "./zombie/defaults.ts";
+import { BASELINE_MODEL } from "./zombie/defaults.ts";
 
 const F = String.fromCharCode(96, 96, 96);
 
@@ -81,10 +77,10 @@ export function renderRuntime(): string {
   out.push("");
   out.push(F + "text");
   out.push(`১) baseline (শেষ অবলম্বন): ${BASELINE_MODEL} — \`ZOMBIECODER_BASELINE_MODEL\` দিয়ে বদলানো যায়`);
-  out.push(`২) কাস্টম প্রোভাইডার নিজের baseURL live probe-এ সাড়া দিলে: <${DEFAULT_CUSTOM_PROVIDER_ID}>/<model-id>`);
-  out.push(`   (ডিফল্ট URL: ${DEFAULT_CUSTOM_PROVIDER_URL}; \`ZOMBIECODER_PROVIDER_URL\`/\`ZOMBIECODER_PROVIDER_ID\` দিয়ে বদলানো যায়)`);
+  out.push("২) কোনো shipped provider নেই; মালিক `--provider-url` / `ZOMBIECODER_PROVIDER_URL` দিলে এবং তার baseURL live probe-এ সাড়া দিলে: <provider-id>/<model-id>");
+  out.push("   (`--provider-id` / `ZOMBIECODER_PROVIDER_ID` না দিলে installer URL host থেকে id বানায়)");
   out.push("৩) না হলে: OpenCode catalog → cost[0].input == 0 && output == 0");
-  out.push("৪) ম্যাপিং:  agent id → stable hash → নির্দিষ্ট ফ্রি মডেল");
+  out.push("৪) ম্যাপিং: agent id → stable round-robin → নির্দিষ্ট ফ্রি মডেল");
   out.push("৫) ব্যর্থ হলে: rotation → পরের ফ্রি মডেল; কখনো hard-fail নয়");
   out.push("৬) ফলাফল cache: install root-এর `zombiecoder/models.json` (default `~/.config/opencode`, `--config-dir` হলে সেই root); প্রকল্পে কোনো models/config ফাইল auto-create হয় না।");
   out.push(F);

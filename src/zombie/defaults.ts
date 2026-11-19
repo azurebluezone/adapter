@@ -62,14 +62,18 @@ export const PRODUCT = "ZombieCoder";
 export const PLUGIN_VERSION = env("ZOMBIECODER_VERSION") ?? readPackageVersion();
 export { BASELINE_MODEL };
 
+// No provider ships with the pack. A fresh install uses OpenCode's own free
+// catalog; a custom provider exists only when the owner passes --provider-url,
+// ZOMBIECODER_PROVIDER_URL, or a config entry. The installer derives the id from
+// that URL when --provider-id is omitted, so no vendor name is baked in here.
 export const DEFAULT_CUSTOM_PROVIDER_ID =
-  env("ZOMBIECODER_PROVIDER_ID") ?? "missionbarisal";
+  env("ZOMBIECODER_PROVIDER_ID") ?? "";
 export const DEFAULT_CUSTOM_PROVIDER_URL =
-  env("ZOMBIECODER_PROVIDER_URL") ?? "https://gpu.zombiecoder.my.id/v1";
+  env("ZOMBIECODER_PROVIDER_URL") ?? "";
 export const DEFAULT_CUSTOM_PROVIDER_KEY =
   env("ZOMBIECODER_PROVIDER_KEY") ?? env("ZOMBIECODER_API_KEY") ?? "";
 export const DEFAULT_PROVIDER_NAME =
-  env("ZOMBIECODER_PROVIDER_NAME") ?? "ZombieCoder Gateway";
+  env("ZOMBIECODER_PROVIDER_NAME") ?? "OpenAI-compatible";
 export const DEFAULT_OPENCODE_API_URL =
   env("OPENCODE_API_URL") ?? env("OPENCODE_BASE") ?? "http://127.0.0.1:49374";
 // URL-only origin handshake. Empty means "do not handshake"; the provider URL

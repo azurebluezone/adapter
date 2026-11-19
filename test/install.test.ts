@@ -101,14 +101,22 @@ test("installer never writes provider/undefined when /models is empty", async ()
         const config = JSON.parse(fs.readFileSync(path.join(root, "opencode.json"), "utf8"));
         assert.equal(config.model, BASELINE);
         assert.ok(!String(config.model).endsWith("/undefined"));
-        assert.equal(config.providers.missionbarisal.settings.apiKey, undefined);
         const zombiecoder = JSON.parse(
           fs.readFileSync(path.join(root, ".zombiecoder", "config.json"), "utf8"),
         );
+        // The URL was supplied, so the provider exists, but the empty /models
+        // answer must not invent a model or a credential.
+        assert.ok(zombiecoder.customProviderID, "provider id was not derived from the URL");
+        const provider = config.providers[zombiecoder.customProviderID];
+        assert.ok(provider, "supplied provider URL was not registered");
+        assert.equal(provider.settings.apiKey, undefined);
+        assert.deepEqual(provider.models, {});
+        // Bundled MCP servers are opt-in, not a default surface.
+        assert.equal(config.mcp, undefined);
+        assert.match(result.stdout, /copy MCP servers.*skipped \(opt-in/);
+        assert.match(result.stdout, /verify MCP tools \(stdio\).*skipped \(opt-in/);
         assert.equal(zombiecoder.installMode, "project");
-
-        // The bundled MCP servers answered a real tools/list handshake.
-        assert.match(result.stdout, /verify MCP tools \(stdio\).*image-brand=6/);
+        assert.equal(zombiecoder.customProviderUrl, base);
         // Native global skill: SKILL.md, not only the legacy flat file.
         const nativeSkill = path.join(
           root,
@@ -328,6 +336,35 @@ test("installer replaces a symlinked legacy plugin directory with one real canon
   }
 });
 
+test("installer writes through a symlinked opencode.json instead of forking the config", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "zombiecoder-config-link-home-"));
+  const legacyRoot = path.join(home, ".opencode");
+  const configRoot = path.join(home, ".config", "opencode");
+  const target = path.join(legacyRoot, "opencode.json");
+  const link = path.join(configRoot, "opencode.json");
+  fs.mkdirSync(legacyRoot, { recursive: true });
+  fs.mkdirSync(configRoot, { recursive: true });
+  fs.writeFileSync(target, JSON.stringify({ $schema: "https://opencode.ai/config.json" }, null, 2) + "\n");
+  fs.symlinkSync(target, link);
+  const result = await runInstaller(
+    ["--global", "--yes", "--no-install", "--no-lsp", "--with-local-mcp", "--provider-url", "none"],
+    {
+      HOME: home,
+      XDG_CONFIG_HOME: path.join(home, ".config"),
+      EXTERNAL_MCP_EXTERNAL_OPENAI_COMPATIBLE_URL: null,
+    },
+  );
+  try {
+    assert.equal(result.status, 0, String(result.stderr || result.stdout || ""));
+    assert.equal(fs.lstatSync(link).isSymbolicLink(), true, "the installer must not replace the symlink");
+    assert.equal(fs.realpathSync(link), fs.realpathSync(target));
+    const config = JSON.parse(fs.readFileSync(target, "utf8"));
+    assert.deepEqual(Object.keys(config.mcp.servers).sort(), ["image-brand", "public-api"]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test("installer leaves a hand-written legacy plugin entry alone", async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "zombiecoder-handwritten-home-"));
   const legacyEntry = path.join(home, ".opencode", "plugins", "zombiecoder.ts");
@@ -403,7 +440,7 @@ test("installer keeps per-agent model pins when agentModelPins is true", async (
     JSON.stringify({
       version: "0.0.0-test",
       customProviderUrl: "",
-      customProviderID: "missionbarisal",
+      customProviderID: "gateway",
       mcpUrl: "",
       opencodeApiUrl: "",
       ssotRefreshMs: 300000,
@@ -459,10 +496,11 @@ test("installer reads the compatible URL from the project .environment file", as
       try {
         assert.equal(result.status, 0, String(result.stderr || result.stdout || ""));
         const config = JSON.parse(fs.readFileSync(path.join(root, "opencode.json"), "utf8"));
-        assert.equal(config.providers.missionbarisal.settings.baseURL, base);
-        assert.equal(config.providers.missionbarisal.settings.apiKey, apiKey);
-        assert.equal(config.agents.manu.model, undefined);
         const state = JSON.parse(fs.readFileSync(path.join(root, ".zombiecoder", "config.json"), "utf8"));
+        assert.ok(state.customProviderID, "installer did not derive a provider id from the URL");
+        assert.equal(config.providers[state.customProviderID].settings.baseURL, base);
+        assert.equal(config.providers[state.customProviderID].settings.apiKey, apiKey);
+        assert.equal(config.agents.manu.model, undefined);
         assert.equal(state.customProviderUrl, base);
         assert.equal(state.customProviderApiKey, apiKey);
         assert.equal(state.modelStrategy, "auto");
@@ -587,7 +625,8 @@ test("installer replaces a previous free baseline when the provider becomes live
       try {
         assert.equal(result.status, 0, String(result.stderr || result.stdout || ""));
         const config = JSON.parse(fs.readFileSync(path.join(root, "opencode.json"), "utf8"));
-        assert.equal(config.model, "missionbarisal/live-model");
+        const state = JSON.parse(fs.readFileSync(path.join(root, ".zombiecoder", "config.json"), "utf8"));
+        assert.equal(config.model, `${state.customProviderID}/live-model`);
         assert.equal(config.agents.manu.model, undefined);
       } finally {
         fs.rmSync(root, { recursive: true, force: true });
@@ -653,14 +692,14 @@ test("a slow provider is saved but not selected, and stale models are removed", 
         path.join(root, "opencode.json"),
         JSON.stringify(
           {
-            model: "missionbarisal/old-model",
+            model: "gateway/old-model",
             providers: {
-              missionbarisal: {
+              gateway: {
                 settings: { baseURL: "http://old.test/v1", apiKey: "old-key" },
                 models: { "old-model": { name: "old-model" } },
               },
             },
-            agents: { manu: { model: "missionbarisal/old-model" } },
+            agents: { manu: { model: "gateway/old-model" } },
           },
           null,
           2,
@@ -673,6 +712,8 @@ test("a slow provider is saved but not selected, and stale models are removed", 
         "--no-install",
         "--provider-url",
         base,
+        "--provider-id",
+        "gateway",
         "--provider-key",
         "test-key",
       ]);
@@ -682,8 +723,8 @@ test("a slow provider is saved but not selected, and stale models are removed", 
         const config = JSON.parse(fs.readFileSync(path.join(root, "opencode.json"), "utf8"));
         assert.equal(config.model, BASELINE);
         assert.equal(config.agents.manu.model, undefined);
-        assert.deepEqual(Object.keys(config.providers.missionbarisal.models), ["live-model"]);
-        assert.ok(!("old-model" in config.providers.missionbarisal.models));
+        assert.deepEqual(Object.keys(config.providers.gateway.models), ["live-model"]);
+        assert.ok(!("old-model" in config.providers.gateway.models));
         const zombiecoder = JSON.parse(
           fs.readFileSync(path.join(root, ".zombiecoder", "config.json"), "utf8"),
         );
@@ -715,14 +756,19 @@ test("installer passes the provider key to the probe and to opencode.json", asyn
       providerHandler(req, res);
     },
     async (base) => {
-      const result = await installProject(base, ["--provider-key", "gateway-key"]);
+      const result = await installProject(base, [
+        "--provider-id",
+        "gateway",
+        "--provider-key",
+        "gateway-key",
+      ]);
       const { root } = result;
       try {
         assert.equal(result.status, 0, String(result.stderr || result.stdout || ""));
         const config = JSON.parse(fs.readFileSync(path.join(root, "opencode.json"), "utf8"));
         assert.equal(authorization, "Bearer gateway-key");
-        assert.equal(config.providers.missionbarisal.settings.apiKey, "gateway-key");
-        assert.equal(config.model, "missionbarisal/live-model");
+        assert.equal(config.providers.gateway.settings.apiKey, "gateway-key");
+        assert.equal(config.model, "gateway/live-model");
         assert.equal(config.agents.manu.model, undefined);
         const zombiecoder = JSON.parse(
           fs.readFileSync(path.join(root, ".zombiecoder", "config.json"), "utf8"),
@@ -743,22 +789,30 @@ test("installer passes the provider key to the probe and to opencode.json", asyn
   );
 });
 
-test("installer copies and registers the in-repo MCP servers", async () => {
+test("installer leaves bundled MCP servers out unless --with-local-mcp is passed", async () => {
   await withServer(
     (_req, res) => {
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ object: "list", data: [] }));
     },
     async (base) => {
-      const result = await installProject(base);
+      const off = await installProject(base);
       try {
-        assert.equal(result.status, 0, String(result.stderr || result.stdout || ""));
-        const config = JSON.parse(
-          fs.readFileSync(path.join(result.root, "opencode.json"), "utf8"),
-        );
+        assert.equal(off.status, 0, String(off.stderr || off.stdout || ""));
+        const config = JSON.parse(fs.readFileSync(path.join(off.root, "opencode.json"), "utf8"));
+        assert.equal(config.mcp, undefined, "bundled MCP servers were registered without opt-in");
+        assert.match(off.stdout, /copy MCP servers.*skipped \(opt-in/);
+      } finally {
+        fs.rmSync(off.root, { recursive: true, force: true });
+      }
+
+      const on = await installProject(base, ["--with-local-mcp"]);
+      try {
+        assert.equal(on.status, 0, String(on.stderr || on.stdout || ""));
+        const config = JSON.parse(fs.readFileSync(path.join(on.root, "opencode.json"), "utf8"));
         for (const name of ["image-brand", "public-api"]) {
           const entry = config.mcp?.servers?.[name];
-          assert.ok(entry, `mcp.${name} missing`);
+          assert.ok(entry, `mcp.${name} missing with --with-local-mcp`);
           assert.equal(entry.type, "local");
           assert.ok(
             fs.existsSync(entry.command[1]),
@@ -767,10 +821,41 @@ test("installer copies and registers the in-repo MCP servers", async () => {
           assert.match(entry.command[1], new RegExp(`[\\\\/]mcp[\\\\/]${name}[\\\\/]server\\.mjs$`));
         }
       } finally {
-        fs.rmSync(result.root, { recursive: true, force: true });
+        fs.rmSync(on.root, { recursive: true, force: true });
       }
     },
   );
+});
+
+test("installer keeps an owner-installed MCP server when bundled servers are opt-in", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "zombiecoder-mcp-owner-"));
+  const mcpDir = path.join(root, ".opencode", "mcp", "cdp");
+  fs.mkdirSync(mcpDir, { recursive: true });
+  const entry = path.join(mcpDir, "server.mjs");
+  fs.writeFileSync(entry, "console.log('cdp')\n");
+  fs.writeFileSync(
+    path.join(root, "opencode.json"),
+    JSON.stringify({ mcp: { servers: { cdp: { type: "local", command: ["node", entry] } } } }, null, 2),
+  );
+  const result = await runInstaller([
+    "--dir",
+    root,
+    "--yes",
+    "--no-install",
+    "--no-lsp",
+    "--no-opencode",
+    "--no-mcp-check",
+    "--no-space-check",
+  ]);
+  try {
+    assert.equal(result.status, 0, String(result.stderr || result.stdout || ""));
+    const config = JSON.parse(fs.readFileSync(path.join(root, "opencode.json"), "utf8"));
+    assert.ok(config.mcp?.servers?.cdp, "owner-installed MCP server was pruned");
+    assert.deepEqual(config.mcp.servers.cdp.command, ["node", entry]);
+    assert.equal(config.mcp.servers["image-brand"], undefined, "bundled server registered without opt-in");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 // OpenCode follows plugins/zombiecoder.ts into plugins/zombiecoder/, so every

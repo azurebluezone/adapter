@@ -62,7 +62,7 @@ test("classifyRunner prefers local evidence, then cost 0/0, then custom, then re
   assert.equal(classifyRunner("lmstudio/qwen", {}).kind, "local", "known local provider id is a fallback");
   assert.equal(classifyRunner("opencode/big-pickle", { freeRefs: ["opencode/big-pickle"] }).kind, "free");
   assert.equal(
-    classifyRunner("missionbarisal/m1", { customProviderID: "missionbarisal", freeRefs: [] }).kind,
+    classifyRunner("gateway/m1", { customProviderID: "gateway", freeRefs: [] }).kind,
     "custom",
   );
   assert.equal(classifyRunner("anthropic/claude", { freeRefs: [] }).kind, "remote");

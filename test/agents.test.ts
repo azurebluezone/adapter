@@ -135,8 +135,22 @@ test("read-only and trivial turns do not require a contract", () => {
     message: "check src/plugin.ts",
   });
   assert.equal(readonly.run.taskKind, "readonly");
-  assert.equal(readonly.run.phase, "investigate");
-  const answered = manu.noteAnswer(readonly.run, false);
+  // A small read-only turn takes the fast path: no footprint/investigate walk.
+  assert.equal(readonly.run.fastPath, true);
+  assert.equal(readonly.run.phase, "intake");
+  assert.equal(manu.release(readonly.run).ok, true);
+
+  // A wide or risky read-only investigation still walks, because the answer
+  // depends on evidence that a one-shot fast path cannot produce.
+  const deep = beginTurn({
+    sessionID: "ses_read_deep",
+    agentID: "manu",
+    message: "audit auth secrets across the whole repo",
+  });
+  assert.equal(deep.run.taskKind, "readonly");
+  assert.equal(deep.run.fastPath, false);
+  assert.equal(deep.run.phase, "investigate");
+  const answered = manu.noteAnswer(deep.run, false);
   assert.equal(answered.phase, "propose");
   assert.equal(manu.release(answered).ok, true);
 

@@ -83,47 +83,10 @@ export function describeMode(mode: AgentMode): string {
   return isAgentMode(mode) ? MODE_REGISTRY[mode].summary : `unknown mode "${String(mode)}"`;
 }
 
-export type BuiltinAgent = {
-  id: string;
-  mode: AgentMode;
-  purpose: string;
-  /** Hidden builtins perform maintenance and cannot be selected. */
-  hidden?: boolean;
-  /** V2 forbids nested subagent launching for these builtins. */
-  canLaunchSubagents: boolean;
-};
-
-// Only documented builtins. No invented "code"/"builder" mode: in V2 "build" and
-// "plan" are agents (both primary), not modes. A six-name mode list would be a lie.
-export const BUILTIN_AGENTS: readonly BuiltinAgent[] = [
-  {
-    id: "build",
-    mode: "primary",
-    purpose: "Default coding agent; workspace tools allowed, sensitive .env reads ask.",
-    canLaunchSubagents: true,
-  },
-  {
-    id: "plan",
-    mode: "primary",
-    purpose: "Explores and plans without editing normal project files.",
-    canLaunchSubagents: true,
-  },
-  {
-    id: "general",
-    mode: "subagent",
-    purpose: "Research and multi-step work with broad tools; cannot launch subagents.",
-    canLaunchSubagents: false,
-  },
-  {
-    id: "explore",
-    mode: "subagent",
-    purpose: "Searches and reads code or web sources without editing files.",
-    canLaunchSubagents: false,
-  },
-  { id: "compaction", mode: "subagent", purpose: "Context maintenance.", hidden: true, canLaunchSubagents: false },
-  { id: "title", mode: "subagent", purpose: "Session title generation.", hidden: true, canLaunchSubagents: false },
-  { id: "summary", mode: "subagent", purpose: "Session summary generation.", hidden: true, canLaunchSubagents: false },
-];
+// The host's builtin agent inventory is not copied here. OpenCode owns those
+// names; a hardcoded copy drifts on every release and makes the tool look
+// authoritative about agents this pack does not control. The three modes below
+// are the pack's own contract.
 
 export type ModeSwitchInput = {
   agent: { id: string; mode: AgentMode };

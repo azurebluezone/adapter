@@ -78,7 +78,10 @@ export function renderAgentPrompt(profile: AgentProfile): string {
     "",
   ]
     .filter((line, index, all) => !(line === "" && all[index - 1] === ""))
-    .join("\n");
+    .join("\n")
+    // Collapse accidental runs of blank lines: the shared contract is long
+    // enough without paying for repeated whitespace in every prompt.
+    .replace(/\n{3,}/g, "\n\n");
 }
 
 export class AgentController {

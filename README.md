@@ -25,7 +25,7 @@ runtime state তৈরি করে; প্রজেক্টের ভিত�
   fallback হয়।
 - প্রতিটি প্রজেক্টের জন্য `.zombiecoder/SSOT.md`, `syllabus.md`, memory ও
   audit state তৈরি হয়।
-- MCP server শুধু probe সফল হলে register হয়।
+- MCP server opt-in: `--with-local-mcp` বা `--mcp-url` দিলে এবং probe সফল হলে register হয়; কোনো server shipped default নয়।
 - Origin handshake (URL-only): trusted origin থেকে শুধু base URL sync করা যায়;
   API key, cookie বা browser session transfer হয় না।
 - API key, provider URL, provider ID, model strategy ও baseline model
@@ -1118,11 +1118,12 @@ VS Code-এ OpenCode session দেখতে [`formulahendry.acp-client`](https:
 → apply → `git diff` → targeted check → full check**। `patch` tool execute না
 হলে `৬.৫ Native tool calls` দেখুন।
 
-### MCP — দুটি local server (installer নিজেই register করে)
+### MCP — দুটি local server (opt-in)
 
 `mcp/` ফোল্ডারে দুটি আলাদা local stdio MCP server আছে; কোনো LLM বা API key নেই।
-Installer clone থেকে চালালে এগুলো install root-এ কপি হয় এবং `opencode.json`-এর
-`mcp.servers`-এ absolute path সহ নিজে থেকেই বসে (`node bin/install.mjs --yes`)।
+কোনো server আর shipped default নয়। চাইলে `--with-local-mcp` দিয়ে install করুন;
+তখন এগুলো install root-এ কপি হয় এবং `opencode.json`-এর `mcp.servers`-এ absolute
+path সহ বসে (`node bin/install.mjs --yes --with-local-mcp`)।
 
 | Server | Tools | কাজ |
 |---|---|---|
@@ -1229,7 +1230,8 @@ Plugin-এর `ctx.rpc` door `POST /api/rpc/zombiecoder/<method>`-এ reachable�
 | `--no-opencode` | `--opencode none`-এর সমান |
 | `--opencode-path <bin>` | PATH discovery বাদ দিয়ে নির্দিষ্ট OpenCode binary ব্যবহার |
 | `--opencode-prefix <dir>` | `--opencode install`-এ npm global prefix |
-| `--no-mcp-check` | local MCP server-এর `initialize` + `tools/list` verification skip |
+| `--with-local-mcp` | bundled stdio MCP server copy + register করে (default বন্ধ) |
+| `--no-mcp-check` | `--with-local-mcp`-এর `initialize` + `tools/list` verification skip |
 | `--no-space-check` | free-space preflight skip |
 | `--keep-cache` | npm cache স্বয়ংক্রিয়ভাবে পরিষ্কার করবে না |
 | `--force-low-space` | জায়গা কম হলেও install চালিয়ে যাবে (ঝুঁকিসহ) |
@@ -1522,8 +1524,8 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  7084ac4458472d4484b135c8ec67462290018619320addc4f8a4635606d571f9  ║
-║  files 140 · bytes 1337129 · base e603d96 · dirty                        ║
+║  root  09e944b11daffe1df8c6130bd2b0bb562fce12759df5f4cd0b6ac31b4e186aa2  ║
+║  files 154 · bytes 1403711 · base beac29a · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -1531,7 +1533,7 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-06T22:54:47.722Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-19T00:19:30.351Z
 
 </div>
 <!-- INTEGRITY:END -->

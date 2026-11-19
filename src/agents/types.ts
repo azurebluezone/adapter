@@ -6,6 +6,7 @@
 // the route or the persona.
 
 import type { AgentMode } from "../zombie/modes.ts";
+import type { TaskComplexity } from "../zombie/taskClass.ts";
 
 export const AGENT_IDS = [
   "manu",
@@ -109,6 +110,10 @@ export type AgentRun = {
   sessionID: string;
   agentID: AgentID;
   taskKind: TaskKind;
+  /** Five-level process weight; absent on runs stored before the classifier. */
+  complexity?: TaskComplexity;
+  /** Read-only small/medium turn that may answer without the full walk. */
+  fastPath?: boolean;
   phase: RoutePhase;
   routeKey: string;
   messageHash: string;
