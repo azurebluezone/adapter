@@ -16,7 +16,7 @@
 //   5. assert the commit under test is what origin/main points at, and that the
 //      new modules and gates are actually tracked in it
 //
-// Final line: RELEASE_GATE_OK head=… shipped=ok clone=ok
+// Final line: RELEASE_GATE_OK clone=ok head=… shipped=ok
 
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -164,7 +164,7 @@ try {
   );
 
   if (failures.length === 0) {
-    console.log(`RELEASE_GATE_OK head=${headSha.slice(0, 12)} shipped=ok clone=ok`);
+    console.log(`RELEASE_GATE_OK clone=ok head=${headSha.slice(0, 12)} shipped=ok`);
   } else {
     console.error(`RELEASE_GATE_FAILED ${failures.join(", ")}`);
     process.exitCode = 1;
