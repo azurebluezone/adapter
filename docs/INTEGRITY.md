@@ -7,21 +7,21 @@
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  5d01bf4a5b25d594092b0745241c3c7c6e789eeca88f1c04fe7a9a2295387f00  ║
-║  files 188 · bytes 1773302 · base 2e5be76 · dirty                        ║
+║  root  ee1f0709a048d67ca8dc488a9af9be2869d1efe60949211707a4644ba89e4bd9  ║
+║  files 189 · bytes 1787081 · base 1cd978b · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
 | Field | Value |
 |---|---|
 | Schema | `zombiecoder-integrity/v1` |
-| Generated (UTC) | `2026-11-22T18:53:57.520Z` |
-| Base commit | `2e5be76` |
+| Generated (UTC) | `2026-11-22T19:13:55.167Z` |
+| Base commit | `1cd978b` |
 | Branch | `main` |
 | Code tree | `dirty` |
-| Files | 188 |
-| Bytes | 1773302 |
-| Root SHA-256 | `5d01bf4a5b25d594092b0745241c3c7c6e789eeca88f1c04fe7a9a2295387f00` |
+| Files | 189 |
+| Bytes | 1787081 |
+| Root SHA-256 | `ee1f0709a048d67ca8dc488a9af9be2869d1efe60949211707a4644ba89e4bd9` |
 
 ## Scope
 
@@ -47,7 +47,7 @@ npm run integrity:check
 
 | Path | Bytes | SHA-256 |
 |---|---:|---|
-| `bin/install.mjs` | 96234 | `65a03188ad250b9e9aa1508cd9cc70b4ecfa49da64b78ba0da8bb81e9ffd5446` |
+| `bin/install.mjs` | 98424 | `8d998c7867cae1e8827213fdab485f6f7e8e46fe07ff84ac9a7361c164f4aad0` |
 | `bin/quick-install.mjs` | 5641 | `c6847f6d2dae8c70dfb2f03d665784e2f382884585a1f6e140b232dc8432bfcc` |
 | `docs/skills/bootstrap.md` | 574 | `0580d9dff2bf4a466597b5dcb41792ba7bba22175e37ff95dfa716acb057e51c` |
 | `docs/skills/cpanel.md` | 1867 | `f056fa581f9a0fa268556d8769fc2c5389a864fbd552e90b1692efde0c003537` |
@@ -98,7 +98,8 @@ npm run integrity:check
 | `scripts/agents-check.mjs` | 6808 | `b7f71c2350aaf9a9b42652907ee204fe673baac6b0164473cba87f70cd50ef3f` |
 | `scripts/allow-always-check.mjs` | 3138 | `514642a97a4f3a3a3f67b68789d8b2e1665680d2623e79d14ba640c6d395c257` |
 | `scripts/audit-install.mjs` | 9325 | `74ab674aa38fac5104a0ba89de7127f33ca12817d225602fe3df363ec61fa5d5` |
-| `scripts/check-install-assets.mjs` | 5517 | `0028bc18ec82a1208fb3599cf4c22a3a6a435828c8fe37f3d886fd9ad07a220d` |
+| `scripts/check-clone-install.mjs` | 8713 | `cd98c915d0e262299fd8fd903a9c8a16539b4184fe93ac8306a1f9569c453184` |
+| `scripts/check-install-assets.mjs` | 6538 | `2ebbd9ec3122f9ca50ef1501bb8c878b686ed970445ef02f46aadff2d0f445f0` |
 | `scripts/check-release.mjs` | 5281 | `5313c3cb098a90921b0e753587775af7ea03f40d63d84e99f632cf837dc447a8` |
 | `scripts/check-skill-library-yaml.mjs` | 9231 | `1a0b4e9381e353e1cca6e2d29fe088712514cd79c6f8b4202d6558082fa8796d` |
 | `scripts/configure.mjs` | 14570 | `53c62929b01c0cc5bddc1a21935e88790c6f67a8d5b7989711b894a6da0faf18` |
@@ -200,7 +201,7 @@ npm run integrity:check
 | `test/frontmatter.test.ts` | 3204 | `5b20743b544ef7c3be3f77c3d9377f577c31a1f30fadc9462a4ad22760ddadc2` |
 | `test/goalContract.test.ts` | 7061 | `40c37c245ab17721c28799aaf59cc2422429510a00c66e6c7563228c13c73cba` |
 | `test/identity.test.ts` | 4431 | `7656158eb5b4af30939741bc4a1515095400e10a1da999bb40f2339e821ddaea` |
-| `test/install.test.ts` | 42211 | `0705941f022820609c61b618d4ab69aec7fe5481b1de6d18cfe0eb01c4c19d62` |
+| `test/install.test.ts` | 44066 | `b99dcdff1257343038571b63a79a74e19413137386abe5171d77574c0735cd49` |
 | `test/installSpace.test.ts` | 2234 | `8d589c1d8e2423869c788c11435e0fc23be6abc5145d7b66c9fb54cc09671c71` |
 | `test/investigation.test.ts` | 2983 | `5c21563ea63fd1a876e1f215d738b5741a687a7e71378b64d069a1b59bc863ab` |
 | `test/io.test.ts` | 1737 | `5e07043c9e0b58d59687415b96a80b786f05fa574a080948fefa1ee407b4c801` |

@@ -82,6 +82,27 @@ function nodeVersionAtLeast(current, minimum) {
   return true;
 }
 
+// A stale checkout is the one install source that can silently reintroduce a
+// retired asset: an older clone still had docs/100c-runtime-template.md and no
+// YAML card module, yet looked installable. Refuse before the first write and
+// name the exact missing module, so the fix is `git pull`, not a debugging trip.
+const REQUIRED_SOURCE = [
+  "src/plugin.ts",
+  "src/agents/runtime.ts",
+  "src/zombie/skillCard.ts",
+  "src/zombie/skillLibrary.ts",
+  "src/zombie/skillCatalog.ts",
+  "docs/SKILL-LIBRARY.md",
+];
+const missingSource = REQUIRED_SOURCE.filter((rel) => !fs.existsSync(path.join(PACKAGE_ROOT, rel)));
+if (missingSource.length > 0) {
+  console.error(`[zc] FAIL stale checkout: ${PACKAGE_ROOT} is missing ${missingSource.join(", ")}.`);
+  console.error(
+    "[zc] This source predates the current pack. Run `git pull --ff-only` in that checkout, or install from a fresh clone of the main branch.",
+  );
+  process.exit(2);
+}
+
 // Import the runtime's own defaults instead of copying provider URLs, IDs,
 // baseline model or API URL into this installer.
 const defaults = await import(
@@ -1293,7 +1314,23 @@ await step("copy plugin source graph", () => {
   for (const entry of entries) {
     const from = path.join(PACKAGE_ROOT, "src", entry);
     if (!fs.existsSync(from)) throw new Error(`missing source entry: src/${entry}`);
-    fs.cpSync(from, path.join(pluginFolder, entry), { recursive: true, force: true });
+    // Session state, git metadata and installed dependencies never belong in
+    // the copied graph. A working checkout can carry `.zombiecoder` (SSOT,
+    // syllabus, memory); copying it installed a second copy of project state.
+    fs.cpSync(from, path.join(pluginFolder, entry), {
+      recursive: true,
+      force: true,
+      filter: (source) => {
+        const parts = path.relative(PACKAGE_ROOT, source).split(path.sep);
+        return !parts.some(
+          (part) =>
+            part === ".zombiecoder" ||
+            part === ".git" ||
+            part === "node_modules" ||
+            part === ".DS_Store",
+        );
+      },
+    });
   }
   const normalized = normalizeModes(pluginFolder);
   const files = listFiles(pluginFolder);
@@ -1362,11 +1399,32 @@ await step("copy runtime assets", () => {
     }
   }
 
-  // A reinstall must also remove assets this pack no longer ships. The retired
-  // `docs/100c-runtime-template.md` carried a private gateway URL and would
-  // otherwise survive forever in an existing install. Only the directories the
-  // installer owns are pruned, dotfiles are left alone, and the downloaded
-  // skill database (zombiecoder/skill-db) lives outside them.
+  // Reinstall reconciliation. The pack owns only the files it wrote last time:
+  // the manifest records them, and only a file that was installed before and is
+  // no longer shipped is removed. A hand-written doc, tool, catalog entry or
+  // native skill is never touched — that is the difference between an update and
+  // data loss. The retired `100c` template is removed even on a manifest-less
+  // install because it carried a private gateway URL.
+  const manifestPath = path.join(RUNTIME_ASSETS_DIR, ".install-assets.json");
+  const retired = new Set(["docs/100c-runtime-template.md"]);
+  let previous = [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    if (Array.isArray(parsed?.files)) {
+      previous = parsed.files.filter((item) => typeof item === "string");
+    }
+  } catch {
+    /* first install, or a manifest from an older run: fall back to retired */
+  }
+  const pruned = [];
+  for (const rel of new Set([...retired, ...previous])) {
+    if (expected.has(rel)) continue;
+    if (!/^(docs|tools|tls|skills-catalog)\//.test(rel)) continue;
+    const file = path.join(RUNTIME_ASSETS_DIR, rel);
+    if (!fs.existsSync(file)) continue;
+    fs.rmSync(file, { force: true });
+    pruned.push(rel);
+  }
   const pruneEmpty = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
@@ -1379,21 +1437,16 @@ await step("copy runtime assets", () => {
       }
     }
   };
-  const pruned = [];
   for (const dir of ["docs", "tools", "tls", "skills-catalog"]) {
     const full = path.join(RUNTIME_ASSETS_DIR, dir);
-    if (!fs.existsSync(full)) continue;
-    for (const rel of listFiles(full)) {
-      if (rel.split("/").some((part) => part.startsWith("."))) continue;
-      const key = `${dir}/${rel}`;
-      if (expected.has(key)) continue;
-      fs.rmSync(path.join(full, rel), { force: true });
-      pruned.push(key);
-    }
-    pruneEmpty(full);
+    if (fs.existsSync(full)) pruneEmpty(full);
   }
+  writeIfChanged(
+    manifestPath,
+    `${JSON.stringify({ version: 1, files: [...expected].sort() }, null, 2)}\n`,
+  );
   const prunedNote = pruned.length
-    ? `, pruned ${pruned.length} stale: ${pruned.sort().join(", ")}`
+    ? `, pruned ${pruned.length} retired: ${pruned.sort().join(", ")}`
     : "";
   return `${assets.length + skillFiles} files -> ${path.relative(TARGET, RUNTIME_ASSETS_DIR)}/{docs,tools,tls,model.mjs,skills-catalog}${prunedNote}`;
 });

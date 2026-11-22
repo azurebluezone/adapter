@@ -168,10 +168,14 @@ Unit tests: `test/skillLibrary.test.ts`.
   `node bin/install.mjs` (or `npm run install-pack`) from this checkout and
   reload OpenCode; then call `skill_catalog action=sync` once to seed the
   database.
-- A reinstall reconciles the runtime asset tree: files the pack no longer ships
-  under `<install>/zombiecoder/{docs,tools,tls,skills-catalog}` are pruned (the
-  retired `100c` template is one of them), while `zombiecoder/skill-db` is left
-  untouched. Dotfiles in those directories are never pruned.
+- A reinstall reconciles only what the pack wrote: `.install-assets.json` records
+  the files installed last time, and a file that is no longer shipped is
+  removed. A hand-written doc, tool, catalog entry or `skills/<name>/SKILL.md` is
+  never touched; `zombiecoder/skill-db` is left untouched. The retired `100c`
+  template is removed even on an install that predates the manifest.
+- A stale checkout is refused before the first write: the installer requires
+  `src/zombie/skillCard.ts`, `src/zombie/skillLibrary.ts` and the rest of the
+  current source, so an old clone cannot reinstall retired assets.
 - First library load is ~163 ms and ~48 MB of heap in a 256-skill/75,358-term
   build; routing afterwards is ~2 ms. The library is loaded once per process and
   reloaded only when the export files change.

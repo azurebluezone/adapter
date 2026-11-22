@@ -102,34 +102,58 @@ try {
     !fs.existsSync(path.join(assetsDir, "docs", "100c-runtime-template.md")),
   );
 
-  // What an older install left behind, plus the downloaded database cache.
-  const stale = {
+  // The retired doc must go. A hand-written doc/tool must survive: the pack
+  // only removes what its own manifest says it installed. A manifest-tracked
+  // file that is no longer shipped must go too.
+  const retired = {
     "docs/100c-runtime-template.md": "# retired template\nhttps://gateway.example.invalid\n",
-    "tools/legacy_origin.py": "print('retired')\n",
-    "tls/old-nginx.template": "server { listen 80; }\n",
   };
-  for (const [rel, text] of Object.entries(stale)) {
+  const userFiles = {
+    "docs/custom-notes.md": "# my notes\n",
+    "tools/custom_tool.py": "print('mine')\n",
+  };
+  for (const [rel, text] of Object.entries({ ...retired, ...userFiles })) {
     const file = path.join(assetsDir, rel);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, text, "utf8");
   }
+  const manifestFile = path.join(assetsDir, ".install-assets.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
+  const manifestRetired = "docs/retired-by-manifest.md";
+  manifest.files.push(manifestRetired);
+  fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  fs.writeFileSync(path.join(assetsDir, manifestRetired), "# installed once\n", "utf8");
+
   const dbFile = path.join(assetsDir, "skill-db", "skills.jsonl");
   const dbText = '{"slug":"database-designer"}\n';
   fs.mkdirSync(path.dirname(dbFile), { recursive: true });
   fs.writeFileSync(dbFile, dbText, "utf8");
-  check("stale files planted", Object.keys(stale).every((rel) => fs.existsSync(path.join(assetsDir, rel))));
+  check(
+    "retired, manifest and user files planted",
+    [...Object.keys(retired), manifestRetired, ...Object.keys(userFiles)].every((rel) =>
+      fs.existsSync(path.join(assetsDir, rel)),
+    ),
+  );
 
   const second = install(configDir, parent);
   check("second install exits 0", second.status === 0, firstLine(second));
-  check("second install reports the prune", /pruned \d+ stale/.test(second.stdout), firstLine(second));
-  for (const rel of Object.keys(stale)) {
-    check(`stale asset removed: ${rel}`, !fs.existsSync(path.join(assetsDir, rel)));
+  check("second install reports the prune", /pruned \d+ retired/.test(second.stdout), firstLine(second));
+  for (const rel of [...Object.keys(retired), manifestRetired]) {
+    check(`retired asset removed: ${rel}`, !fs.existsSync(path.join(assetsDir, rel)));
+  }
+  for (const [rel, text] of Object.entries(userFiles)) {
+    const file = path.join(assetsDir, rel);
+    check(
+      `user file kept: ${rel}`,
+      fs.existsSync(file) && fs.readFileSync(file, "utf8") === text,
+    );
   }
   check(
     "shipped asset survives the prune",
     fs.existsSync(path.join(assetsDir, "docs", "SKILL-LIBRARY.md")),
   );
   check("shipped tool survives the prune", fs.existsSync(path.join(assetsDir, "tools", "tls_verify.py")));
+  check("install manifest is written", fs.existsSync(manifestFile));
   check(
     "skill-db cache survives byte-for-byte",
     fs.existsSync(dbFile) && fs.readFileSync(dbFile, "utf8") === dbText,
@@ -138,7 +162,9 @@ try {
   check("installed tree carries no retired host or model", offenders.length === 0, offenders.join(", "));
 
   if (failures.length === 0) {
-    console.log(`INSTALL_ASSETS_PRUNE_OK stale=${Object.keys(stale).length} cache=preserved`);
+    console.log(
+      `INSTALL_ASSETS_PRUNE_OK retired=${Object.keys(retired).length + 1} user=kept cache=preserved`,
+    );
   } else {
     console.error(`INSTALL_ASSETS_PRUNE_FAILED ${failures.join(", ")}`);
     process.exitCode = 1;

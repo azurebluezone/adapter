@@ -1334,10 +1334,12 @@ opencode reload
 ```
 
 Installer existing `opencode.json` merge করে; user-এর নিজের permissions রাখে এবং
-legacy `kobir` entry prune করে। Reinstall-এ pack-এর নিজের runtime asset
-(`zombiecoder/docs`, `tools`, `tls`, `skills-catalog`) reconcile হয়: যে ফাইল আর
-ship হচ্ছে না সেটা install থেকে সরে যায়, আর downloaded `skill-db` cache অক্ষত
-থাকে।
+legacy `kobir` entry prune করে। Reinstall-এ শুধু pack-এর নিজের লেখা ফাইল
+reconcile হয় (`.install-assets.json` manifest): যে ফাইল আর ship হচ্ছে না সেটা
+সরে যায়, কিন্তু আপনার নিজের লেখা doc, tool, catalog entry বা
+`skills/<name>/SKILL.md` মোছে না; downloaded `skill-db` cache-ও অক্ষত থাকে।
+পুরোনো checkout থেকে install করলে installer প্রথম write-এর আগেই `stale checkout`
+বলে থামে।
 
 ### Clean reinstall
 
@@ -1620,8 +1622,8 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  5d01bf4a5b25d594092b0745241c3c7c6e789eeca88f1c04fe7a9a2295387f00  ║
-║  files 188 · bytes 1773302 · base 2e5be76 · dirty                        ║
+║  root  ee1f0709a048d67ca8dc488a9af9be2869d1efe60949211707a4644ba89e4bd9  ║
+║  files 189 · bytes 1787081 · base 1cd978b · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -1629,7 +1631,7 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-22T18:53:57.520Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-22T19:13:55.167Z
 
 </div>
 <!-- INTEGRITY:END -->

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import http from "node:http";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -290,16 +290,19 @@ test("reinstall prunes retired runtime assets and keeps the skill database", asy
     assert.equal(first.status, 0, String(first.stderr || first.stdout || ""));
     assert.ok(fs.existsSync(path.join(assets, "docs", "SKILL-LIBRARY.md")));
 
-    const stale = [
-      "docs/100c-runtime-template.md",
-      "tools/legacy_origin.py",
-      "tls/old-nginx.template",
-    ];
-    for (const rel of stale) {
-      const file = path.join(assets, rel);
-      fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, "retired\n", "utf8");
+    // The retired doc goes; a hand-written file stays; a file the pack installed
+    // earlier (recorded in the manifest) goes when the pack stops shipping it.
+    const retired = ["docs/100c-runtime-template.md", "docs/retired-by-manifest.md"];
+    const manifestFile = path.join(assets, ".install-assets.json");
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
+    manifest.files.push(retired[1]);
+    fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    for (const rel of retired) {
+      fs.writeFileSync(path.join(assets, rel), "retired\n", "utf8");
     }
+    const userDoc = path.join(assets, "docs", "custom-notes.md");
+    fs.writeFileSync(userDoc, "# mine\n", "utf8");
+
     const db = path.join(assets, "skill-db", "skills.jsonl");
     const dbText = '{"slug":"database-designer"}\n';
     fs.mkdirSync(path.dirname(db), { recursive: true });
@@ -307,14 +310,53 @@ test("reinstall prunes retired runtime assets and keeps the skill database", asy
 
     const second = await runInstaller(args, env);
     assert.equal(second.status, 0, String(second.stderr || second.stdout || ""));
-    assert.match(second.stdout, /pruned 3 stale/);
-    for (const rel of stale) {
+    assert.match(second.stdout, /pruned 2 retired/);
+    for (const rel of retired) {
       assert.equal(fs.existsSync(path.join(assets, rel)), false, `${rel} must be pruned on reinstall`);
     }
+    assert.equal(fs.readFileSync(userDoc, "utf8"), "# mine\n", "a hand-written file is not an asset");
     assert.ok(fs.existsSync(path.join(assets, "docs", "SKILL-LIBRARY.md")), "shipped assets stay");
     assert.equal(fs.readFileSync(db, "utf8"), dbText, "the downloaded skill database is not an asset");
   } finally {
     fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("installer refuses a stale checkout before it writes anything", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "zombiecoder-stale-"));
+  try {
+    fs.mkdirSync(path.join(root, "bin"), { recursive: true });
+    fs.copyFileSync(INSTALLER, path.join(root, "bin", "install.mjs"));
+    fs.writeFileSync(
+      path.join(root, "package.json"),
+      `${JSON.stringify({ name: "stale-checkout", version: "0.0.0" }, null, 2)}\n`,
+    );
+    const configDir = path.join(root, ".opencode");
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--experimental-strip-types",
+        path.join(root, "bin", "install.mjs"),
+        "--config-dir",
+        configDir,
+        "--yes",
+        "--no-install",
+        "--opencode",
+        "none",
+        "--provider-url",
+        "none",
+      ],
+      {
+        encoding: "utf8",
+        env: { ...process.env, HOME: root, XDG_CONFIG_HOME: path.join(root, ".config") },
+      },
+    );
+    assert.equal(result.status, 2, String(result.stderr || result.stdout || ""));
+    assert.match(result.stderr, /stale checkout/);
+    assert.match(result.stderr, /skillCard\.ts/);
+    assert.equal(fs.existsSync(configDir), false, "a refused install must not write a config root");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 

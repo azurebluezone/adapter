@@ -13,7 +13,8 @@ npm test                 # node:test suite
 npm run integrity:check  # verify docs/integrity.json against the working tree
 npm run lsp:probe        # configured LSP servers: initialize probe
 npm run skill-library:check  # download + verify + route the 256-skill database
-node --experimental-strip-types scripts/check-install-assets.mjs  # reinstall prunes retired assets, keeps skill-db
+node --experimental-strip-types scripts/check-install-assets.mjs  # reinstall prunes retired assets, keeps user files and skill-db
+node --experimental-strip-types scripts/check-clone-install.mjs  # stale checkout refused, user skills kept, fresh clone installs clean
 node --check bin/install.mjs
 node --check bin/quick-install.mjs
 node --check scripts/integrity.mjs
@@ -106,8 +107,8 @@ scope, so their footer can be regenerated without changing the code root. Regene
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  5d01bf4a5b25d594092b0745241c3c7c6e789eeca88f1c04fe7a9a2295387f00  ║
-║  files 188 · bytes 1773302 · base 2e5be76 · dirty                        ║
+║  root  ee1f0709a048d67ca8dc488a9af9be2869d1efe60949211707a4644ba89e4bd9  ║
+║  files 189 · bytes 1787081 · base 1cd978b · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -115,7 +116,7 @@ scope, so their footer can be regenerated without changing the code root. Regene
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-22T18:53:57.520Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-22T19:13:55.167Z
 
 </div>
 <!-- INTEGRITY:END -->
