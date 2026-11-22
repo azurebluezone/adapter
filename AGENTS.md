@@ -48,7 +48,7 @@ pass/fail line. A missing command is `NOT_TESTED`, not `PASS`.
 
 ## LSP
 
-OpenCode V2.1.1 supports LSP through the `lsp` config. This repository's local
+OpenCode V2.3.2 supports LSP through the `lsp` config. This repository's local
 setup has seven servers (`typescript`, `python`, `bash`, `json`, `css`, `html`,
 `markdown`) and a direct initialize probe:
 

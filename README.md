@@ -1382,12 +1382,12 @@ Backup-এ API key থাকতে পারে; permission restrict করু�
 
 ### ১৪.১ LSP — installer auto-generate করে
 
-OpenCode V2.1.1-এ LSP runtime আছে। `No LSP servers configured`-এর মানে `lsp`
-config বা language-server binary নেই। এখন installer নিজেই `<install>/lsp`-এ ৪টি
+OpenCode V2.3.2-এ LSP runtime আছে। `No LSP servers configured`-এর মানে `lsp`
+config বা language-server binary নেই। এখন installer নিজেই `<install>/lsp`-এ ৭টি
 server install করে এবং resolve হওয়া binary path দিয়ে `opencode.json`-এর `lsp`
 block লেখে (`syncLspConfig`; পুরনো entry অক্ষত থাকে)। এই machine-এ
-`typescript`, `python`, `bash`, `json` — ৪টি server configured এবং
-`npm run lsp:probe` exit `0` (4/4 initialize pass)। Config `config.updated`
+`typescript`, `python`, `bash`, `json`, `css`, `html`, `markdown` — ৭টি server configured এবং
+`npm run lsp:probe` exit `0` (7/7 initialize pass)। Config `config.updated`
 event-এ reload হয়েছে, কিন্তু desktop editor-এ LSP child process এখনো দেখা যায়নি।
 তাই editor diagnostics `NOT_TESTED`:
 OpenCode পুনরায় চালু করে একটি `.ts` file খুলুন, তারপর যাচাই করুন।

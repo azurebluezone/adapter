@@ -8,14 +8,14 @@
 
 ```mermaid
 flowchart TD
-  RT["OpenCode runtime V2"] --> P["src/plugin.ts<br/>Plugin.define (1690)<br/>setup() (581)"]
+  RT["OpenCode runtime V2"] --> P["src/plugin.ts<br/>Plugin.define (2553)<br/>setup() (727)"]
 
-  P --> T["TOOLS surface<br/>registerTools call (1011)"]
-  T --> TS["src/zombie/server.ts<br/>toolSpecs() (320)<br/>registerTools() (1700)"]
-  TS --> RPC["RPC surface<br/>registerRpc() (178)"]
+  P --> T["TOOLS surface<br/>registerTools call (1140)"]
+  T --> TS["src/zombie/server.ts<br/>toolSpecs() (346)<br/>registerTools() (2002)"]
+  TS --> RPC["RPC surface<br/>registerRpc() (219)"]
 
   P --> H["HOOKS / CONTEXT surface"]
-  H --> HC["session.hook('context') (1098)<br/>compaction (1191)<br/>model.request (1258)<br/>prompt (1275)<br/>http.response (1429)<br/>execute.after (1558)"]
+  H --> HC["session.hook('context') (1245)<br/>compaction (1499)<br/>model.request (1597)<br/>prompt (1614)<br/>http.response (1824)<br/>execute.after (2350)"]
   HC --> CP["src/zombie/context.ts<br/>buildContextPack() (244)"]
   CP --> SSOT["SSOT<br/>src/zombie/ssot.ts (196)"]
   CP --> SYL["Syllabus<br/>src/zombie/syllabus.ts (180)"]
@@ -43,34 +43,40 @@ flowchart TD
 
 `install.sh` install logic duplicate করে না: এটি source staging, integrity, দুই installer pass আর inline verifier চালায়; আসল pipeline সবসময় `bin/install.mjs`। Proof-এর ১৭টি check হলো integrity, staging budget, config JSON, entrypoint, source hash fidelity, single loader, ৯ agent, consent `ask`, dependencies, audit, LSP config, LSP initialize, live `/api/plugin`, live MCP connectivity (`/api/mcp`), idempotence `H1 === H2`, space delta এবং staging cleanup।
 
-## ২. Tool map — ২২টি tool
+## ২. Tool map — ২৮টি tool
 
-গণনা প্রমাণ: `toolSpecs()` runtime-এ ২২টি spec দেয় এবং `test/plugin.test.ts`-এ tool count assert করে। নিচের প্রতিটি নাম `src/zombie/server.ts`-এর `name:` লাইন থেকে নেওয়া।
+গণনা প্রমাণ: `toolSpecs()` runtime-এ ২৮টি spec দেয় (`test/plugin.test.ts:342` → `assert.equal(fake.tools.length, 28)`) এবং `test/wiring.test.ts:126` surface-এ ২৮টি নাম মেলায়। নিচের প্রতিটি নাম `src/zombie/server.ts`-এর `name:` লাইন থেকে নেওয়া।
 
-| # | Tool | কাজ (এক লাইন) | Impl `file:line` | Test | `plugin.ts` dep |
+| # | Tool | কাজ (এক লাইন) | Impl `file:line` | Test | Docs |
 |---|---|---|---|---|---|
-| 1 | `get_working_directory` | project root ও `.zombiecoder` layout দেখায় | `src/zombie/server.ts:362` | `test/plugin.test.ts:697` "context hook resolves…" | `projectRoot` |
-| 2 | `read_ssot` | generated SSOT markdown পড়ে | `src/zombie/server.ts:377` | `test/plugin.test.ts:697` | `projectRoot` |
-| 3 | `read_syllabus` | append-only syllabus পড়ে | `src/zombie/server.ts:389` | `test/footprint.test.ts:20` (module only); tool call `UNVERIFIED` | `projectRoot` |
-| 4 | `append_syllabus` | নতুন lesson append করে | `src/zombie/server.ts:401` | `test/plugin.test.ts:1058` (ledger guard); tool call via `goal_contract` | `projectRoot` |
-| 5 | `goal_contract` | expected outcome লিখে রাখে; এক session-এ একটাই open, open-এ baseline check; close-এ নিজেই check চালায় | `src/zombie/server.ts:432` | `test/plugin.test.ts:161`, `test/goalContract.test.ts:38` | `projectRoot` + optional `synthetic` |
-| 6 | `project_fingerprint` | live project scan, কোনো file লেখে না | `src/zombie/server.ts:987` | `test/plugin.test.ts:161` | `projectRoot` |
-| 7 | `design_sketch` | নতুন screen/flow-এর জন্য ঐচ্ছিক ছোট `sketch.md` + `design.json` | `src/zombie/server.ts:993` | `test/design.test.ts:12` | `projectRoot` |
-| 8 | `design_review` | markup/CSS-এ `file:line` a11y finding | `src/zombie/server.ts:1011` | `test/design.test.ts:66` | `projectRoot` |
-| 9 | `project_onboarding` | প্রথম input-এ docs/code gap syllabus-এ লেখে | `src/zombie/server.ts:1024` | `test/plugin.test.ts:338` | `projectRoot` |
-| 10 | `project_investigation` | request/session, prior state, compiler, docs, tests, logs-এর bounded map syllabus-এ dedupe করে | `src/zombie/server.ts` | `test/investigation.test.ts` | `projectRoot` |
-| 11 | `context_status` | SSOT/syllabus/memory/focus pack-এর `uiLine` দেয় | `src/zombie/server.ts` | `test/plugin.test.ts` | `projectRoot` + `storage` |
-| 12 | `evidence_gate` | Python gate চালিয়ে claim PASS/FAIL যাচাই করে | `src/zombie/server.ts` | `test/plugin.test.ts` | `projectRoot` |
-| 13 | `verify_real` | real input+artifact hash করে provenance লেখে | `src/zombie/server.ts` | `test/plugin.test.ts` | `projectRoot` |
-| 14 | `memory_archive` | archived session message পড়ে | `src/zombie/server.ts` | `test/plugin.test.ts` | `projectRoot` |
-| 15 | `syntax_check` | syntax fallback (LSP নয়) | `src/zombie/server.ts` | `test/lsp.test.ts` | `—` |
-| 16 | `skill_catalog` | shared skill list/install/auto | `src/zombie/server.ts` | `test/skillCatalog.test.ts` | `installRoot` + `reloadSkills` |
-| 17 | `agent_modes` | V2 mode list + validated switch plan | `src/zombie/server.ts` | `test/plugin.test.ts` | `—` |
-| 18 | `reload` | agents/skills/providers/tools door reload | `src/zombie/server.ts` | `test/tools.test.ts` | reload doors |
-| 19 | `http_probe` | HTTP status/header/body hash, secret redact | `src/zombie/server.ts` | `test/tools.test.ts` | `—` |
-| 20 | `patch_preview` | one exact-string replace dry-run; apply-এ backup | `src/zombie/server.ts` | `test/tools.test.ts` | `projectRoot` |
-| 21 | `env_get` | env var আছে কিনা, value ছাড়া | `src/zombie/server.ts` | `test/tools.test.ts` | `—` |
-| 22 | `service_probe` | TCP connect বা HTTP GET probe | `src/zombie/server.ts` | `test/tools.test.ts` | `—` |
+| 1 | `get_working_directory` | project root ও `.zombiecoder` layout দেখায় | `src/zombie/server.ts:388` | `test/plugin.test.ts` | `README.md:1067` |
+| 2 | `read_ssot` | generated SSOT markdown পড়ে | `src/zombie/server.ts:403` | `test/plugin.test.ts`, `test/wiring.test.ts` | `README.md:1065` |
+| 3 | `read_syllabus` | append-only syllabus পড়ে | `src/zombie/server.ts:417` | `test/wiring.test.ts` | `README.md:1066` |
+| 4 | `append_syllabus` | নতুন lesson append করে | `src/zombie/server.ts:430` | `test/plugin.test.ts`, `test/agents.test.ts` | `README.md:1072` |
+| 5 | `goal_contract` | expected outcome + check; এক session-এ একটাই open, close-এ নিজেই check চালায় | `src/zombie/server.ts:462` | `test/plugin.test.ts`, `test/goalContract.test.ts`, `test/route.test.ts` | `README.md:1075`, `docs/AGENT-HANDOFF.md:23` |
+| 6 | `project_fingerprint` | live project scan, কোনো file লেখে না | `src/zombie/server.ts:1068` | `test/plugin.test.ts`, `test/wiring.test.ts` | `README.md:1068` |
+| 7 | `design_sketch` | নতুন screen/flow-এর ঐচ্ছিক `sketch.md` + `design.json` | `src/zombie/server.ts:1076` | `test/design.test.ts`, `test/plugin.test.ts` | `README.md:1079` |
+| 8 | `design_review` | markup/CSS-এ `file:line` a11y finding | `src/zombie/server.ts:1094` | `test/design.test.ts`, `test/plugin.test.ts` | `README.md:1080` |
+| 9 | `project_onboarding` | প্রথম input-এ docs/code gap syllabus-এ লেখে | `src/zombie/server.ts:1107` | `test/plugin.test.ts`, `test/wiring.test.ts` | `README.md:1076` |
+| 10 | `project_investigation` | bounded investigation package syllabus-এ dedupe করে | `src/zombie/server.ts:1131` | `test/investigation.test.ts`, `test/plugin.test.ts` | `README.md:1078` |
+| 11 | `context_status` | SSOT/syllabus/memory/focus pack-এর `uiLine` দেয় | `src/zombie/server.ts:1148` | `test/plugin.test.ts`, `test/wiring.test.ts` | `README.md:1069` |
+| 12 | `subagent_context` | subagent launch-এর bounded envelope render করে | `src/zombie/server.ts:1199` | `test/plugin.test.ts` | `—` |
+| 13 | `tool_result_read` | archived tool result পড়ে | `src/zombie/server.ts:1229` | `test/plugin.test.ts`, `test/wiring.test.ts` | `—` |
+| 14 | `evidence_gate` | claim/response evidence যাচাই করে | `src/zombie/server.ts:1252` | `test/plugin.test.ts` | `README.md:1070` |
+| 15 | `verify_real` | real input+artifact hash করে provenance লেখে | `src/zombie/server.ts:1338` | `test/plugin.test.ts` | `README.md:1077` |
+| 16 | `memory_archive` | archived session message পড়ে | `src/zombie/server.ts:1466` | `test/plugin.test.ts`, `test/wiring.test.ts` | `README.md:1071` |
+| 17 | `syntax_check` | syntax fallback (LSP নয়) | `src/zombie/server.ts:1490` | `test/plugin.test.ts`, `test/lsp.test.ts` | `README.md:1073` |
+| 18 | `symbol_overview` | real LSP symbol outline | `src/zombie/server.ts:1512` | `test/symbols.test.ts`, `test/regressions.test.ts` | `—` |
+| 19 | `find_symbols` | real LSP symbol search | `src/zombie/server.ts:1535` | `test/symbols.test.ts`, `test/regressions.test.ts` | `—` |
+| 20 | `find_references` | real LSP references | `src/zombie/server.ts:1560` | `test/symbols.test.ts`, `test/regressions.test.ts` | `—` |
+| 21 | `diagnostics_for_file` | real LSP diagnostics | `src/zombie/server.ts:1585` | `test/symbols.test.ts`, `test/regressions.test.ts` | `—` |
+| 22 | `skill_catalog` | shared skill list/install/auto | `src/zombie/server.ts:1608` | `test/skillCatalog.test.ts`, `test/capabilities.test.ts` | `README.md:1074` |
+| 23 | `agent_modes` | V2 mode list + validated switch plan | `src/zombie/server.ts:1642` | `test/plugin.test.ts` | `README.md:1081` |
+| 24 | `reload` | agents/skills/providers/tools door reload | `src/zombie/server.ts:1697` | `test/tools.test.ts` | `README.md:1082` |
+| 25 | `http_probe` | HTTP status/header/body hash, secret redact | `src/zombie/server.ts:1734` | `test/tools.test.ts` | `README.md:1083` |
+| 26 | `patch_preview` | one exact-string replace dry-run; apply-এ backup | `src/zombie/server.ts:1799` | `test/tools.test.ts` | `README.md:1084` |
+| 27 | `env_get` | env var আছে কিনা, value ছাড়া | `src/zombie/server.ts:1858` | `test/tools.test.ts`, `test/wiring.test.ts` | `README.md:1085` |
+| 28 | `service_probe` | TCP connect বা HTTP GET probe | `src/zombie/server.ts:1882` | `test/tools.test.ts` | `README.md:1086` |
 
 ## ৩. কোথায় কী এডিট করব
 
@@ -93,7 +99,7 @@ flowchart TD
 | Contract hardening | `src/zombie/goalContract.ts` | `validateCheck`, `trivialExpected` | no-op check আর status-word expected reject করে |
 | Shell write/ledger guard | `src/zombie/shellGuard.ts` | `analyzeShell:209`, `ledgerTarget:220` | quoted text বাদ দিয়ে redirect/write verb parse করে ledger রক্ষা করে |
 | Persona enforcement + delegation | `src/plugin.ts` | `mergeAgentPersona` call, `execute.before` guard | persona marker check, unknown agent fail-closed, সর্বোচ্চ ৪ specialist |
-| Tools | `src/zombie/server.ts` | `toolSpecs:320` | ২২টি tool-এর একমাত্র registry |
+| Tools | `src/zombie/server.ts` | `toolSpecs:346` | ২৮টি tool-এর একমাত্র registry |
 | Plugin wiring / hooks | `src/plugin.ts` | `setup:683`, `export default:2204` | surface registration ও hook lifecycle |
 | Bootstrap / update / proof | `install.sh` | staging + two installer passes + inline verifier | `PROOF PASS`/`PROOF FAIL`, `$TARGET/zombiecoder/install-proof.json` |
 | Setup / install | `bin/install.mjs` | `renderAgentsConfig` call `:1224`, LSP sync `:1302`, `retireLegacyDuplicateEntry:734` | global/project install; duplicate loader retire with backup |
@@ -110,16 +116,16 @@ flowchart TD
 2. **Syllabus** — `read_syllabus`; আগের lesson ও footprint বাদ দিও না।
 3. **Memory** — দরকার হলে `memory_archive`; পুরো history টানো নিষেধ।
 4. **Focus** — `context_status`-এ `message` দাও; `src/zombie/focus.ts:203` target file list দেয়।
-5. **Act** — নির্দিষ্ট file/symbol পড়ে smallest correct diff; irreversible কাজের আগে backup (`patch_preview:1006`)।
-6. **Verify** — আসল command/output; `evidence_gate:587` বা `verify_real:673`; `goal_contract close:432` নিজেই check চালায়, agent-এর exitCode claim বিশ্বাস করে না।
+5. **Act** — নির্দিষ্ট file/symbol পড়ে smallest correct diff; irreversible কাজের আগে backup (`patch_preview:1799`)।
+6. **Verify** — আসল command/output; `evidence_gate:1252` বা `verify_real:1338`; `goal_contract close:462` নিজেই check চালায়, agent-এর exitCode claim বিশ্বাস করে না।
 
 | Gate | কোথায় | কখন |
 |---|---|---|
-| `goal_contract` | `src/zombie/server.ts:432` | প্রথম write/edit-এর আগে `open`; শেষে `close` |
-| `context_status` | `src/zombie/server.ts:551` | substantive কাজের শুরুর দৃশ্যমান লাইন |
-| Pre-work gate text | `src/zombie/context.ts:322` | pack-এ inject হওয়া gate instruction |
-| Response gate | `src/plugin.ts:1701` | `http.response` hook, unproven claim আটকায় |
-| Tool failure breaker | `src/plugin.ts:2031` | `execute.after`, তিন failure-এ escalation |
+| `goal_contract` | `src/zombie/server.ts:462` | প্রথম write/edit-এর আগে `open`; শেষে `close` |
+| `context_status` | `src/zombie/server.ts:1148` | substantive কাজের শুরুর দৃশ্যমান লাইন |
+| Pre-work gate text | `src/zombie/context.ts:444` | pack-এ inject হওয়া gate instruction |
+| Response gate | `src/plugin.ts:1879` | `http.response` hook, unproven claim আটকায় |
+| Tool failure breaker | `src/plugin.ts:2466` | `execute.after`, তিন failure-এ escalation |
 
 ## ৫. Known boundaries
 
@@ -127,33 +133,43 @@ flowchart TD
 |---|---|---|
 | `usage_report` | implement করা নেই; `src/`, `test/`, `docs/`, installer-এ নামও নেই (এই map বাদে) | `grep -rn "usage_report" src docs test bin scripts README.md --exclude=architecture-map.md \| wc -l` → 0 |
 | `eval_run` | implement করা নেই; `src/`, `test/`, `docs/`, installer-এ নামও নেই (এই map বাদে) | `grep -rn "eval_run" src docs test bin scripts README.md --exclude=architecture-map.md \| wc -l` → 0 |
-| Editor LSP diagnostics | `NOT_TESTED` — app restart + real `.ts` file open + `ps`-এ LSP child দেখা, তারপর `END_TO_END_TESTED` | `docs/LSP.md:224` |
-| LSP direct probe | এই session-এ `npm run lsp:probe -- --compact --root "$PWD"` → exit 0, 7/7 server `ok: true` (`LIVE_PROBE_PASSED`); editor diagnostic আলাদা স্তর | `scripts/lsp-probe.mjs:74`, `docs/LSP.md:176` |
-| `syntax_check` | LSP নয়; `node --check`, `tsc`, `py_compile`, `bash -n`, `php -l` fallback | `docs/LSP.md:247`, `src/zombie/lsp.ts:328` |
+| Editor LSP diagnostics | `NOT_TESTED` — app restart + real `.ts` file open + `ps`-এ LSP child দেখা, তারপর `END_TO_END_TESTED` | `docs/LSP.md:345` |
+| LSP direct probe | এই session-এ `npm run lsp:probe -- --compact --root "$PWD"` → exit 0, 7/7 server `ok: true` (`LIVE_PROBE_PASSED`); editor diagnostic আলাদা স্তর | `scripts/lsp-probe.mjs:74`, `docs/LSP.md:204` |
+| `syntax_check` | LSP নয়; `node --check`, `tsc`, `py_compile`, `bash -n`, `php -l` fallback | `docs/LSP.md:279`, `src/zombie/lsp.ts:328` |
 
 ## ৬. Machine-readable
 
 ```yaml
 # impl = spec `name:` line in src/zombie/server.ts
 tools:
-  get_working_directory: { impl: "src/zombie/server.ts:295", tests: ["test/plugin.test.ts:521"], docs: ["README.md:823"] }
-  read_ssot:             { impl: "src/zombie/server.ts:310", tests: ["test/plugin.test.ts:521"], docs: ["README.md:821"] }
-  read_syllabus:         { impl: "src/zombie/server.ts:322", tests: ["test/footprint.test.ts:20"], docs: ["README.md:822"] }
-  append_syllabus:       { impl: "src/zombie/server.ts:334", tests: ["test/plugin.test.ts:139"], docs: ["README.md:828"] }
-  goal_contract:         { impl: "src/zombie/server.ts:432", tests: ["test/plugin.test.ts:161", "test/goalContract.test.ts:38"], docs: ["docs/AGENT-HANDOFF.md:23"] }
-  project_fingerprint:   { impl: "src/zombie/server.ts:545", tests: ["test/plugin.test.ts:139"], docs: ["README.md:824"] }
-  context_status:        { impl: "src/zombie/server.ts:551", tests: ["test/plugin.test.ts:139", "test/plugin.test.ts:521"], docs: ["README.md:825"] }
-  evidence_gate:         { impl: "src/zombie/server.ts:587", tests: ["test/plugin.test.ts:139"], docs: ["README.md:826"] }
-  verify_real:           { impl: "src/zombie/server.ts:673", tests: ["test/plugin.test.ts:139"], docs: [] }
-  memory_archive:        { impl: "src/zombie/server.ts:801", tests: ["test/plugin.test.ts:139"], docs: ["README.md:827"] }
-  syntax_check:          { impl: "src/zombie/server.ts:823", tests: ["test/lsp.test.ts:6", "test/plugin.test.ts:139"], docs: ["README.md:829", "docs/LSP.md:247"] }
-  skill_catalog:         { impl: "src/zombie/server.ts:845", tests: ["test/plugin.test.ts:139", "test/skillCatalog.test.ts:113"], docs: ["README.md:830"] }
-  agent_modes:           { impl: "src/zombie/server.ts:877", tests: ["test/plugin.test.ts:139"], docs: [] }
-  reload:                { impl: "src/zombie/server.ts:904", tests: ["test/tools.test.ts:54"], docs: [] }
-  http_probe:            { impl: "src/zombie/server.ts:941", tests: ["test/tools.test.ts:68"], docs: [] }
-  patch_preview:         { impl: "src/zombie/server.ts:1006", tests: ["test/tools.test.ts:89"], docs: [] }
-  env_get:               { impl: "src/zombie/server.ts:1065", tests: ["test/tools.test.ts:125"], docs: [] }
-  service_probe:         { impl: "src/zombie/server.ts:1089", tests: ["test/tools.test.ts:141"], docs: [] }
+  get_working_directory: { impl: "src/zombie/server.ts:388", tests: ["test/plugin.test.ts"], docs: ["README.md:1067"] }
+  read_ssot:             { impl: "src/zombie/server.ts:403", tests: ["test/plugin.test.ts", "test/wiring.test.ts"], docs: ["README.md:1065"] }
+  read_syllabus:         { impl: "src/zombie/server.ts:417", tests: ["test/wiring.test.ts"], docs: ["README.md:1066"] }
+  append_syllabus:       { impl: "src/zombie/server.ts:430", tests: ["test/plugin.test.ts", "test/agents.test.ts"], docs: ["README.md:1072"] }
+  goal_contract:         { impl: "src/zombie/server.ts:462", tests: ["test/plugin.test.ts", "test/goalContract.test.ts", "test/route.test.ts"], docs: ["README.md:1075", "docs/AGENT-HANDOFF.md:23"] }
+  project_fingerprint:   { impl: "src/zombie/server.ts:1068", tests: ["test/plugin.test.ts", "test/wiring.test.ts"], docs: ["README.md:1068"] }
+  design_sketch:         { impl: "src/zombie/server.ts:1076", tests: ["test/design.test.ts", "test/plugin.test.ts"], docs: ["README.md:1079"] }
+  design_review:         { impl: "src/zombie/server.ts:1094", tests: ["test/design.test.ts", "test/plugin.test.ts"], docs: ["README.md:1080"] }
+  project_onboarding:    { impl: "src/zombie/server.ts:1107", tests: ["test/plugin.test.ts", "test/wiring.test.ts"], docs: ["README.md:1076"] }
+  project_investigation: { impl: "src/zombie/server.ts:1131", tests: ["test/investigation.test.ts", "test/plugin.test.ts"], docs: ["README.md:1078"] }
+  context_status:        { impl: "src/zombie/server.ts:1148", tests: ["test/plugin.test.ts", "test/wiring.test.ts"], docs: ["README.md:1069"] }
+  subagent_context:      { impl: "src/zombie/server.ts:1199", tests: ["test/plugin.test.ts"], docs: [] }
+  tool_result_read:      { impl: "src/zombie/server.ts:1229", tests: ["test/plugin.test.ts", "test/wiring.test.ts"], docs: [] }
+  evidence_gate:         { impl: "src/zombie/server.ts:1252", tests: ["test/plugin.test.ts"], docs: ["README.md:1070"] }
+  verify_real:           { impl: "src/zombie/server.ts:1338", tests: ["test/plugin.test.ts"], docs: ["README.md:1077"] }
+  memory_archive:        { impl: "src/zombie/server.ts:1466", tests: ["test/plugin.test.ts", "test/wiring.test.ts"], docs: ["README.md:1071"] }
+  syntax_check:          { impl: "src/zombie/server.ts:1490", tests: ["test/plugin.test.ts", "test/lsp.test.ts"], docs: ["README.md:1073", "docs/LSP.md:279"] }
+  symbol_overview:       { impl: "src/zombie/server.ts:1512", tests: ["test/symbols.test.ts", "test/regressions.test.ts"], docs: [] }
+  find_symbols:          { impl: "src/zombie/server.ts:1535", tests: ["test/symbols.test.ts", "test/regressions.test.ts"], docs: [] }
+  find_references:       { impl: "src/zombie/server.ts:1560", tests: ["test/symbols.test.ts", "test/regressions.test.ts"], docs: [] }
+  diagnostics_for_file:  { impl: "src/zombie/server.ts:1585", tests: ["test/symbols.test.ts", "test/regressions.test.ts"], docs: [] }
+  skill_catalog:         { impl: "src/zombie/server.ts:1608", tests: ["test/skillCatalog.test.ts", "test/capabilities.test.ts"], docs: ["README.md:1074"] }
+  agent_modes:           { impl: "src/zombie/server.ts:1642", tests: ["test/plugin.test.ts"], docs: ["README.md:1081"] }
+  reload:                { impl: "src/zombie/server.ts:1697", tests: ["test/tools.test.ts"], docs: ["README.md:1082"] }
+  http_probe:            { impl: "src/zombie/server.ts:1734", tests: ["test/tools.test.ts"], docs: ["README.md:1083"] }
+  patch_preview:         { impl: "src/zombie/server.ts:1799", tests: ["test/tools.test.ts"], docs: ["README.md:1084"] }
+  env_get:               { impl: "src/zombie/server.ts:1858", tests: ["test/tools.test.ts", "test/wiring.test.ts"], docs: ["README.md:1085"] }
+  service_probe:         { impl: "src/zombie/server.ts:1882", tests: ["test/tools.test.ts"], docs: ["README.md:1086"] }
 ```
 
 `docs: []` মানে dedicated doc section নেই; source description-ই তখন documentation।

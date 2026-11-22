@@ -1,6 +1,6 @@
-# LSP — OpenCode V2.2.3 (live runtime)
+# LSP — OpenCode V2.3.2 (live runtime)
 
-> **সংক্ষেপে:** OpenCode **V2.2.3-এ LSP runtime আছে**। `No LSP servers configured`
+> **সংক্ষেপে:** OpenCode **V2.3.2-এ LSP runtime আছে**। `No LSP servers configured`
 > মানে upstream-এ LSP নেই — তা নয়; এর মানে `lsp` config বা language-server
 > binary নেই। **installer নিজেই** `<install>/lsp`-এ server toolchain নামায়
 > এবং resolve হওয়া absolute path দিয়ে `opencode.json`-এর `lsp` block লেখে
@@ -24,8 +24,8 @@
 
 | চেক | ফল | লেবেল |
 |---|---|---|
-| OpenCode version | `2.2.3` (`~/.config/ai.opencode.desktop/cli/2.2.3-x64/opencode-cli --version`) | `LIVE_PROBE_PASSED` |
-| Runtime schema | CLI binary-তে `Config.LSP.Server` (offset `122891880`/`170407040`), `publishDiagnostics` (`124119588`), `goToDefinition` (`124119680`), `typescript-language-server` (`124118650`) strings আছে | `SOURCE_VERIFIED` |
+| OpenCode version | `2.3.2` (`~/.config/ai.opencode.desktop/cli/2.3.2-x64/opencode-cli --version`) | `LIVE_PROBE_PASSED` |
+| Runtime schema | `2.2.3` CLI binary-তে `Config.LSP.Server` (offset `122891880`/`170407040`), `publishDiagnostics` (`124119588`), `goToDefinition` (`124119680`), `typescript-language-server` (`124118650`) strings ছিল; `2.3.2`-এ একই offset re-check `NOT_TESTED` | `SOURCE_VERIFIED` (2.2.3) |
 | Desktop renderer | `app.asar`-এ `project-lsp` source map (`211685514`); renderer asset-এ `publishDiagnostics` নেই | `SOURCE_VERIFIED` |
 | Config | `~/.config/opencode/opencode.json`-এ `lsp` key; ৭টি server; effective config API-তেও ৭টি | `CONFIG_VALIDATED` |
 | Binaries | `typescript-language-server 6.0.2`, `typescript 5.9.3`, `pyright 1.1.414`, `bash-language-server 5.8.1`, `vscode-langservers-extracted 4.10.0` | `SOURCE_VERIFIED` |
@@ -38,7 +38,7 @@
 Runtime প্রমাণের reproducible command:
 
 ```bash
-CLI="$HOME/.config/ai.opencode.desktop/cli/2.2.3-x64/opencode-cli"
+CLI="$HOME/.config/ai.opencode.desktop/cli/2.3.2-x64/opencode-cli"
 APP=/opt/OpenCode/resources/app.asar
 grep -aob 'Config.LSP.Server' "$CLI"
 grep -aob 'publishDiagnostics' "$CLI"
@@ -49,7 +49,8 @@ grep -aob 'project-lsp' "$APP"
 
 `grep` offset পাওয়া মানে binary/bundle-এ string আছে। `Config.LSP.Server` schema-তে
 `command`, `extensions`, `disabled`, `env`, `initialization`, `diagnostics` field
-আছে। এটাই দেখায় V2.2.3-এ LSP client/runtime বর্তমান। Renderer-এ শুধু
+আছে। উপরের offset-গুলো `2.2.3` binary-তে observed; live runtime এখন `2.3.2`
+এবং direct initialize probe **7/7 pass**। Renderer-এ শুধু
 `settings/workspaces/project-lsp.ts` source map পাওয়া যায়; `app.asar`-এ
 `publishDiagnostics` নেই — অর্থাৎ LSP runtime server-side, renderer editor নয়।
 
@@ -333,7 +334,7 @@ Endpoint Cloudflare-এর পিছনে:
 
 ## ৯. সিদ্ধান্ত
 
-1. OpenCode V2.2.3-এ LSP runtime **আছে**; “V2-তে LSP নেই” দাবি ভুল ছিল।
+1. OpenCode V2.3.2-এ LSP runtime **আছে** (live probe 7/7); “V2-তে LSP নেই” দাবি ভুল ছিল।
 2. আগের সমস্যা: `lsp` config নেই + binary নেই + TS 7.0.2-এ `tsserver.js` নেই।
 3. এখন ৭টি server configured (`typescript`, `python`, `bash`, `json`, `css`,
    `html`, `markdown`); direct initialize probe **7/7 pass** (`--compact`, exit `0`)।
