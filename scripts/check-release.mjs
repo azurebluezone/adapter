@@ -11,10 +11,12 @@
 //      LIVE_INSTALL_CLEAN_OK
 //   3. assert the retired 100c document is absent and the YAML card module is
 //      present in the installed tree
-//   4. assert the commit under test is what origin/main points at, and that the
-//      new modules are actually tracked in it
+//   4. run scripts/check-clone-install.mjs and require CLONE_INSTALL_OK, so a
+//      release cannot pass while a stale checkout or a lost user skill regresses
+//   5. assert the commit under test is what origin/main points at, and that the
+//      new modules and gates are actually tracked in it
 //
-// Final line: RELEASE_GATE_OK
+// Final line: RELEASE_GATE_OK head=… shipped=ok clone=ok
 
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -25,6 +27,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const INSTALLER = path.join(ROOT, "bin", "install.mjs");
 const AUDIT = path.join(ROOT, "scripts", "audit-install.mjs");
+const CLONE_GATE = path.join(ROOT, "scripts", "check-clone-install.mjs");
 const failures = [];
 
 function check(name, ok, detail = "") {
@@ -112,6 +115,28 @@ try {
       ),
   );
 
+  // Clone safety is a release condition, not a separate errand: the gate must
+  // fail if a stale checkout is no longer refused or a user skill no longer
+  // survives a reinstall. It runs in its own throwaway roots.
+  const clone = spawnSync(process.execPath, [CLONE_GATE], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env,
+    timeout: 240000,
+  });
+  const cloneTail = String(clone.stdout ?? "").trim().split("\n").filter(Boolean).pop() ?? "";
+  check("clone-install gate exits 0", clone.status === 0, firstLine(clone));
+  check(
+    "clone-install gate reports CLONE_INSTALL_OK",
+    /CLONE_INSTALL_OK/.test(clone.stdout ?? ""),
+    cloneTail,
+  );
+  check(
+    "clone-install gate kept user files and one loader",
+    /user skill kept byte-for-byte/.test(clone.stdout ?? "") &&
+      /one plugin loader, no duplicate entry/.test(clone.stdout ?? ""),
+  );
+
   const remote = git(["ls-remote", "origin", "refs/heads/main"]);
   const remoteSha = remote.stdout.trim().split(/\s+/)[0] ?? "";
   const head = git(["rev-parse", "HEAD"]);
@@ -126,6 +151,8 @@ try {
     "src/zombie/skillCard.ts",
     "src/zombie/skillLibrary.ts",
     "docs/SKILL-LIBRARY.md",
+    "scripts/audit-install.mjs",
+    "scripts/check-clone-install.mjs",
     "scripts/check-install-assets.mjs",
     "scripts/check-release.mjs",
   ]) {
@@ -137,7 +164,7 @@ try {
   );
 
   if (failures.length === 0) {
-    console.log(`RELEASE_GATE_OK head=${headSha.slice(0, 12)} shipped=ok`);
+    console.log(`RELEASE_GATE_OK head=${headSha.slice(0, 12)} shipped=ok clone=ok`);
   } else {
     console.error(`RELEASE_GATE_FAILED ${failures.join(", ")}`);
     process.exitCode = 1;

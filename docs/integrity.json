@@ -1,6 +1,6 @@
 {
   "schema": "zombiecoder-integrity/v1",
-  "generated_at": "2026-11-22T19:13:55.167Z",
+  "generated_at": "2026-11-22T19:18:03.758Z",
   "scope": [
     "src",
     "bin",
@@ -12,11 +12,11 @@
     "package.json",
     "LICENSE"
   ],
-  "root_sha256": "ee1f0709a048d67ca8dc488a9af9be2869d1efe60949211707a4644ba89e4bd9",
+  "root_sha256": "6201ab344ed6b1c0b461aa0f00f67167c02f6df93f7f55bbb0249e6dd71c7a50",
   "file_count": 189,
-  "total_bytes": 1787081,
+  "total_bytes": 1788297,
   "git": {
-    "commit": "1cd978b",
+    "commit": "a0eb6f4",
     "branch": "main",
     "dirty": true
   },
@@ -288,8 +288,8 @@
     },
     {
       "path": "scripts/check-release.mjs",
-      "bytes": 5281,
-      "sha256": "5313c3cb098a90921b0e753587775af7ea03f40d63d84e99f632cf837dc447a8"
+      "bytes": 6497,
+      "sha256": "829e7d40e1511124e87e108a430d83bab5dd3682aaab0dcac772d055eed7733b"
     },
     {
       "path": "scripts/check-skill-library-yaml.mjs",
