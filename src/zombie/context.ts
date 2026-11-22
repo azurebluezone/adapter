@@ -16,6 +16,7 @@ import { extractTerms, FOCUS_LIMITS, listProjectFiles, resolveFocus, type FocusP
 import { openContracts } from "./goalContract.ts";
 import { classifyIntent, type Intent } from "./intent.ts";
 import { discoverTechnologyProfiles } from "./projectProfile.ts";
+import { skillLiteSection, type SkillLiteSection } from "./skillLibrary.ts";
 
 export const CONTEXT_LIMITS = {
   // Only the slices an agent needs for the current task. The full SSOT and
@@ -29,7 +30,9 @@ export const CONTEXT_LIMITS = {
   focus: 600,
   memoryPerMessage: 80,
   memoryTotal: 1100,
-  total: 5200,
+  // Two YAML skill-lite cards: the trigger, the first steps and provenance.
+  skillLite: 700,
+  total: 6400,
 } as const;
 
 // Which SSOT sections each role actually needs. A documentation agent does not
@@ -96,6 +99,8 @@ export type ContextPack = {
   focus: FocusPlan | null;
   /** Deterministic routing hint; never replaces the user's literal request. */
   intent: Intent;
+  /** YAML skill-lite cards routed from this turn's request (null when no install root). */
+  skillLite: SkillLiteSection | null;
   /** Goal contracts opened in this session whose result is not recorded yet. */
   openContractIDs: string[];
   memory: MemoryStatus;
@@ -362,6 +367,8 @@ export function buildContextPack(
   recent: MemoryMessage[] = [],
   userMessage = "",
   sessionID = "",
+  /** Install root that owns the shared skill database. Empty disables skill routing. */
+  installRoot = "",
 ): ContextPack {
   const ssotPath = ssotFile(projectRoot);
   const syllabusPath = syllabusFile(projectRoot);
@@ -419,6 +426,20 @@ export function buildContextPack(
   const intent = classifyIntent(userMessage, projectFiles);
   const technologies = discoverTechnologyProfiles(projectRoot);
   const focusBody = focusPlan ? clip(focusPlan.text, CONTEXT_LIMITS.focus) : "";
+  // Per-input skill routing: the skill database stays data on disk; the model
+  // sees at most two compact YAML cards, never a 256-file markdown dump.
+  let skillLite: SkillLiteSection | null = null;
+  if (installRoot && String(userMessage ?? "").trim().length > 0) {
+    try {
+      skillLite = skillLiteSection(userMessage, {
+        installRoot,
+        budget: CONTEXT_LIMITS.skillLite,
+        limit: 2,
+      });
+    } catch {
+      skillLite = null;
+    }
+  }
 
   const lines = [
     "## ZombieCoder Compact Context Pack",
@@ -469,6 +490,13 @@ export function buildContextPack(
     `- terms: ${intent.terms.length ? intent.terms.map((term) => `\`${term}\``).join(", ") : "none"}`,
     "- The literal current request above wins if this classification is wrong.",
     "",
+    ...(skillLite?.matches.length
+      ? [
+          `### Skill-lite matches (YAML cards, top ${skillLite.matches.length}) — steward: ${CONTEXT_OWNERS.skills.agent}`,
+          skillLite.text,
+          "",
+        ]
+      : []),
     "### Technology map (manifest evidence; run focused checks only)",
     ...(technologies.length
       ? technologies.slice(0, 5).map((profile) =>
@@ -499,7 +527,9 @@ export function buildContextPack(
     syllabus.exists ? "OK" : "MISSING"
   } (steward ${CONTEXT_OWNERS.syllabus.agent}) | Memory ${memory.recent} recent / ${memory.archives} archives (steward ${
     CONTEXT_OWNERS.memory.agent
-  }) | Focus ${focusPlan ? `${focusPlan.primary.length}+${focusPlan.related.length} files` : "off"} | Contract ${
+  }) | Focus ${focusPlan ? `${focusPlan.primary.length}+${focusPlan.related.length} files` : "off"} | Skill-lite ${
+    skillLite?.matches.length ?? 0
+  } | Contract ${
     openContractsForSession.length ? openContractsForSession[0].id : "none"
   } | Pack ${Buffer.byteLength(text, "utf8")}B`;
   return {
@@ -513,6 +543,7 @@ export function buildContextPack(
     syllabusExcerptBytes,
     focus: focusPlan,
     intent,
+    skillLite,
     openContractIDs: openContractsForSession.map((contract) => contract.id),
     memory,
     owners: CONTEXT_OWNERS,

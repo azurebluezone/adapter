@@ -1315,7 +1315,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           messages,
           (text) => isSyntheticText(text, syntheticHashes),
         );
-        const pack = buildContextPack(projectRoot, agentID, recent, userMessage, sessionID);
+        const pack = buildContextPack(projectRoot, agentID, recent, userMessage, sessionID, PLUGIN_PARENT);
         recordCompactTask(projectRoot, sessionID, userMessage, pack.intent, recent.length);
 
         // Route state is plugin-owned. It is created per user turn and carried

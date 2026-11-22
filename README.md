@@ -243,7 +243,10 @@ evidence presence যাচাই করে, বাস্তব সত্য ন
 - **Skill map** — প্রতিটি agent-এর 15–20 first-principles skill:
   [`docs/skill-map.md`](docs/skill-map.md)।
 
-বিস্তারিত: [`docs/100c-runtime-template.md`](docs/100c-runtime-template.md)
+এই pack-এ কোনো provider বা MCP URL baked-in নেই। দরকার হলে
+`ZOMBIECODER_PROVIDER_URL` / `ZOMBIECODER_MCP_URL` (বা installer-এর
+`--provider-url` / `--mcp-url`) দিয়ে যোগ করুন; না দিলে OpenCode-এর native
+free model catalog-ই ব্যবহার হয়।
 
 ---
 
@@ -788,7 +791,7 @@ execute করে না।
 ```
 
 Tool ব্যবহার করতে হলে gateway/model-এ native tool calling সক্রিয় থাকতে হবে।
-llama.cpp-ভিত্তিক gateway-এ প্রযোজ্য হলে chat template/`--jinja` এবং
+OpenAI-compatible gateway-এ প্রযোজ্য হলে chat template/`--jinja` এবং
 tool-capable model ব্যবহার করুন।
 
 যাচাইয়ের নিয়ম: response-এ `choices[0].message.tool_calls` থাকতে হবে। শুধু
@@ -806,14 +809,14 @@ Origin URL সেট করার দুটি উপায়:
 Linux/macOS:
 
 ```bash
-export ZOMBIECODER_ORIGIN_URL="https://gpu.zombiecoder.my.id"
+export ZOMBIECODER_ORIGIN_URL="https://gateway.example.com"
 npm run install-pack -- --config-dir "$HOME/.opencode" --yes
 ```
 
 Windows PowerShell:
 
 ```powershell
-$env:ZOMBIECODER_ORIGIN_URL = "https://gpu.zombiecoder.my.id"
+$env:ZOMBIECODER_ORIGIN_URL = "https://gateway.example.com"
 npm.cmd run install-pack -- --config-dir "$env:USERPROFILE\.opencode" --yes
 ```
 
@@ -821,7 +824,7 @@ npm.cmd run install-pack -- --config-dir "$env:USERPROFILE\.opencode" --yes
 
 ```json
 {
-  "originUrl": "https://gpu.zombiecoder.my.id"
+  "originUrl": "https://gateway.example.com"
 }
 ```
 
@@ -829,8 +832,8 @@ Origin-কে `GET /gateway_url.json` public endpoint দিতে হবে। 
 
 ```json
 {
-  "base_url": "https://gpu.zombiecoder.my.id/v1",
-  "hostname": "gpu.zombiecoder.my.id",
+  "base_url": "https://gateway.example.com/v1",
+  "hostname": "gateway.example.com",
   "auth_required": true
 }
 ```
@@ -1331,7 +1334,10 @@ opencode reload
 ```
 
 Installer existing `opencode.json` merge করে; user-এর নিজের permissions রাখে এবং
-legacy `kobir` entry prune করে।
+legacy `kobir` entry prune করে। Reinstall-এ pack-এর নিজের runtime asset
+(`zombiecoder/docs`, `tools`, `tls`, `skills-catalog`) reconcile হয়: যে ফাইল আর
+ship হচ্ছে না সেটা install থেকে সরে যায়, আর downloaded `skill-db` cache অক্ষত
+থাকে।
 
 ### Clean reinstall
 
@@ -1442,7 +1448,8 @@ adapter/
 ├── bin/
 │   └── install.mjs
 ├── docs/
-│   └── 100c-runtime-template.md
+│   ├── SKILL-LIBRARY.md
+│   └── skill-map.md
 ├── scripts/
 │   ├── configure.mjs
 │   └── setup.mjs
@@ -1613,8 +1620,8 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  6dd5499d575bc47ecf0456484ad1a9bc4cbc1bfb68ba992454c9a6221be0ced3  ║
-║  files 182 · bytes 1697162 · base 08b1c06 · clean                        ║
+║  root  5d01bf4a5b25d594092b0745241c3c7c6e789eeca88f1c04fe7a9a2295387f00  ║
+║  files 188 · bytes 1773302 · base 2e5be76 · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -1622,7 +1629,7 @@ commercial অনুমতি বা আইনি পরামর্শের �
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-22T11:13:31.143Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-22T18:53:57.520Z
 
 </div>
 <!-- INTEGRITY:END -->

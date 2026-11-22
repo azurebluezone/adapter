@@ -36,16 +36,6 @@ const STALE_RULES: StaleRule[] = [
     reason: "one agent retries; three different agents are not tried",
   },
   {
-    file: "docs/100c-runtime-template.md",
-    pattern: /switched to the next untried roster agent/,
-    reason: "the circuit breaker never switches agents",
-  },
-  {
-    file: "docs/100c-runtime-template.md",
-    pattern: /After three failed agents/,
-    reason: "one agent owns the failure; there are no three failed agents",
-  },
-  {
     file: "src/runtime.ts",
     pattern: /ctx\.session\.switchAgent/,
     reason: "runtime docs must not advertise a delegation door",

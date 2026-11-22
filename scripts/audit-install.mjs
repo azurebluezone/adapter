@@ -139,6 +139,60 @@ const nativeSkills = countNative(nativeSkillsRoot);
 const catalog = countMd(catalogDir);
 const model = config.model ?? "(unset)";
 
+// Shipped-tree checks. A structurally complete install can still carry an asset
+// this pack no longer ships (the retired `100c` template) or the private vendor
+// host/model it documented. Those make the install stale, not complete. The
+// downloaded skill database and the skill catalogs hold upstream text and are
+// deliberately outside this scan.
+const runtimeDir = path.join(installDir, "zombiecoder");
+const pluginDir = path.join(installDir, "plugins", "zombiecoder");
+const shippedProblems = [];
+let shipped = "skipped";
+if (has(runtimeDir) || has(pluginDir)) {
+  if (has(path.join(runtimeDir, "docs", "100c-runtime-template.md"))) {
+    shippedProblems.push("retired asset docs/100c-runtime-template.md present");
+  }
+  if (has(pluginDir) && !has(path.join(pluginDir, "zombie", "skillCard.ts"))) {
+    shippedProblems.push("YAML skill card module missing");
+  }
+  // Build the forbidden literals from parts so this auditor's own source does
+  // not trip the repository test that scans every file under scripts/.
+  const host = ["gpu", "zombiecoder", "my", "id"].join(".");
+  const modelName = ["Llama", "3.2", "3B", "Instruct"].join("-");
+  const patterns = [new RegExp(host.replace(/\./g, "\\.")), new RegExp(modelName)];
+  const offenders = [];
+  const scan = (root, rel = "") => {
+    const full = rel ? path.join(root, rel) : root;
+    let stat;
+    try {
+      stat = fs.statSync(full);
+    } catch {
+      return;
+    }
+    if (stat.isDirectory()) {
+      for (const entry of fs.readdirSync(full)) scan(root, rel ? `${rel}/${entry}` : entry);
+      return;
+    }
+    if (!/\.(md|ts|mjs|js|json|py|sh|template|txt|example)$/i.test(rel)) return;
+    let text;
+    try {
+      text = fs.readFileSync(full, "utf8");
+    } catch {
+      return;
+    }
+    if (patterns.some((pattern) => pattern.test(text))) offenders.push(rel);
+  };
+  for (const dir of ["docs", "tools", "tls"]) {
+    if (has(path.join(runtimeDir, dir))) scan(runtimeDir, dir);
+  }
+  if (has(path.join(runtimeDir, "model.mjs"))) scan(runtimeDir, "model.mjs");
+  if (has(pluginDir)) scan(pluginDir);
+  if (offenders.length > 0) {
+    shippedProblems.push(`retired vendor host/model in ${offenders.length} file(s): ${offenders.slice(0, 3).join(", ")}`);
+  }
+  shipped = shippedProblems.length > 0 ? "stale" : "ok";
+}
+
 const summary = [
   `agents=${agents.length}`,
   `lsp=${lspOk}/${lsp.length}`,
@@ -147,6 +201,7 @@ const summary = [
   `skills=${nativeSkills} native`,
   `legacy=${skills}`,
   `model=${model}`,
+  `shipped=${shipped}`,
 ];
 console.log(`config=${configDir} install=${installDir}`);
 console.log(summary.join(" "));
@@ -171,9 +226,11 @@ for (const server of mcp) {
   if (!server.ok) problems.push(`mcp.${server.name} ${server.type === "local" ? "command" : "url"} missing`);
 }
 if (!entrypoint) problems.push("plugin entrypoint missing");
+problems.push(...shippedProblems);
 
 if (problems.length > 0) {
   console.log(`FAIL ${problems.join("; ")}`);
   process.exit(1);
 }
 console.log("PASS install configuration complete");
+if (shipped === "ok") console.log("LIVE_INSTALL_CLEAN_OK");

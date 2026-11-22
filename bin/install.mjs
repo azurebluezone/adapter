@@ -1313,7 +1313,7 @@ await step("copy runtime assets", () => {
     ["tools/render_nginx.py", "tools/render_nginx.py", 0o755],
     ["tools/tls_verify.py", "tools/tls_verify.py", 0o755],
     ["tls/nginx.conf.template", "tls/nginx.conf.template", 0o644],
-    ["docs/100c-runtime-template.md", "docs/100c-runtime-template.md", 0o644],
+    ["docs/SKILL-LIBRARY.md", "docs/SKILL-LIBRARY.md", 0o644],
     ["docs/skill-map.md", "docs/skill-map.md", 0o644],
     ["doc/identity.js", "docs/identity.js", 0o644],
     ["doc/ethics.js", "docs/ethics.js", 0o644],
@@ -1333,6 +1333,7 @@ await step("copy runtime assets", () => {
   // Research corpora are documentation, not prompts, but agents retrieve them on
   // demand from the installed docs tree. Copy every markdown file so the corpus
   // stays available offline with the runtime.
+  const expected = new Set(assets.map(([, toRel]) => toRel));
   const researchSource = path.join(PACKAGE_ROOT, "docs", "skills-research");
   if (fs.existsSync(researchSource)) {
     for (const name of fs.readdirSync(researchSource)) {
@@ -1341,6 +1342,7 @@ await step("copy runtime assets", () => {
       ensureDir(path.dirname(to));
       fs.copyFileSync(path.join(researchSource, name), to);
       fs.chmodSync(to, 0o644);
+      expected.add(`docs/skills-research/${name}`);
     }
   }
 
@@ -1355,10 +1357,45 @@ await step("copy runtime assets", () => {
       if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
       fs.copyFileSync(path.join(skillSource, entry.name), path.join(skillTarget, entry.name));
       fs.chmodSync(path.join(skillTarget, entry.name), 0o644);
+      expected.add(`skills-catalog/${entry.name}`);
       skillFiles += 1;
     }
   }
-  return `${assets.length + skillFiles} files -> ${path.relative(TARGET, RUNTIME_ASSETS_DIR)}/{docs,tools,tls,model.mjs,skills-catalog}`;
+
+  // A reinstall must also remove assets this pack no longer ships. The retired
+  // `docs/100c-runtime-template.md` carried a private gateway URL and would
+  // otherwise survive forever in an existing install. Only the directories the
+  // installer owns are pruned, dotfiles are left alone, and the downloaded
+  // skill database (zombiecoder/skill-db) lives outside them.
+  const pruneEmpty = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const full = path.join(dir, entry.name);
+      pruneEmpty(full);
+      try {
+        fs.rmdirSync(full);
+      } catch {
+        /* still has files */
+      }
+    }
+  };
+  const pruned = [];
+  for (const dir of ["docs", "tools", "tls", "skills-catalog"]) {
+    const full = path.join(RUNTIME_ASSETS_DIR, dir);
+    if (!fs.existsSync(full)) continue;
+    for (const rel of listFiles(full)) {
+      if (rel.split("/").some((part) => part.startsWith("."))) continue;
+      const key = `${dir}/${rel}`;
+      if (expected.has(key)) continue;
+      fs.rmSync(path.join(full, rel), { force: true });
+      pruned.push(key);
+    }
+    pruneEmpty(full);
+  }
+  const prunedNote = pruned.length
+    ? `, pruned ${pruned.length} stale: ${pruned.sort().join(", ")}`
+    : "";
+  return `${assets.length + skillFiles} files -> ${path.relative(TARGET, RUNTIME_ASSETS_DIR)}/{docs,tools,tls,model.mjs,skills-catalog}${prunedNote}`;
 });
 
 // ---- 2b-2. native skills ------------------------------------------------------

@@ -17,6 +17,7 @@
     "generate": "node --experimental-strip-types src/generate.ts",
     "typecheck": "tsc --noEmit",
     "docs:check": "node --experimental-strip-types scripts/docs-check.mjs",
+    "skill-library:check": "node --experimental-strip-types scripts/check-skill-library-yaml.mjs",
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "quick-install": "node bin/quick-install.mjs",
     "e2e:install": "node scripts/e2e-install.mjs --quick",

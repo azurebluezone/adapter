@@ -245,7 +245,7 @@ test("installer --config-dir creates a complete self-contained config root", asy
         assert.ok(fs.existsSync(path.join(configDir, "zombiecoder", "config.json")));
         assert.ok(fs.existsSync(path.join(configDir, "zombiecoder", "tools", "evidence_gate.py")));
         assert.ok(fs.existsSync(path.join(configDir, "zombiecoder", "tls", "nginx.conf.template")));
-        assert.ok(fs.existsSync(path.join(configDir, "zombiecoder", "docs", "100c-runtime-template.md")));
+        assert.ok(fs.existsSync(path.join(configDir, "zombiecoder", "docs", "SKILL-LIBRARY.md")));
         assert.ok(fs.existsSync(path.join(configDir, "zombiecoder", "model.mjs")));
         assert.ok(!fs.existsSync(path.join(parent, "opencode.json")));
         const config = JSON.parse(fs.readFileSync(path.join(configDir, "opencode.json"), "utf8"));
@@ -273,6 +273,49 @@ test("installer --config-dir creates a complete self-contained config root", asy
       }
     },
   );
+});
+
+test("reinstall prunes retired runtime assets and keeps the skill database", async () => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "zombiecoder-prune-assets-"));
+  const configDir = path.join(parent, ".opencode");
+  const assets = path.join(configDir, "zombiecoder");
+  const args = ["--config-dir", configDir, "--yes", "--no-install", "--provider-url", "none"];
+  const env = {
+    HOME: parent,
+    XDG_CONFIG_HOME: path.join(parent, ".config"),
+    EXTERNAL_MCP_EXTERNAL_OPENAI_COMPATIBLE_URL: null,
+  };
+  try {
+    const first = await runInstaller(args, env);
+    assert.equal(first.status, 0, String(first.stderr || first.stdout || ""));
+    assert.ok(fs.existsSync(path.join(assets, "docs", "SKILL-LIBRARY.md")));
+
+    const stale = [
+      "docs/100c-runtime-template.md",
+      "tools/legacy_origin.py",
+      "tls/old-nginx.template",
+    ];
+    for (const rel of stale) {
+      const file = path.join(assets, rel);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, "retired\n", "utf8");
+    }
+    const db = path.join(assets, "skill-db", "skills.jsonl");
+    const dbText = '{"slug":"database-designer"}\n';
+    fs.mkdirSync(path.dirname(db), { recursive: true });
+    fs.writeFileSync(db, dbText, "utf8");
+
+    const second = await runInstaller(args, env);
+    assert.equal(second.status, 0, String(second.stderr || second.stdout || ""));
+    assert.match(second.stdout, /pruned 3 stale/);
+    for (const rel of stale) {
+      assert.equal(fs.existsSync(path.join(assets, rel)), false, `${rel} must be pruned on reinstall`);
+    }
+    assert.ok(fs.existsSync(path.join(assets, "docs", "SKILL-LIBRARY.md")), "shipped assets stay");
+    assert.equal(fs.readFileSync(db, "utf8"), dbText, "the downloaded skill database is not an asset");
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
 });
 
 test("installer links a self-contained home to OpenCode's canonical loader", async () => {

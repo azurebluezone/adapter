@@ -43,7 +43,6 @@ const SCOPE = [
 
 const FOOTER_DOCS = [
   { path: "README.md", link: "docs/INTEGRITY.md" },
-  { path: "docs/100c-runtime-template.md", link: "INTEGRITY.md" },
   { path: "docs/AGENT-HANDOFF.md", link: "INTEGRITY.md" },
   { path: "docs/LSP.md", link: "INTEGRITY.md" },
   { path: "AGENTS.md", link: "docs/INTEGRITY.md" },

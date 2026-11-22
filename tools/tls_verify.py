@@ -5,7 +5,7 @@ No host is hardcoded. The Nginx template is reusable through placeholders:
 SERVER_NAME, TLS_CERT, TLS_KEY and UPSTREAM.
 
 Usage:
-    python3 tools/tls_verify.py --host gpu.zombiecoder.my.id --servername gpu.zombiecoder.my.id
+    python3 tools/tls_verify.py --host api.example.com --servername api.example.com
     python3 tools/tls_verify.py --host localhost --port 8443 --nginx-conf /tmp/nginx.conf
 
 Exit codes: 0 = PASS, 1 = FAIL, 2 = SKIP (missing binary/config, not a TLS failure).

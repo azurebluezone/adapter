@@ -42,6 +42,66 @@ function makeInstall(root: string): string {
   return configDir;
 }
 
+/** Add the runtime asset tree + plugin dir a real install carries. */
+function addShippedTree(
+  configDir: string,
+  options: { retired?: boolean; card?: boolean; hostInDoc?: boolean } = {},
+): void {
+  const runtime = path.join(configDir, "zombiecoder");
+  fs.mkdirSync(path.join(runtime, "docs"), { recursive: true });
+  fs.writeFileSync(path.join(runtime, "docs", "SKILL-LIBRARY.md"), "# skills\n");
+  if (options.retired) {
+    fs.writeFileSync(path.join(runtime, "docs", "100c-runtime-template.md"), "# retired\n");
+  }
+  if (options.hostInDoc) {
+    const host = ["gpu", "zombiecoder", "my", "id"].join(".");
+    fs.writeFileSync(path.join(runtime, "docs", "origin.md"), `https://${host}\n`);
+  }
+  const plugin = path.join(configDir, "plugins", "zombiecoder", "zombie");
+  fs.mkdirSync(plugin, { recursive: true });
+  if (options.card !== false) {
+    fs.writeFileSync(path.join(plugin, "skillCard.ts"), "export const card = 1;\n");
+  }
+}
+
+test("audit rejects a retired asset, a vendor host and a missing YAML card module", () => {
+  const home = tempDir("zombiecoder-audit-shipped-");
+  try {
+    const configDir = makeInstall(home);
+    addShippedTree(configDir, { retired: true, hostInDoc: true });
+    const stale = run(["--config", configDir], home);
+    assert.equal(stale.status, 1);
+    assert.match(stale.stdout, /retired asset docs\/100c-runtime-template\.md present/);
+    assert.match(stale.stdout, /retired vendor host\/model in 1 file/);
+    assert.match(stale.stdout, /shipped=stale/);
+    assert.equal(/LIVE_INSTALL_CLEAN_OK/.test(stale.stdout), false);
+
+    fs.rmSync(path.join(configDir, "zombiecoder", "docs", "100c-runtime-template.md"));
+    fs.rmSync(path.join(configDir, "zombiecoder", "docs", "origin.md"));
+    fs.rmSync(path.join(configDir, "plugins", "zombiecoder", "zombie", "skillCard.ts"));
+    const noCard = run(["--config", configDir], home);
+    assert.equal(noCard.status, 1);
+    assert.match(noCard.stdout, /YAML skill card module missing/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("audit passes a clean shipped tree and prints the live marker", () => {
+  const home = tempDir("zombiecoder-audit-clean-");
+  try {
+    const configDir = makeInstall(home);
+    addShippedTree(configDir);
+    const clean = run(["--config", configDir], home);
+    assert.equal(clean.status, 0, clean.stdout + clean.stderr);
+    assert.match(clean.stdout, /shipped=ok/);
+    assert.match(clean.stdout, /LIVE_INSTALL_CLEAN_OK/);
+    assert.match(clean.stdout, /PASS install configuration complete/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test("audit --help prints usage and exits 0 without reading a config", () => {
   const home = tempDir("zombiecoder-audit-help-");
   try {
