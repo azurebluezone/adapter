@@ -18,6 +18,14 @@ export type GoalContractFields = {
   match: MatchMode;
   /** v2 contracts are closed under the immutable-expected guard. */
   guard: string;
+  /** What the user receives, not only which command runs. */
+  deliverable: string;
+  /** Current outcome: "pending" while open, then the observed result. */
+  result: string;
+  /** Path prefixes a mutating tool may touch for this contract. */
+  scope: string;
+  /** ISO timestamp of open; the intent judge counts 180s from here. */
+  openedAt: string;
 };
 
 export type FailedContract = {
@@ -154,7 +162,48 @@ export function parseContract(syllabus: string, id: string): GoalContractFields 
     pass: field("pass"),
     match: normalizeMatch(field("match")),
     guard: field("guard"),
+    deliverable: field("deliverable"),
+    result: field("result"),
+    scope: field("scope"),
+    openedAt: field("openedAt"),
   };
+}
+
+export type ContractBlockInput = GoalContractFields & {
+  id: string;
+  status?: string;
+  session?: string;
+  consent?: string;
+  baseline?: string;
+  baselineObserved?: string;
+};
+
+/**
+ * Serialize one contract block. `parseContract` is its inverse for the fields
+ * the judge and the scope monitor consume, so the syllabus stays the single
+ * ledger instead of a second, hand-formatted copy.
+ */
+export function formatContractBlock(input: ContractBlockInput): string {
+  const line = (name: string, value: string) => `- ${name}: ${String(value ?? "")}`;
+  return [
+    `### Goal Contract ${input.id}`,
+    line("status", input.status ?? "open"),
+    ...(input.session ? [line("session", input.session)] : []),
+    ...(input.consent ? [line("consent", input.consent)] : []),
+    line("goal", input.goal),
+    line("input", input.input),
+    line("deliverable", input.deliverable),
+    line("result", input.result),
+    line("scope", input.scope),
+    line("openedAt", input.openedAt),
+    line("expected", input.expected),
+    line("check", `\`${input.check}\``),
+    line("pass", input.pass),
+    line("match", input.match),
+    line("guard", input.guard),
+    ...(input.baseline ? [line("baseline", input.baseline)] : []),
+    ...(input.baselineObserved ? [line("baselineObserved", input.baselineObserved)] : []),
+  ].join("\n");
 }
 
 /**

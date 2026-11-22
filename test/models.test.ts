@@ -40,7 +40,7 @@ test("stableHash is deterministic", () => {
 });
 
 test("assignModels keeps the main agent unpinned and syncs a distinct model to every subagent", () => {
-  const candidates = Array.from({ length: 9 }, (_, index) => `a/m${index + 1}`);
+  const candidates = Array.from({ length: 10 }, (_, index) => `a/m${index + 1}`);
   const assigned = assignModels(ROSTER, candidates, false, Math.random, "a/m1");
   assert.equal(assigned[MAIN_AGENT_ID], "", "the main agent keeps the UI-selected model");
   const subagents = Object.entries(assigned).filter(([id]) => id !== MAIN_AGENT_ID);
@@ -86,7 +86,7 @@ test("random assignment still spawns no duplicate subagent model while the pool 
 });
 
 test("free strategy syncs one distinct OpenCode free model to each subagent", async () => {
-  const free = Array.from({ length: 9 }, (_, index) => ({
+  const free = Array.from({ length: 10 }, (_, index) => ({
     providerID: "opencode",
     modelID: `free-${index}`,
     cost: [{ input: 0, output: 0 }],
@@ -106,7 +106,7 @@ test("free strategy syncs one distinct OpenCode free model to each subagent", as
     { customProviderUrl: "", strategy: "free" },
   );
   assert.equal(plan.strategy, "free-fallback");
-  assert.equal(plan.candidates.length, 9);
+  assert.equal(plan.candidates.length, 10);
   assert.equal(plan.assignment[MAIN_AGENT_ID], "", "the main agent follows the UI model");
   const refs = Object.values(plan.assignment).filter(Boolean);
   assert.equal(refs.length, ROSTER.length - 1);

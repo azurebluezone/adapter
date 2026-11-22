@@ -105,6 +105,22 @@ import { buildRunnerIdentity } from "./zombie/runnerIdentity.ts";
 import { openContracts, parseContract } from "./zombie/goalContract.ts";
 import { applyResponseGate } from "./zombie/responseGate.ts";
 import {
+  JUDGE_MAX_QUESTIONS,
+  judgeDue,
+  judgeGate,
+  mutationInScope,
+  type JudgeDebate,
+  type JudgeRuntimeState,
+  type JudgeVerdict,
+} from "./zombie/intentJudge.ts";
+import { uiCard } from "./zombie/uiCard.ts";
+import {
+  addEvidence,
+  MAX_EVIDENCE_OUTPUT,
+  type ToolEvidence,
+  type TurnEvidence,
+} from "./zombie/claimEvidence.ts";
+import {
   BREAKER_LIMIT,
   breakerContext,
   decideBreaker,
@@ -259,6 +275,46 @@ export const DEFAULT_CONFIG: ZombieConfig = {
 // The working directory is never assumed to be the install root.
 const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PLUGIN_PARENT = path.resolve(PLUGIN_DIR, "../..");
+
+type JudgeStorage = { get: (key: string) => Promise<unknown> };
+
+/**
+ * The context pack must show the judge state without making the model ask for
+ * it. Read the plugin-owned storage; a missing or rejected key is "no judge".
+ */
+async function readJudgeRuntimeState(storage: JudgeStorage, sessionID: string): Promise<JudgeRuntimeState> {
+  const empty: JudgeRuntimeState = {
+    due: false,
+    contractID: "",
+    verdict: null,
+    pendingQuestion: null,
+    questions: 0,
+  };
+  if (!sessionID || sessionID === "unknown") return empty;
+  try {
+    const pending = (await storage.get(`judge/pending/${sessionID}`)) as
+      | { contractID?: string; openedAt?: string }
+      | null
+      | undefined;
+    const contractID = String(pending?.contractID ?? "");
+    if (!contractID) return empty;
+    const clock = (await storage.get(`judge/contract/${contractID}`)) as
+      | { openedAt?: string }
+      | null
+      | undefined;
+    const verdict = (await storage.get(`judge/verdict/${contractID}`)) as JudgeVerdict | null | undefined;
+    const debate = (await storage.get(`judge/debate/${contractID}`)) as JudgeDebate | null | undefined;
+    return {
+      due: judgeDue(clock?.openedAt ?? pending?.openedAt),
+      contractID,
+      verdict: verdict?.status ?? null,
+      pendingQuestion: debate?.questions.find((entry) => !entry.answer)?.question ?? null,
+      questions: debate?.questions.length ?? 0,
+    };
+  } catch {
+    return empty;
+  }
+}
 export const GLOBAL_CONFIG_DIR = path.join(
   process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"),
   "opencode",
@@ -1112,7 +1168,12 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
     reloadTools: async () => {
       await ctx.tool?.reload?.();
     },
-    synthetic: async (input: { sessionID: string; text: string; description?: string }) => {
+    synthetic: async (input: {
+      sessionID: string;
+      text: string;
+      description?: string;
+      metadata?: Record<string, unknown>;
+    }) => {
       const door = (ctx as any).session?.synthetic;
       if (typeof door !== "function") throw new Error("session.synthetic unavailable");
       // Synthetic cards arrive in the model request as user messages; remember
@@ -1159,6 +1220,22 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
     return "registered (apply pending)";
   });
   report.outputs.tools = tools;
+
+  // Footprint health is part of setup, not only the watchdog: a fresh install
+  // must write its problems and the big-project roadmap before the first
+  // conversation. The scan is after every setup write, so the counts are real.
+  const footprint = step("project-footprint", () => {
+    const scanned = scanProject(root!);
+    return recordProjectFootprint(root!, scanned);
+  });
+  report.outputs.footprint = footprint
+    ? {
+        appended: footprint.appended,
+        marker: footprint.marker,
+        problems: footprint.problems,
+        roadmap: footprint.roadmap,
+      }
+    : null;
 
   // Run the first-input evidence pass after every setup write (opencode.json,
   // agent markdown, skills). A stale fingerprint would record the tree as it was
@@ -1240,6 +1317,12 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
     | ((input: { sessionID: string; agentID: string; outcome: ContractOutcome }) => Promise<void>)
     | null = null;
 
+  // What the tools actually did in this turn. Both the session-hook block (the
+  // response gate) and the tool-hook block (the ledger writer) need it, so it
+  // lives at setup scope. The response gate reads this ledger instead of
+  // trusting a phrase the model wrote in its own answer.
+  const turnEvidence = new Map<string, TurnEvidence>();
+
   if (ctx.session?.hook) {
     const contextHook = await stepAsync("hook-context", () =>
       ctx.session!.hook!("context", async (event: any) => {
@@ -1315,7 +1398,19 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           messages,
           (text) => isSyntheticText(text, syntheticHashes),
         );
-        const pack = buildContextPack(projectRoot, agentID, recent, userMessage, sessionID, PLUGIN_PARENT);
+        // The judge needs the request that opened the contract, not the latest
+        // tool-loop message. Freeze the current user turn here; goal_contract
+        // open copies it into the contract's intent snapshot.
+        if (sessionID && sessionID !== "unknown" && userMessage.trim()) {
+          await ctx.storage.set(`judge/request/${sessionID}`, {
+            text: userMessage.slice(0, 4000),
+            at: new Date().toISOString(),
+          });
+        }
+        const judgeRuntime = await readJudgeRuntimeState(ctx.storage, sessionID);
+        const pack = buildContextPack(projectRoot, agentID, recent, userMessage, sessionID, PLUGIN_PARENT, {
+          judge: judgeRuntime,
+        });
         recordCompactTask(projectRoot, sessionID, userMessage, pack.intent, recent.length);
 
         // Route state is plugin-owned. It is created per user turn and carried
@@ -1613,6 +1708,9 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
     const sessionHook = await stepAsync("hook-session-index", () =>
       ctx.session!.hook!("prompt", async (event: any) => {
         const sessionID = String(event?.sessionID ?? "unknown");
+        // A new user turn starts a new evidence window: last turn's test run
+        // cannot certify this turn's claim.
+        turnEvidence.delete(sessionID);
         const projectRoot = await resolveSessionRoot(sessionID);
         try {
           scaffoldProject(projectRoot);
@@ -1688,11 +1786,13 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           return;
         }
         if (decision.action === "stop") {
-          await notify({
-            sessionID,
-            text: unresolvedMessage(nextState, decision.limit),
-            description: "zombiecoder circuit breaker",
-          });
+          await notify(
+            uiCard({
+              sessionID,
+              kind: "circuit-breaker-stop",
+              text: unresolvedMessage(nextState, decision.limit),
+            }),
+          );
           audit(projectRoot, "plugin", {
             kind: "agent.breaker.open",
             sessionID,
@@ -1704,11 +1804,13 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
         }
         // Same agent, same model, same accountability. The retry carries the
         // failure evidence; there is no switchAgent and no delegation.
-        await notify({
-          sessionID,
+        await notify(
+          uiCard({
+            sessionID,
+            kind: "circuit-breaker-retry",
             text: statusMessage(trackedFailure, decision),
-          description: "zombiecoder circuit breaker",
-        });
+          }),
+        );
         if (input.queueRetry) {
           if (typeof session?.prompt !== "function") {
             audit(projectRoot, "plugin", {
@@ -1868,12 +1970,89 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
               }
             };
             const gateOptions: GateOptions = { allowedRoot: projectRoot };
+            gateOptions.evidence = turnEvidence.get(sessionID) ?? { entries: [] };
+            gateOptions.contract = routeRun?.contract ?? null;
+            // Hardcoded intent judge: after the contract has been open for
+            // three minutes, a worker answer is released only by a stored PASS
+            // for that contract. The judge's own turn is exempt.
+            let judgeState: { due: boolean; verdict: JudgeVerdict | null; contractID: string } = {
+              due: false,
+              verdict: null,
+              contractID: "",
+            };
+            try {
+              const pending = (await ctx.storage.get(`judge/pending/${sessionID}`)) as
+                | { contractID?: string; openedAt?: string }
+                | null
+                | undefined;
+              const contractID = String(pending?.contractID ?? routeRun?.contract?.id ?? "");
+              if (contractID) {
+                const clock = (await ctx.storage.get(`judge/contract/${contractID}`)) as
+                  | { openedAt?: string }
+                  | null
+                  | undefined;
+                const verdict = (await ctx.storage.get(`judge/verdict/${contractID}`)) as
+                  | JudgeVerdict
+                  | null
+                  | undefined;
+                judgeState = {
+                  due: judgeDue(clock?.openedAt ?? pending?.openedAt),
+                  verdict: verdict ?? null,
+                  contractID,
+                };
+              }
+            } catch (error: any) {
+              audit(projectRoot, String(event?.agent ?? "unknown"), {
+                kind: "intent_judge.state.error",
+                sessionID,
+                error: redact(String(error?.message ?? error)),
+              });
+            }
+            const judgeTurn = String(event?.agent ?? "") === "intent-judge";
+            // The user must see why the answer stopped. One card per contract,
+            // not one per retry: repeated notices are noise, not evidence.
+            if (judgeState.due && !judgeState.verdict && judgeState.contractID && !judgeTurn) {
+              const dueKey = `judge/ui/${judgeState.contractID}/due`;
+              if (!(await ctx.storage.get(dueKey))) {
+                await ctx.storage.set(dueKey, { at: new Date().toISOString() });
+                try {
+                  await deps.synthetic(
+                    uiCard({
+                      sessionID,
+                      kind: "intent-judge-due",
+                      text: [
+                        "Intent judge due",
+                        "",
+                        `Contract: ${judgeState.contractID}`,
+                        "The contract has been open for three minutes. The worker answer is blocked until an independent verdict exists.",
+                        "",
+                        "Next: call `intent_judge` action=prompt, launch the `intent-judge` subagent with that prompt, answer its question, and let it record PASS or FAIL.",
+                      ].join("\n"),
+                    }),
+                  );
+                } catch {
+                  // The gate still blocks; the audit trail is the durable record.
+                }
+              }
+            }
             if (routeRun) {
               gateOptions.route = (parsed) => {
                 const routed = routeForResponse(routeRun, parsed);
                 routeNext = routed.run;
                 routeRelease = routed.check;
-                return { passed: routed.check.ok, reason: routed.check.reason };
+                if (!routed.check.ok) {
+                  return { passed: false, reason: routed.check.reason };
+                }
+                const judge = judgeGate({
+                  due: judgeState.due,
+                  verdict: judgeState.verdict,
+                  judgeTurn,
+                  contractID: judgeState.contractID || undefined,
+                });
+                return {
+                  passed: judge.ok,
+                  reason: judge.ok ? routed.check.reason : judge.reason,
+                };
               };
             }
             const result = await applyResponseGate(event.response, gateOptions);
@@ -2213,6 +2392,12 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           }
         }
 
+        if (canonicalTool(tool) === "intent_judge") {
+          // The verdict tool reads this marker. It is set by the plugin, not by
+          // the prompt, so a worker cannot claim to be the judge.
+          await ctx.storage.set(`judge/agent/${sessionID}`, { agent: agentID });
+        }
+
         if (!MUTATING_TOOLS.has(tool)) return;
         const fileTarget = String(input.filePath ?? input.path ?? input.file ?? "").replace(/\\/g, "/");
         const targets = [fileTarget, ...patchTargets(input)]
@@ -2225,6 +2410,32 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
         const shellWrite = analyzeShell(commandText);
         const shellMutates = (tool === "shell" || tool === "bash" || tool === "command" || tool === "execute") && shellWrite.mutates;
 
+        // Per-tool scope monitor: the open contract's `scope` bounds every
+        // mutating call. A shell write with no resolvable target is out of
+        // scope once a bound exists, because it could touch anything.
+        const activeContract = (await ctx.storage.get(`goal/active/${sessionID}`)) as
+          | { id?: string; scope?: string }
+          | null
+          | undefined;
+        const contractScope = String(activeContract?.scope ?? "");
+        if (contractScope && (MUTATING_TOOLS.has(tool) || shellMutates)) {
+          const scopeTarget = fileTarget || shellWrite.targets[0] || "";
+          if (!mutationInScope(contractScope, tool, scopeTarget)) {
+            audit(projectRoot, agentID, {
+              kind: "intent_judge.scope.block",
+              sessionID,
+              tool,
+              contract: activeContract?.id ?? null,
+              scope: contractScope,
+              target: scopeTarget || null,
+              reason: "mutating tool target is outside the contract scope",
+            });
+            throw new Error(
+              `tool "${tool}" target "${scopeTarget || "(unresolved)"}" is outside contract ${activeContract?.id ?? "(unknown)"}'s scope (${contractScope}). ` +
+                "Keep the change inside the approved scope, or open a new contract for the wider change.",
+            );
+          }
+        }
         // The plugin is a separate module. A session working in another project
         // must not edit the plugin source or install root: the agent would be
         // changing the rules it is being judged by. Read-only inspection stays
@@ -2371,6 +2582,25 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           consecutiveFailures: count,
         });
 
+        // Record what this tool actually returned before anything else. The
+        // response gate treats this ledger as the only evidence a claim can
+        // cite; a phrase the model wrote is never enough.
+        try {
+          const observed = extractToolOutput(event);
+          const observedText =
+            typeof observed === "string" ? observed : JSON.stringify(observed ?? "");
+          const entry: ToolEvidence = {
+            tool: String(event?.tool ?? ""),
+            status: String(event?.status ?? "unknown"),
+            input: event?.input ?? null,
+            output: observedText.slice(0, MAX_EVIDENCE_OUTPUT),
+          };
+          turnEvidence.set(sessionID, addEvidence(turnEvidence.get(sessionID), entry));
+        } catch {
+          // A ledger write must never fail the tool; an empty ledger only makes
+          // the response gate stricter.
+        }
+
         // Keep the full body when it is too large for a prompt. The audit row
         // names the artifact so a later answer can cite it instead of guessing.
         try {
@@ -2478,17 +2708,19 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
         const door = (ctx as any).session?.synthetic;
         if (typeof door === "function") {
           try {
-            await door({
-              sessionID,
-              description: "zombiecoder tool breaker",
-              text: [
-                `**Tool breaker:** \`${agentID}\` পরপর ${count}টি tool error পেয়েছে।`,
-                "",
-                "দায়িত্ব সরানো হয়নি, মডেল বদলানো হয়নি। এখন:",
-                "1. error message/output দিন — একই এজেন্ট আবার চেষ্টা করবে।",
-                "2. কাজটা ছোট করুন বা নতুন নির্দেশ দিন।",
-              ].join("\n"),
-            });
+            await door(
+              uiCard({
+                sessionID,
+                kind: "tool-breaker",
+                text: [
+                  `Tool breaker: \`${agentID}\` পরপর ${count}টি tool error পেয়েছে।`,
+                  "",
+                  "দায়িত্ব সরানো হয়নি, মডেল বদলানো হয়নি। এখন:",
+                  "1. error message/output দিন, একই এজেন্ট আবার চেষ্টা করবে।",
+                  "2. কাজটা ছোট করুন বা নতুন নির্দেশ দিন।",
+                ].join("\n"),
+              }),
+            );
           } catch {
             /* the audit row is the durable record */
           }

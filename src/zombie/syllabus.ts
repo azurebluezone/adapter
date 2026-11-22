@@ -4,8 +4,9 @@
 // APPEND-ONLY: nothing in this module ever truncates it. If it is missing the
 // agent seeds it from the SSOT fingerprint rather than asking the user.
 
-import { appendJsonl, docWithSignature, readJsonl, readText, writeAtomic } from "./io.ts";
+import { appendJsonl, docWithSignature, readJsonl, readText, sha256, writeAtomic } from "./io.ts";
 import { auditFile, syllabusFile } from "./paths.ts";
+import { ROADMAP_MIN_FILES, recordRoadmap } from "./roadmap.ts";
 import type { Fingerprint } from "./scan.ts";
 import { LEGACY_AGENT_IDS } from "../roster.ts";
 
@@ -220,7 +221,47 @@ export function appendSyllabus(  projectRoot: string,
 // same lesson again. The marker line is the dedupe key: it is derived from the
 // live fingerprint, so a changed tree produces a new lesson and an unchanged tree
 // stays silent.
-export type FootprintRecord = { appended: boolean; file: string; marker: string };
+export type FootprintRecord = {
+  appended: boolean;
+  file: string;
+  marker: string;
+  /** Real gaps found in the bounded scan; the lesson writes them for the next session. */
+  problems: string[];
+  roadmap: { big: boolean; file: string; next: string | null; written: boolean };
+};
+
+/**
+ * Problems a bounded scan can prove without reading every file. The onboarding
+ * pass adds deeper evidence (TODO markers, log errors, git drift); this list is
+ * the cheap footprint health that every setup and watchdog pass can afford.
+ */
+export function footprintProblems(fp: Fingerprint): string[] {
+  const files = fp.files;
+  const has = (pattern: RegExp): boolean => files.some((file) => pattern.test(file));
+  const problems: string[] = [];
+  if (Object.keys(fp.manifests).length === 0) {
+    problems.push("No supported manifest at the root; dependency and build facts are unknown.");
+  }
+  if (!has(/(?:^|\/)(?:test|tests|__tests__)\//) && !has(/\.(?:test|spec)\.[a-z0-9]+$/i)) {
+    problems.push("No test files detected; behaviour cannot be re-proved from the repo alone.");
+  }
+  if (!has(/^README(?:\.[a-z0-9]+)?$/i)) {
+    problems.push("No README at the root; the project's stated purpose is not written down.");
+  }
+  if (!has(/^docs?\//i)) {
+    problems.push("No docs/ directory; documentation drift is invisible.");
+  }
+  if (!has(/^scripts\/check[-.]/i)) {
+    problems.push("No scripts/check-* verification script; a release gate has no runnable command.");
+  }
+  if (!has(/^\.github\/workflows\//i)) {
+    problems.push("No CI workflow; checks are not enforced on change.");
+  }
+  if (fp.indexTruncated) {
+    problems.push(`File index truncated: ${fp.indexedFiles}/${fp.totalFiles}; use project_fingerprint for the rest.`);
+  }
+  return problems;
+}
 
 function auditSummary(projectRoot: string): string[] {
   const rows = readJsonl<any>(auditFile(projectRoot), 500);
@@ -247,9 +288,26 @@ function auditSummary(projectRoot: string): string[] {
 
 export function recordProjectFootprint(projectRoot: string, fp: Fingerprint): FootprintRecord {
   const file = syllabusFile(projectRoot);
-  const marker = `fp:${fp.totalFiles}/${fp.totalBytes}/${fp.languages.slice(0, 3).map((l) => l.name).join("+") || "unknown"}`;
+  const roadmap = recordRoadmap(projectRoot, fp);
+  const problems = footprintProblems(fp);
+  // The problems digest is part of the marker: fixing a missing test/README
+  // changes the lesson even when the file count and byte count stay the same.
+  const problemDigest = sha256(problems.join("\n")).slice(0, 8);
+  const marker = `fp:${fp.totalFiles}/${fp.totalBytes}/${fp.languages.slice(0, 3).map((l) => l.name).join("+") || "unknown"}/${problemDigest}`;
   const existing = readText(file) ?? "";
-  if (existing.includes(marker)) return { appended: false, file, marker };
+  const result = {
+    appended: false,
+    file,
+    marker,
+    problems,
+    roadmap: {
+      big: roadmap.roadmap.big,
+      file: roadmap.file,
+      next: roadmap.roadmap.next,
+      written: roadmap.written,
+    },
+  };
+  if (existing.includes(marker)) return result;
   const langs = fp.languages.slice(0, 6).map((l) => `${l.name}(${l.files})`).join(", ") || "unknown";
   const dirs = fp.topLevel.slice(0, 8).map((t) => "`" + t.name + (t.kind === "dir" ? "/" : "") + "`").join(", ") || "none";
   const summary = [
@@ -260,6 +318,17 @@ export function recordProjectFootprint(projectRoot: string, fp: Fingerprint): Fo
     `- Top level: ${dirs}`,
     `- Markers: ${fp.markers.join(", ") || "none"}`,
     "",
+    "**Problems found**",
+    "",
+    ...(problems.length > 0 ? problems.map((problem) => `- ${problem}`) : ["- none detected by the bounded scan"]),
+    "",
+    "**Roadmap**",
+    "",
+    roadmap.roadmap.big
+      ? `- File: \`${roadmap.file}\`; phases: ${roadmap.roadmap.phases.map((phase) => phase.name).join(", ")}`
+      : `- Not generated: ${fp.totalFiles} files is below the ${ROADMAP_MIN_FILES}-file big-project threshold.`,
+    roadmap.roadmap.next ? `- Next open item: ${roadmap.roadmap.next}` : "- No open roadmap item.",
+    "",
     "Carried from the previous audit trail:",
     "",
     ...auditSummary(projectRoot),
@@ -267,5 +336,5 @@ export function recordProjectFootprint(projectRoot: string, fp: Fingerprint): Fo
     "Next action: read SSOT section 3 before opening files; do not re-scan the tree unless the fingerprint is stale.",
   ].join("\n");
   appendSyllabus(projectRoot, "Project footprint (auto)", summary, auditFile(projectRoot));
-  return { appended: true, file, marker };
+  return { ...result, appended: true };
 }

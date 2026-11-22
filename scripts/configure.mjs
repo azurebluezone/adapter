@@ -109,7 +109,7 @@ function globalAgentReport(configDir) {
   const cfg = readJsonFile(file);
   if (!cfg || typeof cfg.agents !== "object") return { ok: false, reason: "agents block missing" };
   const missing = EXPECTED_AGENT_IDS.filter((id) => !cfg.agents[id]);
-  const badMode = EXPECTED_AGENT_IDS.filter((id) => cfg.agents[id]?.mode !== "all");
+  const badMode = EXPECTED_AGENT_IDS.filter((id) => cfg.agents[id]?.mode !== (id === "intent-judge" ? "subagent" : "all"));
   const badPerm = EXPECTED_AGENT_IDS.filter(
     (id) =>
       !Array.isArray(cfg.agents[id]?.permissions) ||
@@ -273,7 +273,7 @@ Options:
   -h, --help     this text
 
 What it does:
-  1. verifies the global install (${EXPECTED_AGENT_IDS.length} roster agents, mode:all, subagent allow)
+  1. verifies the global install (${EXPECTED_AGENT_IDS.length} roster agents, mode:all except intent-judge=subagent)
   2. creates .zombiecoder/{memory,.state}
   3. asks the running OpenCode server to reload the location
   4. if OpenCode is not running, generates SSOT.md and syllabus.md directly

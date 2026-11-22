@@ -140,9 +140,9 @@ test("resolveAgentController applies config overrides without mutating the base"
   assert.equal(resolveAgentController("nope", { nope: "all" }), undefined);
 });
 
-test("modeMatrix covers 9 agents x 3 modes and reports the effective current mode", () => {
+test("modeMatrix covers 10 agents x 3 modes and reports the effective current mode", () => {
   const matrix = modeMatrix({ manu: "subagent", nila: "primary" });
-  assert.equal(matrix.length, 9);
+  assert.equal(matrix.length, 10);
   for (const row of matrix) {
     assert.deepEqual(Object.keys(row.cells).sort(), ["all", "primary", "subagent"]);
     assert.equal(row.cells.primary.asPrimary, true);

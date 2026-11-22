@@ -11,6 +11,7 @@ import {
   SHARED_RULES,
 } from "./shared.ts";
 import { BASE_PHASE_TOOLS } from "./defaults.ts";
+import { domainSkillsFor } from "./domainSkills.ts";
 import {
   advance,
   isConsentFor,
@@ -66,7 +67,15 @@ export function toolMatches(entry: string, tool: string): boolean {
 
 export function agentProfileMarker(profile: AgentProfile): string {
   const digest = createHash("sha256")
-    .update(JSON.stringify([profile, SHARED_RULES, SHARED_EXECUTION, SHARED_EXPERTISE]))
+    .update(
+      JSON.stringify([
+        profile,
+        domainSkillsFor(profile.id),
+        SHARED_RULES,
+        SHARED_EXECUTION,
+        SHARED_EXPERTISE,
+      ]),
+    )
     .digest("hex")
     .slice(0, 16);
   return `<!-- zombiecoder-agent-profile:${profile.id}:${digest} -->`;
@@ -101,6 +110,12 @@ export function renderAgentPrompt(profile: AgentProfile): string {
     profile.skillFocus?.length ? "**Skill Focus:** " + profile.skillFocus.join(", ") : "",
     profile.skillFocus?.length
       ? "Full skill map: `docs/skill-map.md`; websearch to extend."
+      : "",
+    // The persona says who the agent is; this line says what it can actually
+    // do. It is generated from the AgentID-keyed map, so a new agent cannot
+    // ship with a persona and an empty knowledge base.
+    domainSkillsFor(profile.id).length
+      ? "**Domain Skills:** " + domainSkillsFor(profile.id).join(", ")
       : "",
     "",
     "**Responsibilities:** " + profile.duties.join(", "),

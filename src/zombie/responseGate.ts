@@ -13,6 +13,14 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import {
+  contractCompares,
+  isComparativeClaim,
+  mutationTouched,
+  phraseObserved,
+  type ContractScope,
+  type TurnEvidence,
+} from "./claimEvidence.ts";
 
 export const DEFAULT_MIN_RESPONSE_LENGTH = 40;
 
@@ -68,6 +76,12 @@ const CLAIM_MARKERS: RegExp[] = [
   /(?:সব|সবকিছু)\s+(?:ঠিক|ভালো|ঠিকঠাক|কাজ\s+করছে)/,
   /(?:ফিক্স|ঠিক|সমাধান|শেষ|পাস|ইনস্টল|কনফিগার|আপডেট|তৈরি|বদল|যোগ|মুছে)\S*\s*(?:করেছি|করে\s+ফেলেছি|হয়ে\s+গেছে|হয়েছে|সম্পন্ন\s+হয়েছে)/,
   /(?:টেস্ট|বিল্ড|কাজ|সেটআপ)\S*\s*(?:পাস\s+করেছে|শেষ\s+হয়েছে|সম্পন্ন\s+হয়েছে|সফল\s+হয়েছে)/,
+  // Passive change claims: "বসানো হয়েছে", "রাখা হয়েছে", "করা হয়েছে".
+  // Without these the real #148 answer ("ডিজাইন ... রাখা হয়েছে") was not a
+  // claim at all, so the provenance rules never ran and a prose test phrase
+  // was accepted as proof.
+  /(?:বসানো|রাখা|বদলানো|তৈরি|যোগ|মুছে\s+ফেলা|লেখা|করা|ঠিক\s+করা|ইনস্টল\s+করা|আপডেট\s+করা|কনফিগার\s+করা|ডিপ্লয়\s+করা)\s+হয়েছে/,
+  /কাজ\s+(?:শেষ|হয়ে\s+গেছে|সম্পন্ন)/,
   /\b(?:everything|all)\s+(?:works?|is\s+fixed|is\s+done|is\s+ready)\b/i,
 ];
 
@@ -110,6 +124,8 @@ export function isStandInPath(file: string, root: string): boolean {
 const OUTCOME_CLAIM_MARKERS: RegExp[] = [
   /\b(?:fixed|solved|resolved|works?|working|done|installed|deployed|configured|completed?|ready)\b/i,
   /(?:ঠিক|সমাধান|ফিক্স|ইনস্টল|কনফিগার|আপডেট|তৈরি)\S*\s*(?:করেছি|করে\s+ফেলেছি|হয়ে\s+গেছে|হয়েছে|সম্পন্ন\s+হয়েছে)/,
+  /(?:বসানো|রাখা|বদলানো|তৈরি|যোগ|মুছে\s+ফেলা|লেখা|করা)\s+হয়েছে/,
+  /কাজ\s+(?:শেষ|হয়ে\s+গেছে|সম্পন্ন)/,
   /(?:সব|সবকিছু)\s+(?:ঠিক|ভালো|ঠিকঠাক|কাজ\s+করছে)/,
 ];
 
@@ -418,7 +434,12 @@ function validLineCitation(file: string, start: number, end: number): boolean {
 
 export function evaluateResponse(
   text: string,
-  options: { allowedRoot: string; minLength?: number },
+  options: {
+    allowedRoot: string;
+    minLength?: number;
+    evidence?: TurnEvidence;
+    contract?: ContractScope | null;
+  },
 ): ResponseVerdict {
   const trimmed = String(text ?? "").trim();
   const minLength = options.minLength ?? DEFAULT_MIN_RESPONSE_LENGTH;
@@ -616,6 +637,55 @@ export function evaluateResponse(
       }
     }
   }
+
+  // The processor's record outranks the model's prose. A cited phrase counts
+  // only when a tool result actually contained it; a "changed this file" claim
+  // needs a mutation in this turn; and "same / পুরো / হুবহু" needs a check that
+  // compares. Without these three rules a model passes by writing its own
+  // evidence — which is exactly how "34 checks run, 0 failed" certified a
+  // design that was not the same.
+  const processorClaim = CLAIM_MARKERS.some((pattern) => pattern.test(trimmed));
+  if (
+    processorClaim &&
+    options.contract !== undefined &&
+    isComparativeClaim(trimmed) &&
+    !contractCompares(options.contract)
+  ) {
+    return {
+      ...base,
+      passed: false,
+      violations: ["claim:beyond-contract-scope"],
+      reason: "comparative/global claim without a comparison check in the contract",
+    };
+  }
+  if (options.evidence !== undefined) {
+    const cited = new Set(resolvedPaths.map((entry) => entry.candidate));
+    for (const phrase of matched) {
+      if (cited.has(phrase)) continue;
+      if (!phraseObserved(phrase, options.evidence)) {
+        return {
+          ...base,
+          passed: false,
+          violations: ["evidence:not-observed"],
+          reason: `evidence not observed in a tool result: ${phrase}`,
+        };
+      }
+    }
+    if (
+      processorClaim &&
+      OUTCOME_CLAIM_MARKERS.some((pattern) => pattern.test(trimmed)) &&
+      paths.length > 0 &&
+      !paths.some((candidate) => mutationTouched(candidate, options.evidence))
+    ) {
+      return {
+        ...base,
+        passed: false,
+        violations: ["claim:no-mutation"],
+        reason: "mutation missing: change claim cites a file that no mutating tool touched in this turn",
+      };
+    }
+  }
+
   if (matched.length > 0) {
     return { ...base, passed: true, matched, reason: `evidence: ${matched[0]}` };
   }
@@ -826,6 +896,17 @@ export type GateOptions = {
   minLength?: number;
   /** Plugin-owned route check. Runs after parsing, before release. */
   route?: (parsed: ParsedResponse) => RouteDecision;
+  /**
+   * Tool results the plugin observed in this turn. When present, a phrase in
+   * the answer is evidence only if a real tool output contained it. The plugin
+   * always passes this; a bare unit test may omit it.
+   */
+  evidence?: TurnEvidence;
+  /**
+   * Contract snapshot for this run. A comparative/global claim needs a check
+   * that compares; `null` means no contract proved a comparison.
+   */
+  contract?: ContractScope | null;
 };
 
 function safeRoute(

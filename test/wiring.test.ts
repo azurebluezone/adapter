@@ -43,7 +43,7 @@ test("tool registration survives MCP names that shadow a ZombieCoder tool", asyn
 
   const applied = await registration.applied;
   assert.equal(applied.error, undefined);
-  assert.equal(applied.registered.length, 28, "all 28 ZombieCoder tools must register");
+  assert.equal(applied.registered.length, 29, "all 29 ZombieCoder tools must register");
   for (const name of ["append_syllabus", "read_ssot", "env_get"]) {
     assert.ok(
       applied.registered.includes(`zombiecoder_${name}`),
@@ -57,7 +57,7 @@ test("tool registration survives MCP names that shadow a ZombieCoder tool", asyn
   );
   assert.ok(ids.includes("public-api_append_syllabus"), "the MCP tool keeps its own id");
   assert.ok(ids.includes("zombiecoder_append_syllabus"), "the plugin tool must be present too");
-  assert.equal(ids.length, 31, "3 MCP tools + 28 ZombieCoder tools");
+  assert.equal(ids.length, 32, "3 MCP tools + 29 ZombieCoder tools");
 
   // Workflow tools used in phases that deny `execute` must be direct calls:
   // a route gate sees the top-level tool name, and the Code Mode wrapper is
@@ -79,7 +79,7 @@ test("tool registration survives MCP names that shadow a ZombieCoder tool", asyn
   const surface = JSON.parse(
     fs.readFileSync(path.join(root, ".zombiecoder", ".state", "tool-surface.json"), "utf8"),
   );
-  assert.equal(surface.zombiecoder.length, 28);
+  assert.equal(surface.zombiecoder.length, 29);
   assert.ok(surface.zombiecoder.includes("zombiecoder_append_syllabus"));
   assert.ok(surface.surface.includes("public-api_append_syllabus"));
 
@@ -96,6 +96,7 @@ test("respond phase receives the release tools as direct calls, not the Code Mod
       "append_syllabus",
       "context_status",
       "goal_contract",
+      "intent_judge",
       "memory_archive",
       "project_fingerprint",
       "project_onboarding",
@@ -123,10 +124,10 @@ test("respond phase receives the release tools as direct calls, not the Code Mod
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test("the source surface has 28 tools including the shadowed and symbol tools", () => {
+test("the source surface has 29 tools including the shadowed and symbol tools", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "zc-specs-"));
   const names = toolSpecs(depsFor(root)).map((spec) => spec.name);
-  assert.equal(names.length, 28);
+  assert.equal(names.length, 29);
   for (const name of [
     "append_syllabus",
     "read_ssot",
@@ -156,10 +157,14 @@ test("one shared intent classifier keeps route and context in sync", () => {
   assert.equal(classifyTask("ফাইলগুলো দেখে বলো কী আছে"), "readonly");
 });
 
-test("all nine agents are main-selectable and know the shared context and MCP surfaces", () => {
-  assert.equal(ROSTER.length, 9);
+test("all ten agents are main-selectable and know the shared context and MCP surfaces", () => {
+  assert.equal(ROSTER.length, 10);
   for (const agent of ROSTER) {
-    assert.equal(agent.mode, "all", `${agent.id} must stay selectable as a main agent`);
+    assert.equal(
+      agent.mode,
+      agent.id === "intent-judge" ? "subagent" : "all",
+      `${agent.id} has the wrong mode`,
+    );
     const prompt = agentSystemPrompt(agent);
     assert.match(prompt, /### Context you are given/, `${agent.id} does not know the context sources`);
     assert.match(prompt, /### Complexity budget/, `${agent.id} has no anti-overthink budget`);

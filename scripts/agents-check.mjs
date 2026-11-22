@@ -23,11 +23,11 @@ function check(name, fn) {
   }
 }
 
-check("nine controllers in roster order", () => {
-  assert.equal(AGENT_CONTROLLERS.length, 9);
+check("ten controllers in roster order", () => {
+  assert.equal(AGENT_CONTROLLERS.length, 10);
   assert.deepEqual(
     AGENT_CONTROLLERS.map((controller) => controller.id),
-    ["manu", "jarin", "brishti", "rashed", "halim", "majnu", "nila", "tuhin", "zombiecoder"],
+    ["manu", "jarin", "brishti", "rashed", "halim", "majnu", "nila", "tuhin", "zombiecoder", "intent-judge"],
   );
   assert.deepEqual(AGENT_CONTROLLERS.map((controller) => controller.id), ROSTER.map((a) => a.id));
 });

@@ -53,7 +53,12 @@ function makeContext(root: string, options: { models?: any[] } = {}) {
   const agentSwitches: Array<{ sessionID: string; agent: string }> = [];
   const modelSwitches: Array<{ sessionID: string; model: any }> = [];
   const switchState = { fail: false, failModel: false };
-  const synthetics: Array<{ sessionID: string; text: string; description?: string }> = [];
+  const synthetics: Array<{
+    sessionID: string;
+    text: string;
+    description?: string;
+    metadata?: Record<string, unknown>;
+  }> = [];
   const permissions: Array<{
     sessionID: string;
     action: string;
@@ -238,7 +243,7 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   assert.ok(fs.existsSync(path.join(root, ".zombiecoder", "memory", "index.json")), "memory index missing");
 
   const agents = fs.readdirSync(path.join(root, ".opencode", "agents"));
-  assert.equal(agents.length, 9);
+  assert.equal(agents.length, 10);
   assert.ok(agents.includes("zombiecoder.md"), "renamed agent markdown missing");
   assert.ok(!agents.includes("kobir.md"), "old agent markdown must not survive the rename");
   const manu = fs.readFileSync(path.join(root, ".opencode", "agents", "manu.md"), "utf8");
@@ -310,7 +315,11 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   assert.equal(config.agents.manu.mode, "all");
   const configAgents = config.agents as Record<string, any>;
   for (const [id, agent] of Object.entries(configAgents)) {
-    assert.equal(agent.mode, "all", "every agent must be a main agent, not a subagent");
+    assert.equal(
+      agent.mode,
+      id === "intent-judge" ? "subagent" : "all",
+      `${id} has the wrong mode`,
+    );
     const subagentRules = (agent.permissions ?? []).filter((rule: any) => rule.action === "subagent");
     assert.ok(subagentRules.length > 0, `${id}: subagent permission missing`);
     const allowedTargets = allowedSpecialistTargets(id);
@@ -339,7 +348,7 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   assert.doesNotMatch(ssot, /^## .*Model plan/m);
   assert.doesNotMatch(ssot, /^## .*MCP/m);
 
-  assert.equal(fake.tools.length, 28);
+  assert.equal(fake.tools.length, 29);
   assert.ok(fake.tools.every((tool) => tool.output), "every tool must declare an output schema");
   assert.ok(fake.tools.some((tool) => tool.name === "subagent_context"), "subagent_context tool missing");
   assert.ok(fake.tools.some((tool) => tool.name === "tool_result_read"), "tool_result_read tool missing");
@@ -520,15 +529,19 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   assert.deepEqual(openConsent[openConsent.length - 1].save, [root], "Allow always must remember this project");
   assert.equal(openConsent[openConsent.length - 1].metadata?.goal, "checkout returns an order id");
   const previewCard = fake.synthetics.find(
-    (entry) => entry.description === "goal contract preview",
+    (entry) => entry.metadata?.source === "goal" && entry.metadata?.kind === "goal-contract-open",
   );
-  assert.ok(previewCard, "goal_contract open must show a synthetic preview card");
-  assert.match(previewCard.text, /👍 দেখে নাও|permission dialog/);
+  assert.ok(previewCard, "goal_contract open must show a visible synthetic goal card");
+  assert.match(previewCard.description!, /তুমি চাইছ/, "the visible description carries the contract");
+  assert.match(previewCard.description!, /\{"id":7,"total":42\}/);
+  assert.match(previewCard.description!, /মিলানোর নিয়ম: json/);
+  assert.match(previewCard.text, /permission dialog/);
   assert.match(previewCard.text, /Allow once/);
   assert.match(previewCard.text, /Allow always/);
   assert.match(previewCard.text, /Reject/);
   assert.doesNotMatch(previewCard.text, /Yes দিলে/, "the preview must use the real permission labels");
-  assert.match(previewCard.text, /✋ ভুল মনে হলে/);
+  assert.match(previewCard.text, /ভুল মনে হলে/);
+  assert.doesNotMatch(previewCard.text, /[👍✋]/u, "the visible card carries no emoji");
   assert.doesNotMatch(previewCard.text, /"হ্যাঁ"/, "no confirmation word is requested");
   const syllabusAfterOpen = fs.readFileSync(path.join(root, ".zombiecoder", "syllabus.md"), "utf8");
   assert.match(syllabusAfterOpen, new RegExp(`Goal Contract ${opened.id}`));
@@ -566,7 +579,7 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
     "close must propose no durable pattern, so every close asks again",
   );
   const closePreview = fake.synthetics.find(
-    (entry) => entry.description === "goal contract close preview",
+    (entry) => entry.metadata?.kind === "goal-contract-close-preview",
   );
   assert.ok(closePreview, "goal_contract close must show its own preview card");
   assert.match(closePreview.text, /শেষ ধাপ/);
@@ -574,7 +587,7 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   assert.match(closePreview.text, /সেভ হয় না/);
   assert.match(closePreview.text, new RegExp(opened.id));
   const resultCard = fake.synthetics.find(
-    (entry) => entry.description === "goal contract result",
+    (entry) => entry.metadata?.kind === "goal-contract-result",
   );
   assert.ok(resultCard, "goal_contract close must show a synthetic result card");
   assert.match(resultCard.text, /PASS/);
@@ -735,7 +748,7 @@ test("setup scaffolds .zombiecoder, writes agent markdown, and registers doors",
   const report = JSON.parse(fs.readFileSync(path.join(root, ".zombiecoder", ".state", "setup-report.json"), "utf8"));
   const toolStep = report.steps.find((step: any) => step.step === "register-tools");
   assert.equal(toolStep.ok, true);
-  assert.equal(toolStep.detail, "28 registered, 28 live");
+  assert.equal(toolStep.detail, "29 registered, 29 live");
   assert.ok(fs.existsSync(path.join(root, ".zombiecoder", ".state", "audit.jsonl")));
 
   await cleanup();
@@ -890,13 +903,13 @@ test("three consecutive tool errors stop the same agent without switching", asyn
     await after(event("error", `call-${index}`));
   }
   assert.equal(
-    fake.synthetics.filter((entry) => entry.description === "zombiecoder tool breaker").length,
+    fake.synthetics.filter((entry) => entry.metadata?.kind === "tool-breaker").length,
     0,
     "a completed tool must reset the consecutive failure count",
   );
   await after(event("error", "call-4"));
 
-  const cards = fake.synthetics.filter((entry) => entry.description === "zombiecoder tool breaker");
+  const cards = fake.synthetics.filter((entry) => entry.metadata?.kind === "tool-breaker");
   assert.equal(cards.length, 1, "the third consecutive failure must produce one visible stop card");
   assert.match(cards[0].text, /Tool breaker/);
   assert.match(cards[0].text, /দায়িত্ব সরানো হয়নি, মডেল বদলানো হয়নি/);
@@ -908,7 +921,7 @@ test("three consecutive tool errors stop the same agent without switching", asyn
 
   await after(event("error", "call-5"));
   assert.equal(
-    fake.synthetics.filter((entry) => entry.description === "zombiecoder tool breaker").length,
+    fake.synthetics.filter((entry) => entry.metadata?.kind === "tool-breaker").length,
     1,
     "one stopped agent must not produce repeated cards",
   );
@@ -943,7 +956,7 @@ test("a goal_contract FAIL feeds the same-agent breaker without switching", asyn
 
   for (let index = 0; index < 2; index += 1) await after(event("FAIL"));
   assert.equal(
-    fake.synthetics.filter((entry) => entry.description === "zombiecoder circuit breaker").length,
+    fake.synthetics.filter((entry) => entry.metadata?.kind === "circuit-breaker-retry" || entry.metadata?.kind === "circuit-breaker-stop").length,
     2,
     "each failed contract attempt is visible to the user",
   );
@@ -953,7 +966,7 @@ test("a goal_contract FAIL feeds the same-agent breaker without switching", asyn
 
   await after(event("FAIL"));
   const stopped = fake.synthetics.filter(
-    (entry) => entry.description === "zombiecoder circuit breaker",
+    (entry) => entry.metadata?.kind === "circuit-breaker-retry" || entry.metadata?.kind === "circuit-breaker-stop",
   );
   assert.equal(stopped.length, 3);
   assert.match(stopped[2].text, /কাজটি সমাধান হয়নি/);
@@ -1627,10 +1640,10 @@ test("global install keeps the UI model on the main agent and syncs one model pe
   };
   fs.writeFileSync(path.join(globalDir, "opencode.json"), JSON.stringify(globalConfig, null, 2));
 
-  // One UI default plus eight free models: the main agent keeps the UI model and
+  // One UI default plus nine free models: the main agent keeps the UI model and
   // every subagent is synced to a different free model, even though the old
   // global config pinned all agents to a dead gateway.
-  const freeModels = ["big-pickle", ...Array.from({ length: 8 }, (_, index) => `free-${index + 1}`)].map(
+  const freeModels = ["big-pickle", ...Array.from({ length: 9 }, (_, index) => `free-${index + 1}`)].map(
     (modelID) => ({
       providerID: "opencode",
       modelID,
@@ -2072,6 +2085,18 @@ test("a passing final answer resets the breaker for the next question", async ()
   await (blockedEvent as any).zombiecoderSettled;
   assert.equal((fake.storage.get("agent/breaker/ses_reset") as any).failures.length, 1);
 
+  // The processor saw a real test run in this turn. A phrase in the model's
+  // prose is not evidence; this tool result is.
+  await fake.toolHooks["execute.after"]({
+    status: "completed",
+    sessionID: "ses_reset",
+    agent: "manu",
+    tool: "shell",
+    id: "call-npm-test",
+    input: { command: "npm test" },
+    result: { output: "78/78 pass" },
+  });
+
   const good = event("manu", proven);
   await hook(good);
   assert.match(await good.response.text(), /78\/78 pass/, "a passing answer must not be rewritten");
@@ -2235,7 +2260,7 @@ test("goal_contract refuses an already-green check and reuses one open", async (
     const ledger = fs.readFileSync(path.join(root, ".zombiecoder", "syllabus.md"), "utf8");
     assert.doesNotMatch(ledger, /### Goal Contract gc-/, "a passing baseline must write no contract");
     const baselineCard = fake.synthetics.find(
-      (entry) => entry.description === "goal contract baseline blocked",
+      (entry) => entry.metadata?.kind === "goal-contract-baseline-blocked",
     );
     assert.ok(baselineCard, "the refusal must be visible in the UI");
 
@@ -2331,7 +2356,7 @@ test("goal_contract close survives storage that rejects null", async () => {
   }
 });
 
-test("all nine roster agents get their persona at runtime and it is audited", async () => {
+test("all ten roster agents get their persona at runtime and it is audited", async () => {
   const root = tempProject();
   fs.writeFileSync(path.join(root, "package.json"), '{"name":"persona-probe"}', "utf8");
   const fake = makeContext(root);

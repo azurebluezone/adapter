@@ -8,14 +8,16 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { readText, sha256 } from "./io.ts";
+import { readJson, readText, sha256 } from "./io.ts";
 import { KEEP_RECENT, readIndex, type MemoryMessage } from "./memory.ts";
 import { readSyllabus } from "./syllabus.ts";
-import { memoryArchiveFile, memoryDir, memoryIndexFile, ssotFile, syllabusFile } from "./paths.ts";
+import { memoryArchiveFile, memoryCompactFile, memoryDir, memoryIndexFile, ssotFile, syllabusFile } from "./paths.ts";
 import { extractTerms, FOCUS_LIMITS, listProjectFiles, resolveFocus, type FocusPlan } from "./focus.ts";
 import { openContracts } from "./goalContract.ts";
 import { classifyIntent, type Intent } from "./intent.ts";
+import { JUDGE_MAX_QUESTIONS, type JudgeRuntimeState } from "./intentJudge.ts";
 import { discoverTechnologyProfiles } from "./projectProfile.ts";
+import { roadmapSummary } from "./roadmap.ts";
 import { skillLiteSection, type SkillLiteSection } from "./skillLibrary.ts";
 
 export const CONTEXT_LIMITS = {
@@ -338,6 +340,16 @@ function syllabusExcerpt(text: string, userMessage: string): string {
   return blocks.join("\n\n");
 }
 
+/** The newest lesson whose heading starts with `prefix`, bounded for the pack. */
+function newestLesson(text: string, prefix: string): string | null {
+  const marker = `### ${prefix}`;
+  const at = text.lastIndexOf(marker);
+  if (at < 0) return null;
+  const rest = text.slice(at);
+  const next = rest.indexOf("\n### ", marker.length);
+  return clip(rest.slice(0, next >= 0 ? next : rest.length).trim(), 900);
+}
+
 function memorySummary(recent: MemoryMessage[]): string {
   if (recent.length === 0) return "No recent kept exchanges for this session.";
   const lines: string[] = [];
@@ -361,6 +373,11 @@ function exists(file: string): boolean {
   }
 }
 
+export type ContextRuntime = {
+  /** Plugin-owned judge clock, verdict and pending question for this session. */
+  judge?: JudgeRuntimeState;
+};
+
 export function buildContextPack(
   projectRoot: string,
   agentID: string,
@@ -369,6 +386,7 @@ export function buildContextPack(
   sessionID = "",
   /** Install root that owns the shared skill database. Empty disables skill routing. */
   installRoot = "",
+  runtime: ContextRuntime = {},
 ): ContextPack {
   const ssotPath = ssotFile(projectRoot);
   const syllabusPath = syllabusFile(projectRoot);
@@ -441,6 +459,36 @@ export function buildContextPack(
     }
   }
 
+  const compact = readJson<{ sessions?: Record<string, { request?: string }> }>(memoryCompactFile(projectRoot));
+  const storedIntent = String(compact?.sessions?.[sessionID]?.request ?? "").trim();
+  const roadmap = roadmapSummary(projectRoot);
+  const investigation = newestLesson(syllabusText ?? "", "Investigation");
+  const judge = runtime.judge;
+  const judgeLines = judge?.contractID
+    ? [
+        `- Contract: ${judge.contractID}`,
+        `- Due: ${judge.due ? "yes (3 minutes elapsed)" : "no"}`,
+        `- Verdict: ${judge.verdict ?? "none"}`,
+        `- Questions: ${judge.questions}/${JUDGE_MAX_QUESTIONS}`,
+        ...(judge.pendingQuestion
+          ? [
+              `- Pending question: ${clip(judge.pendingQuestion, 300)}`,
+              "- Answer it with `intent_judge` action=answer before the verdict.",
+            ]
+          : []),
+        judge.due && !judge.verdict
+          ? "- Next: call `intent_judge` action=prompt, launch the `intent-judge` subagent, answer its question, and let it record PASS/FAIL."
+          : "- Release: after 3 minutes a worker answer is blocked until a PASS verdict exists.",
+      ]
+    : ["- No judge clock for this session."];
+  const roadmapLines = roadmap
+    ? [
+        `- File: \`${roadmap.file}\``,
+        `- Phases: ${roadmap.phases.join(", ") || "none"}`,
+        `- Next open item: ${roadmap.next ?? "none"}`,
+      ]
+    : ["- Not generated: this project is below the big-project threshold."];
+
   const lines = [
     "## ZombieCoder Compact Context Pack",
     "",
@@ -450,6 +498,9 @@ export function buildContextPack(
     "",
     ...(String(userMessage ?? "").trim()
       ? ["### Current user request (source of truth)", clip(userMessage, CONTEXT_LIMITS.request), ""]
+      : []),
+    ...(storedIntent
+      ? ["### Original intent (stored for the judge)", clip(storedIntent, CONTEXT_LIMITS.request), ""]
       : []),
     ...(rules ? ["### Standing rules (SSOT + syllabus)", rules, ""] : []),
     ssot.exists
@@ -462,8 +513,12 @@ export function buildContextPack(
       : "### Syllabus (missing)",
     syllabusBody,
     "",
+    ...(investigation ? ["### Latest investigation (syllabus)", investigation, ""] : []),
     "### Pre-work gate — goal contract",
     ...gate,
+    "",
+    "### Judge state",
+    ...judgeLines,
     "",
     "### Task slice (act on this)",
     `- Intent: ${intent.kind}; focus: ${
@@ -476,13 +531,16 @@ export function buildContextPack(
     }.`,
     "- Everything below this section is reference for this slice, not extra work. Act on the slice only.",
     "",
+    "### Roadmap (auto)",
+    ...roadmapLines,
+    "",
     "### Working budget (anti-overthink)",
-    "- One request → one contract → the smallest file set; the footprint above is the scan, do not list the tree again.",
+    "- One request, one contract, the smallest file set; the footprint above is the scan, do not list the tree again.",
     ...(focusPlan
       ? ["- Open the named focus files first; add a file only when the check output or an import line points at it."]
       : ["- No focus file matched: run one bounded grep for the most distinctive term, then open at most five files."]),
     "- No plan longer than the next action; one reviewer only for a named slice; after three failed attempts stop and report the blocker.",
-    "- Reply shape: result → evidence (path:line, command exit code or marker) → next action. Quote the marker, not the whole tool transcript.",
+    "- Reply shape: result, then evidence (path:line, command exit code or marker), then next action. Quote the marker, not the whole tool transcript.",
     "",
     ...(focusBody ? [`### Focus files — from the user's message (${Buffer.byteLength(focusBody, "utf8")}B)`, focusBody, ""] : []),
     "### Intent routing (deterministic hint)",
@@ -504,16 +562,13 @@ export function buildContextPack(
         )
       : ["- No supported stack manifest found; infer from focused files and state uncertainty."]),
     "- Provider catalog does not expose model training-data cutoffs: UNVERIFIED; use current official docs for version-sensitive claims.",
+    "- Version-sensitive claim: `websearch` the official docs and cite the URL; model memory is UNVERIFIED.",
     "",
     `### Session memory (${memory.recent} in RAM, newest ${KEEP_RECENT} kept; ${memory.archives} archives) — steward: ${CONTEXT_OWNERS.memory.agent}`,
     memorySummary(recent),
-    ...(memory.recent > 0
-      ? [
-          `- Older turns: the full session is append-only at \`${
-            sessionID ? memoryArchiveFile(projectRoot, sessionID) : memoryDir(projectRoot)
-          }\` — read it when the kept turns are not enough.`,
-        ]
-      : []),
+    `- Older turns: the full session is append-only at \`${
+      sessionID ? memoryArchiveFile(projectRoot, sessionID) : memoryDir(projectRoot)
+    }\` — read it when the kept turns are not enough.`,
     "",
     "### Context stewards (not task attribution)",
     `- SSOT steward: ${CONTEXT_OWNERS.ssot.agent}`,
@@ -531,6 +586,8 @@ export function buildContextPack(
     skillLite?.matches.length ?? 0
   } | Contract ${
     openContractsForSession.length ? openContractsForSession[0].id : "none"
+  } | Judge ${
+    judge?.verdict ?? (judge?.due ? "due" : "idle")
   } | Pack ${Buffer.byteLength(text, "utf8")}B`;
   return {
     text,

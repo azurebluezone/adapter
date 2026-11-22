@@ -26,8 +26,8 @@ function check(name, fn) {
   }
 }
 
-check("nine controllers and three documented modes", () => {
-  assert.equal(AGENT_CONTROLLERS.length, 9);
+check("ten controllers and three documented modes", () => {
+  assert.equal(AGENT_CONTROLLERS.length, 10);
   assert.deepEqual([...AGENT_MODES], ["primary", "subagent", "all"]);
 });
 
@@ -44,9 +44,9 @@ check("V2 frontmatter uses permissions/subagent and never permission/task", () =
   }
 });
 
-check("mode matrix has 9 agents x 3 modes and effective current mode", () => {
+check("mode matrix has 10 agents x 3 modes and effective current mode", () => {
   const matrix = modeMatrix({ manu: "subagent", nila: "primary" });
-  assert.equal(matrix.length, 9);
+  assert.equal(matrix.length, 10);
   for (const row of matrix) {
     assert.deepEqual(Object.keys(row.cells).sort(), ["all", "primary", "subagent"]);
     assert.equal(row.cells.primary.asPrimary, true);

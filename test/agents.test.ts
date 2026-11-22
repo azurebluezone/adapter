@@ -19,9 +19,9 @@ import {
   contractFromEvent,
 } from "../src/agents/runtime.ts";
 
-test("nine controllers own the roster in the same order", () => {
-  assert.equal(AGENT_CONTROLLERS.length, 9);
-  assert.equal(AGENT_PROFILES.length, 9);
+test("ten controllers own the roster in the same order", () => {
+  assert.equal(AGENT_CONTROLLERS.length, 10);
+  assert.equal(AGENT_PROFILES.length, 10);
   const ids = AGENT_CONTROLLERS.map((controller) => controller.id);
   assert.deepEqual(ids, ROSTER.map((agent) => agent.id));
   assert.deepEqual(ids, [
@@ -34,6 +34,7 @@ test("nine controllers own the roster in the same order", () => {
     "nila",
     "tuhin",
     "zombiecoder",
+    "intent-judge",
   ]);
 });
 
@@ -109,11 +110,17 @@ test("each prompt exposes its phase tools and namespaced plugin tools", () => {
 
 test("shared routing keeps the selected agent as owner without forcing review on simple tasks", () => {
   const prompt = getAgentController("manu")!.prompt();
-  assert.match(prompt, /UI-selected agent as the primary owner and final reporter/);
-  assert.match(prompt, /do not add a reviewer to a simple task/);
+  assert.match(prompt, /selected agent as task owner\/reporter/);
+  assert.match(prompt, /No reviewer for a simple task/);
   assert.match(prompt, /project_investigation/);
   assert.doesNotMatch(prompt, /After substantive implementation, have Majnu review/);
-  for (const controller of AGENT_CONTROLLERS) assert.equal(controller.profile.mode, "all");
+  for (const controller of AGENT_CONTROLLERS) {
+    assert.equal(
+      controller.profile.mode,
+      controller.id === "intent-judge" ? "subagent" : "all",
+      `${controller.id} has the wrong mode`,
+    );
+  }
 });
 
 test("the route is parameterized and illegal edges are impossible", () => {
@@ -396,6 +403,6 @@ test("every persona keeps the friendly, playful Barishal tone and its own identi
     assert.match(prompt, /Finish your own slice/);
     assert.match(prompt, /selected agent as task owner\/reporter/);
     assert.match(prompt, /Majnu cannot delegate/);
-    assert.ok(prompt.length < 7000, `${agent.id} shared prompt should stay concise`);
+    assert.ok(prompt.length < 8200, `${agent.id} shared prompt should stay concise`);
   }
 });

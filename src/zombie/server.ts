@@ -16,7 +16,8 @@ import { spawnSync } from "node:child_process";
 import { auditFile, memoryDir, ssotFile, syllabusFile } from "./paths.ts";
 import { appendJsonl, ensureDir, readJsonl, readText, redact, redactValue, writeAtomic, PLUGIN_VERSION } from "./io.ts";
 import { readArchive, readIndex, readRecent, archiveSummary, type StorageLike } from "./memory.ts";
-import { appendSyllabus, readSyllabus } from "./syllabus.ts";
+import { appendSyllabus, footprintProblems, readSyllabus } from "./syllabus.ts";
+import { roadmapSummary } from "./roadmap.ts";
 import { scanProject } from "./scan.ts";
 import { keepTransform, type TransformDoor } from "./transform.ts";
 import { buildContextPack, resolveAllowedPath } from "./context.ts";
@@ -27,6 +28,7 @@ import { loadRun } from "../agents/runtime.ts";
 import {
   contractStatus,
   failedExpectedRewrite,
+  formatContractBlock,
   matches,
   normalizeCommand,
   normalizeMatch,
@@ -38,6 +40,16 @@ import {
   validateExpected,
 } from "./goalContract.ts";
 import { isStandInPath } from "./responseGate.ts";
+import {
+  JUDGE_DELAY_MS,
+  JUDGE_MAX_QUESTIONS,
+  buildJudgePrompt,
+  debateTranscript,
+  judgeDue,
+  type JudgeDebate,
+  type JudgeVerdict,
+} from "./intentJudge.ts";
+import { uiCard } from "./uiCard.ts";
 import { syntaxCheck } from "./lsp.ts";
 import {
   diagnosticsForFile,
@@ -58,6 +70,7 @@ import {
   routeSkillText,
   skillBySlug,
   skillDbDir,
+  skillLiteSection,
   syncSkillDb,
 } from "./skillLibrary.ts";
 import { ROSTER } from "../roster.ts";
@@ -103,7 +116,12 @@ export type SurfaceDeps = {
   /** Reload the plugin's own tool registrations after a surface change. */
   reloadTools?: () => Promise<void>;
   /** Show a visible card in the session UI (OpenCode synthetic message). */
-  synthetic?: (input: { sessionID: string; text: string; description?: string }) => Promise<unknown>;
+  synthetic?: (input: {
+    sessionID: string;
+    text: string;
+    description?: string;
+    metadata?: Record<string, unknown>;
+  }) => Promise<unknown>;
   /**
    * OpenCode's native permission door. The plugin asks once per contract at open
    * and once per close; the user's reply ("once" / "always" / "reject") is
@@ -321,8 +339,8 @@ export async function registerRpc(rpc: RpcLike | undefined, deps: SurfaceDeps): 
         };
       },
 
-      agents: async () =>
-        ROSTER.map((a) => ({
+      agents: async () => ({
+        agents: ROSTER.map((a) => ({
           id: a.id,
           name: a.name,
           callSign: a.callSign,
@@ -330,6 +348,7 @@ export async function registerRpc(rpc: RpcLike | undefined, deps: SurfaceDeps): 
           mode: a.mode,
           model: a.model,
         })),
+      }),
     };
 
     const registration = await rpc.register(rpcDefinition(), handlers);
@@ -488,6 +507,8 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           id: { type: "string", description: "Contract id returned by open; required by close." },
           goal: { type: "string", description: "Required for open: concise outcome derived from the user's request." },
           input: { type: "string", description: "Required for open: real user input, such as a file path, URL, or exact request." },
+          deliverable: { type: "string", description: "What the user receives (artifact or behavior). Defaults to the goal." },
+          scope: { type: "string", description: "Comma/space-separated path prefixes a mutating tool may touch. Defaults to the focus files or the project root." },
           expected: { type: "string", description: "Literal distinctive success marker emitted by the check only when all requirements pass; do not use a prose summary." },
           check: { type: "string", description: "Runnable command that proves the requirements and prints the expected marker only on success. close runs it." },
           pass: { type: "string", description: "Required for open: observable pass criteria that the check enforces." },
@@ -515,6 +536,12 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           const expected = text("expected");
           const check = text("check");
           const pass = text("pass");
+          const deliverable = text("deliverable") || goal;
+          const declaredScope = text("scope");
+          const openRun = context?.sessionID ? await loadRun(deps.storage, context.sessionID) : null;
+          const scope =
+            declaredScope ||
+            (openRun?.focus?.length ? openRun.focus.join(", ") : ".");
           const missing = [
             ["goal", goal],
             ["input", realInput],
@@ -609,27 +636,34 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           // before any code is written. Shown as a synthetic session message so
           // it appears in the UI, not only inside a file.
           const preview = [
-            "🧭 কাজ শুরুর আগে — একবার মিলিয়ে নাও",
+            "কাজ শুরুর আগে — একবার মিলিয়ে নাও",
             "",
             `তুমি চাইছ: ${goal}`,
             `আসল ইনপুট: ${realInput}`,
             `আমি তোমাকে দেব: ${expected}`,
             ...(investigationSummary ? [`Investigation: ${investigationSummary}`] : []),
-            `যাচাই: \`${check}\` → ${pass}`,
+            `যাচাই: \`${check}\` — ${pass}`,
             `মিলানোর নিয়ম: ${mode}`,
             "",
             "খোলার আগে একবার baseline চালাব। ওটা pass করে ফেললে contract খুলব না — আগেই pass করা check কোনো কাজের প্রমাণ নয়।",
-            "👍 permission dialog-এ: Allow once = শুধু এইবার; Allow always = এই প্রজেক্টে পরেরবার আর জিজ্ঞেস করব না; Reject = কিছুই লেখা হবে না।",
-            "✋ ভুল মনে হলে Reject দাও; কোনো ফাইল লেখা হবে না, নতুন করে বলব।",
+            "permission dialog: Allow once = শুধু এইবার; Allow always = এই প্রজেক্টে পরেরবার আর জিজ্ঞেস করব না; Reject = কিছুই লেখা হবে না।",
+            "ভুল মনে হলে Reject দাও; কোনো ফাইল লেখা হবে না, নতুন করে বলব।",
           ].join("\n");
           let uiShown = false;
           if (context?.sessionID && deps.synthetic) {
             try {
-              await deps.synthetic({
-                sessionID: String(context.sessionID),
-                text: preview,
-                description: "goal contract preview",
-              });
+              // The desktop renderer shows a synthetic notice's `description`,
+              // never its `text` (session-ui/src/timeline-next/row.tsx). A short
+              // description therefore hid the whole contract. `source: "goal"`
+              // is the native surface that renders the description as a full
+              // user message, so the preview is actually visible on screen.
+              await deps.synthetic(
+                uiCard({
+                  sessionID: String(context.sessionID),
+                  kind: "goal-contract-open",
+                  text: preview,
+                }),
+              );
               uiShown = true;
             } catch {
               uiShown = false;
@@ -715,19 +749,21 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             });
             if (sessionID && deps.synthetic) {
               try {
-                await deps.synthetic({
-                  sessionID,
-                  description: "goal contract baseline blocked",
-                  text: [
-                    "⛔ Ανακτήθηκε এই check আগেই pass করে",
-                    "",
-                    `চেক: \`${check}\``,
-                    `পেলাম: ${oneLine(baselineOutput) || "(empty)"}`,
-                    "",
-                    "কাজ শুরুর আগেই প্রত্যাশা মিলে গেছে — এটা কোনো কাজের প্রমাণ নয়, তাই contract খোলা হয়নি।",
-                    "আসল পরিবর্তনের পর যে check fail করে, সেটাই contract-এ দাও।",
-                  ].join("\n"),
-                });
+                await deps.synthetic(
+                  uiCard({
+                    sessionID,
+                    kind: "goal-contract-baseline-blocked",
+                    text: [
+                      "এই check আগেই pass করে",
+                      "",
+                      `চেক: \`${check}\``,
+                      `পেলাম: ${oneLine(baselineOutput) || "(empty)"}`,
+                      "",
+                      "কাজ শুরুর আগেই প্রত্যাশা মিলে গেছে — এটা কোনো কাজের প্রমাণ নয়, তাই contract খোলা হয়নি।",
+                      "আসল পরিবর্তনের পর যে check fail করে, সেটাই contract-এ দাও।",
+                    ].join("\n"),
+                  }),
+                );
               } catch {
                 // The card is a courtesy; the refusal below is the gate.
               }
@@ -747,21 +783,29 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
 
           const id = `gc-${Date.now().toString(36)}`;
           const openedAt = new Date().toISOString();
-          const summary = [
-            `- status: open`,
-            ...(sessionID ? [`- session: ${sessionID}`] : []),
-            ...(sessionID ? [`- consent: approved (goal_contract.open)`] : []),
-            `- goal: ${goal}`,
-            `- input: ${realInput}`,
-            `- expected: ${expected}`,
-            `- check: \`${check}\``,
-            `- pass: ${pass}`,
-            `- match: ${mode}`,
-            `- guard: v3`,
-            `- baseline: failed (exit ${baseline.exitCode === null ? "none" : baseline.exitCode})`,
-            `- baselineObserved: ${oneLine(baselineOutput) || "(empty)"}`,
-          ].join("\n");
-          const written = appendSyllabus(projectRoot, `Goal Contract ${id}`, summary, auditFile(projectRoot));
+          const summary = formatContractBlock({
+            id,
+            status: "open",
+            ...(sessionID ? { session: sessionID } : {}),
+            ...(sessionID ? { consent: "approved (goal_contract.open)" } : {}),
+            goal,
+            input: realInput,
+            deliverable,
+            result: "pending",
+            scope,
+            openedAt,
+            expected,
+            check,
+            pass,
+            match: mode,
+            guard: "v3",
+            baseline: `failed (exit ${baseline.exitCode === null ? "none" : baseline.exitCode})`,
+            baselineObserved: oneLine(baselineOutput) || "(empty)",
+          });
+          // `formatContractBlock` already carries the `### Goal Contract <id>`
+          // heading. Using the id in the topic too produced two headings, and
+          // `parseContract` stopped at the empty first block.
+          const written = appendSyllabus(projectRoot, "Goal Contract — open", summary, auditFile(projectRoot));
           // Storage is the short-lived marker: close refuses a v3 contract that
           // has no open marker, so a hand-written ledger block cannot become a
           // contract after the fact.
@@ -770,6 +814,9 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             session: sessionID,
             goal,
             input: realInput,
+            deliverable,
+            result: "pending",
+            scope,
             expected,
             check,
             pass,
@@ -783,7 +830,40 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             },
           });
           if (sessionID) {
-            await deps.storage.set(`goal/active/${sessionID}`, { id, goal, check, openedAt });
+            await deps.storage.set(`goal/active/${sessionID}`, {
+              id,
+              goal,
+              deliverable,
+              scope,
+              check,
+              openedAt,
+            });
+            // The judge clock starts at open. It survives close: the verdict
+            // is about this contract, not about the phase the worker is in.
+            await deps.storage.set(`judge/pending/${sessionID}`, { contractID: id, openedAt });
+            await deps.storage.set(`judge/contract/${id}`, {
+              contractID: id,
+              sessionID,
+              openedAt,
+              deliverable,
+              scope,
+              check,
+              expected,
+            });
+            // The intent snapshot is written at open, not read from the latest
+            // turn: a later message must not rewrite what the judge is judging.
+            const storedRequest = (await deps.storage.get(`judge/request/${sessionID}`)) as
+              | { text?: string }
+              | null
+              | undefined;
+            await deps.storage.set(`judge/intent/${id}`, {
+              contractID: id,
+              sessionID,
+              request: String(storedRequest?.text ?? realInput ?? "").slice(0, 4000),
+              goal,
+              deliverable,
+              input: realInput,
+            });
           }
           audit(projectRoot, "goal_contract", {
             kind: "goal_contract.open",
@@ -884,18 +964,20 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             let uiShown = false;
             if (sessionID && deps.synthetic) {
               try {
-                await deps.synthetic({
-                  sessionID,
-                  description: "goal contract blocked",
-                  text: [
-                    `⛔ Goal Contract ${id} — blocked`,
-                    "",
-                    `আগের contract \`${rewrite.id}\` একই check দিয়ে FAIL হয়েছে (expected: ${rewrite.expected})।`,
-                    `এখন expected বদলে \`${contract.expected}\` দেওয়া হয়েছে — এটা FAIL-এর ফল পুনর্লিখন।`,
-                    "",
-                    "contract খোলাই আছে। আসল output ঠিক করো, অথবা ভিন্ন check command দিয়ে নতুন contract খোলো।",
-                  ].join("\n"),
-                });
+                await deps.synthetic(
+                  uiCard({
+                    sessionID,
+                    kind: "goal-contract-blocked",
+                    text: [
+                      `Goal Contract ${id} — blocked`,
+                      "",
+                      `আগের contract \`${rewrite.id}\` একই check দিয়ে FAIL হয়েছে (expected: ${rewrite.expected})।`,
+                      `এখন expected বদলে \`${contract.expected}\` দেওয়া হয়েছে — এটা FAIL-এর ফল পুনর্লিখন।`,
+                      "",
+                      "contract খোলাই আছে। আসল output ঠিক করো, অথবা ভিন্ন check command দিয়ে নতুন contract খোলো।",
+                    ].join("\n"),
+                  }),
+                );
                 uiShown = true;
               } catch {
                 uiShown = false;
@@ -912,7 +994,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           }
           // The user must see what will be executed before the native dialog.
           const closePreview = [
-            "🧭 শেষ ধাপ — গোল বন্ধ করার আগে",
+            "শেষ ধাপ — গোল বন্ধ করার আগে",
             "",
             `গোল: ${contract.goal}`,
             `আইডি: ${id}`,
@@ -921,17 +1003,19 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             `মিলানোর নিয়ম: ${mode}`,
             ...(stored?.openedAt ? [`খোলার সময়: ${stored.openedAt}`] : []),
             "",
-            "👍 permission dialog-এ: Allow once = চেক চালাও; Allow always চাপলেও close-এর জন্য কিছু সেভ হয় না, পরের close-এ আবার জিজ্ঞেস করব; Reject = চেক চলবে না।",
-            "✋ Reject দিলে contract খোলাই থাকবে, ফল লেখা হবে না।",
+            "permission dialog: Allow once = চেক চালাও; Allow always চাপলেও close-এর জন্য কিছু সেভ হয় না, পরের close-এ আবার জিজ্ঞেস করব; Reject = চেক চলবে না।",
+            "Reject দিলে contract খোলাই থাকবে, ফল লেখা হবে না।",
           ].join("\n");
           let previewShown = false;
           if (sessionID && deps.synthetic) {
             try {
-              await deps.synthetic({
-                sessionID,
-                text: closePreview,
-                description: "goal contract close preview",
-              });
+              await deps.synthetic(
+                uiCard({
+                  sessionID,
+                  kind: "goal-contract-close-preview",
+                  text: closePreview,
+                }),
+              );
               previewShown = true;
             } catch {
               previewShown = false;
@@ -1042,22 +1126,24 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           let uiShown = false;
           if (sessionID && deps.synthetic) {
             try {
-              await deps.synthetic({
-                sessionID,
-                description: "goal contract result",
-                text: [
-                  status === "PASS" ? `✅ Goal Contract ${id} — PASS` : `❌ Goal Contract ${id} — FAIL`,
-                  "",
-                  `চেক: \`${contract.check}\` → exit ${run.exitCode === null ? "none" : run.exitCode}`,
-                  `expected: ${contract.expected}`,
-                  `পেলাম: ${oneLine(output) || "(কোনো output নেই)"}`,
-                  ...(reason ? [`কারণ: ${reason}`] : []),
-                  "",
-                  status === "PASS"
-                    ? "প্রমাণ syllabus-এ লেখা হয়েছে।"
-                    : "এটা PASS নয় — আসল আচরণ ঠিক করো, তারপর একই contract id, check ও expected রেখে আবার close করো। Plugin check-টি নতুন করে চালাবে।",
-                ].join("\n"),
-              });
+              await deps.synthetic(
+                uiCard({
+                  sessionID,
+                  kind: "goal-contract-result",
+                  text: [
+                    `Goal Contract ${id} — ${status}`,
+                    "",
+                    `চেক: \`${contract.check}\` — exit ${run.exitCode === null ? "none" : run.exitCode}`,
+                    `expected: ${contract.expected}`,
+                    `পেলাম: ${oneLine(output) || "(কোনো output নেই)"}`,
+                    ...(reason ? [`কারণ: ${reason}`] : []),
+                    "",
+                    status === "PASS"
+                      ? "প্রমাণ syllabus-এ লেখা হয়েছে।"
+                      : "এটা PASS নয় — আসল আচরণ ঠিক করো, তারপর একই contract id, check ও expected রেখে আবার close করো। Plugin check-টি নতুন করে চালাবে।",
+                  ].join("\n"),
+                }),
+              );
               uiShown = true;
             } catch {
               uiShown = false;
@@ -1081,12 +1167,335 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
       },
     },
     {
+      name: "intent_judge",
+      // The judge runs as a subagent; its verdict must be stored by the plugin,
+      // not retyped by the worker. Only the intent-judge agent may record one.
+      // The worker gets `prompt` and `answer`; the judge gets `ask` and `record`.
+      direct: true,
+      description:
+        "Independent intent-judge control surface. action=status returns the contract clock, due state, debate and verdict. action=prompt returns the plugin-built judge prompt (original request + contract + syllabus + skill routing). action=ask stores a judge question (max 2); action=answer stores the worker's reply; action=record stores PASS/FAIL with a reason. Only the intent-judge agent may ask or record; a worker cannot self-approve.",
+      input: obj({
+        action: { type: "string", enum: ["status", "prompt", "ask", "answer", "record"] },
+        contractID: { type: "string", description: "Contract id the verdict judges." },
+        question: { type: "string", description: "Judge question for action=ask." },
+        answer: { type: "string", description: "Worker answer for action=answer." },
+        status: { type: "string", enum: ["PASS", "FAIL"], description: "Verdict for action=record." },
+        reason: { type: "string", description: "Evidence-backed reason; path:line, command output or exit code." },
+      }),
+      run: async (input: any, context?: ToolContextLike) => {
+        const sessionID = String(context?.sessionID ?? "").trim();
+        if (!sessionID) throw new Error("intent_judge needs a session id");
+        const action = String(input?.action ?? "status");
+        const requested = String(input?.contractID ?? "").trim();
+        const marker = (await deps.storage.get(`judge/agent/${sessionID}`)) as
+          | { agent?: string }
+          | null
+          | undefined;
+        const isJudge = marker?.agent === "intent-judge";
+        const pending = (await deps.storage.get(`judge/pending/${sessionID}`)) as
+          | { contractID?: string; openedAt?: string }
+          | null
+          | undefined;
+        const readClock = async (contractID: string) =>
+          ((await deps.storage.get(`judge/contract/${contractID}`)) as
+            | { sessionID?: string; openedAt?: string; deliverable?: string; scope?: string; check?: string; expected?: string }
+            | null
+            | undefined) ?? null;
+        const readDebate = async (contractID: string) =>
+          ((await deps.storage.get(`judge/debate/${contractID}`)) as JudgeDebate | null | undefined) ?? null;
+        const show = async (target: string, kind: string, text: string) => {
+          if (!target || !deps.synthetic) return false;
+          try {
+            await deps.synthetic(uiCard({ sessionID: target, kind, text }));
+            return true;
+          } catch {
+            return false;
+          }
+        };
+
+        if (action === "status") {
+          const contractID = requested || String(pending?.contractID ?? "");
+          const clock = contractID ? await readClock(contractID) : null;
+          const verdict = contractID
+            ? ((await deps.storage.get(`judge/verdict/${contractID}`)) as JudgeVerdict | null | undefined)
+            : null;
+          const debate = contractID ? await readDebate(contractID) : null;
+          const pendingQuestion = debate?.questions.find((entry) => !entry.answer)?.question ?? null;
+          return {
+            contractID: contractID || null,
+            openedAt: clock?.openedAt ?? pending?.openedAt ?? null,
+            due: judgeDue(clock?.openedAt ?? pending?.openedAt),
+            delayMs: JUDGE_DELAY_MS,
+            verdict: verdict ?? null,
+            questions: debate?.questions.length ?? 0,
+            pendingQuestion,
+            maxQuestions: JUDGE_MAX_QUESTIONS,
+          };
+        }
+
+        if (action === "prompt") {
+          const contractID = requested || String(pending?.contractID ?? "");
+          if (!contractID) throw new Error("intent_judge prompt needs the contract id");
+          const clock = await readClock(contractID);
+          if (!clock) {
+            throw new Error(`no judge clock exists for ${contractID}; open the contract first`);
+          }
+          const projectRoot = deps.projectRoot(clock.sessionID ?? sessionID);
+          const syllabus = readSyllabus(projectRoot) ?? "";
+          const contract = parseContract(syllabus, contractID);
+          if (!contract) {
+            throw new Error(`contract ${contractID} is not in the syllabus; read it before judging`);
+          }
+          const intent = (await deps.storage.get(`judge/intent/${contractID}`)) as
+            | { request?: string }
+            | null
+            | undefined;
+          const originalRequest = String(intent?.request ?? contract.input ?? "").trim();
+          const syllabusExcerpt = [
+            `Contract ${contractID}: ${contract.goal}`,
+            `deliverable: ${contract.deliverable}`,
+            `result: ${contract.result}`,
+            `scope: ${contract.scope}`,
+            "",
+            "Newest syllabus lessons:",
+            syllabus.slice(-4000),
+          ].join("\n");
+          // Route the skill cards before the judge starts. The judge still
+          // loads the full body with `skill_catalog action=get mode=full`; the
+          // card saves a round trip and names the likely domain up front.
+          let skillLite = "";
+          try {
+            skillLite = skillLiteSection(originalRequest, {
+              installRoot: deps.installRoot(),
+              limit: 2,
+            }).text;
+          } catch {
+            skillLite = "";
+          }
+          const prompt = buildJudgePrompt({
+            originalRequest,
+            contract: {
+              id: contractID,
+              goal: contract.goal,
+              deliverable: contract.deliverable,
+              result: contract.result,
+              scope: contract.scope,
+              openedAt: clock.openedAt ?? contract.openedAt,
+              expected: contract.expected,
+              check: contract.check,
+            },
+            syllabusExcerpt,
+            skillLite,
+            evidence: [],
+          });
+          return {
+            contractID,
+            due: judgeDue(clock.openedAt),
+            prompt,
+            next: "Launch the intent-judge subagent with this prompt. The judge asks with action=ask and records with action=record.",
+          };
+        }
+
+        if (action === "ask") {
+          if (!isJudge) {
+            throw new Error("only the intent-judge agent may ask a question; the worker cannot interrogate itself");
+          }
+          if (!requested) throw new Error("intent_judge ask needs the contract id");
+          const clock = await readClock(requested);
+          if (!clock) throw new Error(`no judge clock exists for ${requested}`);
+          const question = String(input?.question ?? "").trim();
+          if (question.length < 12) {
+            throw new Error("a judge question must state the missing fact in at least 12 characters");
+          }
+          const debate =
+            (await readDebate(requested)) ??
+            ({
+              contractID: requested,
+              sessionID: String(clock.sessionID ?? sessionID),
+              workerClaim: "pending",
+              questions: [],
+            } satisfies JudgeDebate);
+          if (debate.questions.length >= JUDGE_MAX_QUESTIONS) {
+            throw new Error(`the judge may ask at most ${JUDGE_MAX_QUESTIONS} questions; record the verdict now`);
+          }
+          debate.questions.push({ at: new Date().toISOString(), question: question.slice(0, 1000) });
+          await deps.storage.set(`judge/debate/${requested}`, debate);
+          const target = String(clock.sessionID ?? sessionID);
+          const shown = await show(
+            target,
+            "intent-judge-question",
+            [
+              `Intent judge question ${debate.questions.length} of ${JUDGE_MAX_QUESTIONS}`,
+              "",
+              `Contract: ${requested}`,
+              `Worker claim: ${debate.workerClaim}`,
+              "",
+              `Judge: ${question}`,
+              "",
+              "Worker: answer with `intent_judge` action=answer, then continue the judge session.",
+            ].join("\n"),
+          );
+          return {
+            contractID: requested,
+            asked: debate.questions.length,
+            remaining: JUDGE_MAX_QUESTIONS - debate.questions.length,
+            uiShown: shown,
+          };
+        }
+
+        if (action === "answer") {
+          if (isJudge) {
+            throw new Error("the judge asks; the worker answers. The judge cannot answer its own question");
+          }
+          if (!requested) throw new Error("intent_judge answer needs the contract id");
+          const clock = await readClock(requested);
+          if (!clock) throw new Error(`no judge clock exists for ${requested}`);
+          const debate = await readDebate(requested);
+          if (!debate) throw new Error("the judge has not asked a question for this contract");
+          const index = debate.questions.findIndex((entry) => !entry.answer);
+          if (index < 0) throw new Error("there is no unanswered judge question");
+          const answer = String(input?.answer ?? "").trim();
+          if (answer.length < 1) throw new Error("an answer cannot be empty");
+          debate.questions[index] = {
+            ...debate.questions[index],
+            answer: answer.slice(0, 2000),
+            answeredAt: new Date().toISOString(),
+          };
+          await deps.storage.set(`judge/debate/${requested}`, debate);
+          const target = String(clock.sessionID ?? sessionID);
+          const shown = await show(
+            target,
+            "intent-judge-answer",
+            [
+              `Worker answer ${index + 1}`,
+              "",
+              `Contract: ${requested}`,
+              `Judge: ${debate.questions[index].question}`,
+              `Worker: ${answer}`,
+              "",
+              "The judge reads this answer and records PASS or FAIL.",
+            ].join("\n"),
+          );
+          return { contractID: requested, answered: index + 1, uiShown: shown };
+        }
+
+        if (action !== "record") {
+          throw new Error("intent_judge action must be status, prompt, ask, answer or record");
+        }
+        if (!isJudge) {
+          throw new Error(
+            "only the intent-judge agent may record a verdict; the worker cannot approve itself",
+          );
+        }
+        if (!requested) throw new Error("intent_judge record needs the contract id");
+        const clock = await readClock(requested);
+        if (!clock) {
+          throw new Error(`no judge clock exists for ${requested}; use the contract id from the judge prompt`);
+        }
+        const debate = await readDebate(requested);
+        if (debate) {
+          const unanswered = debate.questions.find((entry) => !entry.answer);
+          if (unanswered) {
+            throw new Error("the judge asked a question that the worker has not answered; answer it before the verdict");
+          }
+        }
+        const status = String(input?.status ?? "").trim().toUpperCase();
+        if (status !== "PASS" && status !== "FAIL") {
+          throw new Error("intent_judge record status must be PASS or FAIL");
+        }
+        const reason = String(input?.reason ?? "").trim();
+        if (reason.length < 12) {
+          throw new Error("a verdict needs a reason that cites path, command output or exit code");
+        }
+        const verdict: JudgeVerdict = {
+          contractID: requested,
+          status,
+          reason: reason.slice(0, 1000),
+          at: new Date().toISOString(),
+          judge: "intent-judge",
+        };
+        const finalDebate: JudgeDebate = debate ?? {
+          contractID: requested,
+          sessionID: String(clock.sessionID ?? sessionID),
+          workerClaim: "pending",
+          questions: [],
+        };
+        finalDebate.verdict = verdict;
+        await deps.storage.set(`judge/debate/${requested}`, finalDebate);
+        await deps.storage.set(`judge/verdict/${requested}`, verdict);
+        const target = String(clock.sessionID ?? sessionID);
+        const shown = await show(
+          target,
+          "intent-judge-verdict",
+          [
+            `Intent judge verdict: ${status}`,
+            "",
+            debateTranscript(finalDebate),
+          ].join("\n"),
+        );
+        audit(deps.projectRoot(clock.sessionID), "intent-judge", {
+          kind: "intent_judge.verdict",
+          sessionID: clock.sessionID ?? sessionID,
+          contractID: requested,
+          status,
+          reason: verdict.reason,
+          questions: finalDebate.questions.length,
+        });
+        return { ...verdict, uiShown: shown };
+      },
+    },
+    {
       name: "project_fingerprint",
-      description: "Scan the project live and return its machine-readable fingerprint. No fingerprint file is created.",
+      description:
+        "Scan the project live and return its machine-readable fingerprint plus footprint health and the automatic roadmap. No fingerprint file is created. A visible card shows the same result once per session.",
       // The footprint phase denies `execute`; the scan must remain reachable.
       direct: true,
       input: empty,
-      run: (_input: any, context?: ToolContextLike) => scanProject(rootFor(context)),
+      run: async (_input: any, context?: ToolContextLike) => {
+        const projectRoot = rootFor(context);
+        const fp = scanProject(projectRoot);
+        const problems = footprintProblems(fp);
+        const roadmap = roadmapSummary(projectRoot);
+        const syllabus = readSyllabus(projectRoot) ?? "";
+        const markers = [...syllabus.matchAll(/`(fp:[^`]+)`/g)];
+        const marker = markers.at(-1)?.[1] ?? `fp:${fp.totalFiles}/${fp.totalBytes}`;
+        const sessionID = String(context?.sessionID ?? "").trim();
+        let uiShown = false;
+        if (sessionID && deps.synthetic) {
+          const key = `footprint/ui/${sessionID}/${marker}`;
+          const seen = await deps.storage.get(key);
+          if (!seen) {
+            await deps.storage.set(key, { at: new Date().toISOString() });
+            try {
+              await deps.synthetic(
+                uiCard({
+                  sessionID,
+                  kind: "project-footprint",
+                  text: [
+                    "Footprint check",
+                    "",
+                    `Files / dirs / bytes: ${fp.totalFiles} / ${fp.totalDirs} / ${fp.totalBytes}`,
+                    `Languages: ${fp.languages.slice(0, 6).map((l) => `${l.name}(${l.files})`).join(", ") || "unknown"}`,
+                    `Problems found: ${problems.length}`,
+                    ...(problems.length > 0 ? problems.map((problem) => `- ${problem}`) : ["- none detected by the bounded scan"]),
+                    "",
+                    roadmap
+                      ? `Roadmap: \`${roadmap.file}\`; next: ${roadmap.next ?? "no open item"}`
+                      : `Roadmap: not generated (${fp.totalFiles} files is below the big-project threshold)`,
+                  ].join("\n"),
+                }),
+              );
+              uiShown = true;
+            } catch {
+              uiShown = false;
+            }
+          }
+        }
+        return {
+          ...fp,
+          health: { problems, roadmap, uiShown },
+        };
+      },
     },
     {
       name: "design_sketch",

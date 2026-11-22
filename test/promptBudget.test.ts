@@ -10,7 +10,7 @@ test("every persona prompt stays inside the budget with one shared-rules block",
   assert.deepEqual(report.issues, []);
   assert.equal(report.ok, true);
   assert.ok(report.maxBytes <= 32000, `largest prompt is ${report.maxBytes} bytes`);
-  assert.equal(report.agents.length, 9);
+  assert.equal(report.agents.length, 10);
   for (const [agent, copies] of Object.entries(report.sharedCopies)) {
     assert.equal(copies, 1, `${agent} carries the shared rules ${copies} times`);
   }

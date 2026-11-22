@@ -90,7 +90,7 @@ function assertInstall(root, label, options = {}) {
   }
   pass(
     `${label}: structure`,
-    `9 agents, plugin graph, consent ask rules${options.proof ? ", proof PASS" : ""}`,
+    `10 agents, plugin graph, consent ask rules${options.proof ? ", proof PASS" : ""}`,
   );
 }
 

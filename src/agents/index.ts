@@ -1,4 +1,4 @@
-// Registry of the nine controllers. Import order is the roster order used by the
+// Registry of the ten controllers. Import order is the roster order used by the
 // installer, the syllabus and the UI. `roster.ts` consumes this list; nothing
 // here imports roster, so the dependency arrow points one way.
 
@@ -14,6 +14,7 @@ import { majnu } from "./majnu.ts";
 import { nila } from "./nila.ts";
 import { tuhin } from "./tuhin.ts";
 import { zombiecoder } from "./zombiecoder.ts";
+import { intentJudge } from "./intentJudge.ts";
 
 export const AGENT_CONTROLLERS: readonly AgentController[] = Object.freeze([
   manu,
@@ -25,6 +26,7 @@ export const AGENT_CONTROLLERS: readonly AgentController[] = Object.freeze([
   nila,
   tuhin,
   zombiecoder,
+  intentJudge,
 ]);
 
 export const AGENT_PROFILES: readonly AgentProfile[] = Object.freeze(
@@ -115,7 +117,7 @@ function modeCell(mode: AgentMode): ModeMatrixCell {
   };
 }
 
-/** Nine agents x three modes, with the effective (config-resolved) current mode. */
+/** Ten agents x three modes, with the effective (config-resolved) current mode. */
 export function modeMatrix(overrides?: Record<string, string> | null): readonly ModeMatrixRow[] {
   return AGENT_CONTROLLERS.map((controller) => ({
     agent: controller.id,

@@ -110,6 +110,9 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     // list is merged at runtime, so the plugin ships no server name.
     "project_onboarding",
     "project_fingerprint",
+    // The worker gets the plugin-built judge prompt and can answer a judge
+    // question; asking/recording stays gated to the intent-judge agent.
+    "intent_judge",
   ],
   propose: [
     "read",
@@ -149,6 +152,7 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "question",
     "webfetch",
     "websearch",
+    "intent_judge",
   ],
   verify: [
     "goal_contract",
@@ -167,6 +171,7 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "find_symbols",
     "find_references",
     "diagnostics_for_file",
+    "intent_judge",
   ],
   respond: ["context_status", "append_syllabus"],
 };

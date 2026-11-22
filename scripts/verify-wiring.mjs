@@ -51,6 +51,7 @@ const DIRECT_TOOLS = [
   "append_syllabus",
   "context_status",
   "goal_contract",
+  "intent_judge",
   "memory_archive",
   "project_fingerprint",
   "project_onboarding",
@@ -164,7 +165,7 @@ function checkSource() {
     return;
   }
   const data = JSON.parse(result.stdout.trim().split("\n").pop());
-  must(data.names.length === 28, `source toolSpecs must be 28, got ${data.names.length}`);
+  must(data.names.length === 29, `source toolSpecs must be 29, got ${data.names.length}`);
   for (const name of ["append_syllabus", "read_ssot", "env_get", "symbol_overview", "find_symbols", "find_references", "diagnostics_for_file"]) {
     must(data.names.includes(name), `source surface missing ${name}`);
   }
@@ -174,8 +175,8 @@ function checkSource() {
   );
   must(data.route === "substantive", `real change request classified as ${data.route}`);
   must(data.context === "change", `context classifier says ${data.context}, route says ${data.route}`);
-  must(data.modes.length === 9, `roster must be 9 agents, got ${data.modes.length}`);
-  for (const [id, mode] of data.modes) must(mode === "all", `${id} mode is ${mode}, expected all`);
+  must(data.modes.length === 10, `roster must be 10 agents, got ${data.modes.length}`);
+  for (const [id, mode] of data.modes) must(mode === (id === "intent-judge" ? "subagent" : "all"), `${id} mode is ${mode}, expected ${id === "intent-judge" ? "subagent" : "all"}`);
   for (const [index, prompt] of data.prompts.entries()) {
     const id = data.modes[index][0];
     must(/mcpAllow/.test(prompt), `${id} prompt does not explain the environment MCP allowlist`);
@@ -188,7 +189,7 @@ function checkSource() {
   must(data.mcp.allowed === true, "mcpAllow did not grant a listed namespace");
   must(data.mcp.denied === false, "mcpAllow granted an unlisted namespace");
   must(data.mcp.pluginNamespace === false, "the plugin namespace leaked into the MCP allowlist");
-  pass(`source: 28 tools, ${data.direct.length} workflow tools outside Code Mode, no hardcoded MCP server name, environment allowlist works`);
+  pass(`source: 29 tools, ${data.direct.length} workflow tools outside Code Mode, no hardcoded MCP server name, environment allowlist works`);
 }
 
 function checkCollision() {
@@ -233,7 +234,7 @@ function checkCollision() {
   for (const name of ["append_syllabus", "context_status", "goal_contract", "project_onboarding", "read_ssot"]) {
     must(codemode.get(name) === false, `${name} must be registered as a direct tool (codemode:false), got ${codemode.get(name)}`);
   }
-  pass("collision: 28 ZombieCoder tools coexist with 3 same-named MCP tools; release tools are direct");
+  pass("collision: 29 ZombieCoder tools coexist with 3 same-named MCP tools; release tools are direct");
 }
 
 function checkInstalled() {
@@ -255,7 +256,7 @@ function checkInstalled() {
   }
   const data = JSON.parse(result.stdout.trim().split("\n").pop());
   const names = data.names;
-  must(names.length === 28, `installed toolSpecs must be 28, got ${names.length}`);
+  must(names.length === 29, `installed toolSpecs must be 29, got ${names.length}`);
   for (const name of ["append_syllabus", "read_ssot", "env_get", "symbol_overview", "find_symbols", "find_references", "diagnostics_for_file"]) {
     must(names.includes(name), `installed surface missing ${name}`);
   }
@@ -312,7 +313,7 @@ function checkConfig() {
       "zombiecoder config has no sourceRoot; the plugin cannot protect its source tree",
     );
   }
-  pass(`config: 9 agents, ${lsp.length}/7 LSP binaries, ${servers.size} MCP servers, mcpAllow + sourceRoot set`);
+  pass(`config: 10 agents, ${lsp.length}/7 LSP binaries, ${servers.size} MCP servers, mcpAllow + sourceRoot set`);
 }
 
 function checkLsp() {
@@ -458,12 +459,12 @@ function checkSurface() {
   }
   const data = readJson(SURFACE_FILE);
   must(data.namespace === "zombiecoder", `surface namespace is ${data.namespace}`);
-  must(data.zombiecoder.length === 28, `live zombiecoder surface is ${data.zombiecoder.length}, expected 28`);
+  must(data.zombiecoder.length === 29, `live zombiecoder surface is ${data.zombiecoder.length}, expected 29`);
   for (const name of ["append_syllabus", "read_ssot", "env_get"]) {
     must(data.zombiecoder.includes(`zombiecoder_${name}`), `live surface missing zombiecoder_${name}`);
   }
   const mcpIds = (data.surface ?? []).filter((id) => /^(?:image-brand|public-api|cdp)_/.test(id));
-  pass(`live surface snapshot: 28 tools; MCP ids: ${mcpIds.join(", ") || "none yet (registration is environment-owned)"}`);
+  pass(`live surface snapshot: 29 tools; MCP ids: ${mcpIds.join(", ") || "none yet (registration is environment-owned)"}`);
 }
 
 function checkProtected() {

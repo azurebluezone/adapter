@@ -55,7 +55,7 @@ test("every roster agent knows MCP is environment-owned and optional", () => {
     assert.match(prompt, /`mcpAllow`/, `${agent.id}: allowlist missing`);
     assert.match(prompt, /opencode mcp list/, `${agent.id}: live MCP check missing`);
     assert.doesNotMatch(prompt, /cdp_|image-brand|public-api/i, `${agent.id}: prompt hardcodes a server`);
-    assert.ok(prompt.length < 7000, `${agent.id}: prompt budget exceeded`);
+    assert.ok(prompt.length < 8200, `${agent.id}: prompt budget exceeded`);
   }
 });
 

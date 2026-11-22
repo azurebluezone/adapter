@@ -68,7 +68,18 @@ export function isInternalAgent(agentID: string): boolean {
   return INTERNAL_AGENT_IDS.has(String(agentID ?? "").trim().toLowerCase());
 }
 
-const ALL_SPECIALIST_IDS = ["manu", "jarin", "brishti", "rashed", "halim", "majnu", "nila", "tuhin", "zombiecoder"] as const;
+const ALL_SPECIALIST_IDS = [
+  "manu",
+  "jarin",
+  "brishti",
+  "rashed",
+  "halim",
+  "majnu",
+  "nila",
+  "tuhin",
+  "zombiecoder",
+  "intent-judge",
+] as const;
 const SPECIALIST_TARGETS: Readonly<Record<string, readonly string[]>> = {
   zombiecoder: ALL_SPECIALIST_IDS,
   manu: ALL_SPECIALIST_IDS,

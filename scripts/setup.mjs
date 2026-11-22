@@ -35,11 +35,13 @@ const VERSION = PKG.version;
 
 // Read the expected agent IDs from the runtime roster. setup.mjs deliberately
 // runs without the type-stripping flag, so a narrow read of the source of truth
-// is used instead of a second hardcoded list.
+// is used instead of a second hardcoded list. `AGENT_IDS` in types.ts is the
+// same tuple the controllers and the installer consume.
 function expectedAgentIds() {
   try {
-    const source = fs.readFileSync(path.join(REPO_ROOT, "src", "roster.ts"), "utf8");
-    return [...source.matchAll(/^\s{4}id:\s*"([^"]+)"/gm)].map((match) => match[1]);
+    const source = fs.readFileSync(path.join(REPO_ROOT, "src", "agents", "types.ts"), "utf8");
+    const tuple = /export const AGENT_IDS = \[([\s\S]*?)\] as const;/.exec(source)?.[1] ?? "";
+    return [...tuple.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
   } catch {
     return [];
   }
@@ -122,7 +124,11 @@ function globalSummary(configDir) {
   const expected = EXPECTED_AGENT_IDS;
   const missing = expected.filter((id) => !agents[id]);
   const checked = expected.length > 0 ? expected : ids;
-  const allPrimary = checked.length > 0 && checked.every((id) => agents[id]?.mode === "all");
+  // The independent judge is a subagent by design; every other roster agent is
+  // main-selectable. Checking a single hardcoded mode would fail a valid install.
+  const expectedMode = (id) => (id === "intent-judge" ? "subagent" : "all");
+  const allPrimary =
+    checked.length > 0 && checked.every((id) => agents[id]?.mode === expectedMode(id));
   const canDelegate =
     checked.length > 0 &&
     checked.every(

@@ -142,7 +142,7 @@ test("context pack preserves the current request and all ten recent messages", (
   assert.match(pack.text, /### Current user request \(source of truth\)/);
   assert.match(pack.text, /### Task slice \(act on this\)/);
   assert.match(pack.text, /Act on the slice only/);
-  assert.match(pack.text, /Reply shape: result → evidence/);
+  assert.match(pack.text, /Reply shape: result, then evidence/);
   assert.match(pack.text, /preserve the retail policy/);
   for (const message of recent) assert.ok(pack.text.includes(message.text), message.text);
   assert.match(pack.text, /\| Name \| test-project \|/, "specialists must see project constraints");

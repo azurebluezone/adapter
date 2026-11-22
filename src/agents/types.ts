@@ -18,6 +18,7 @@ export const AGENT_IDS = [
   "nila",
   "tuhin",
   "zombiecoder",
+  "intent-judge",
 ] as const;
 
 export type AgentID = (typeof AGENT_IDS)[number];
