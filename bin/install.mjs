@@ -1578,6 +1578,15 @@ await step("seed zombiecoder config", () => {
     customProviderID: PROVIDER_ID,
     customProviderApiKey: PROVIDER_KEY,
     mcpUrl: MCP_URL,
+    // Environment-owned MCP namespaces. The plugin reads this list and never
+    // hardcodes a server name. Without --with-local-mcp the owner's existing
+    // list survives; the plugin still works with an empty list.
+    mcpAllow: WITH_LOCAL_MCP
+      ? listMcpServers(path.join(CONFIG_DIR, "mcp")).map((server) => server.name)
+      : Array.isArray(existing.mcpAllow) ? existing.mcpAllow : [],
+    // The plugin protects its source tree from writes made by sessions whose
+    // working directory is elsewhere. Record where this install came from.
+    sourceRoot: PACKAGE_ROOT,
     originUrl: ORIGIN_URL,
     opencodeApiUrl: existing.opencodeApiUrl ?? DEFAULT_OPENCODE_API_URL,
     ssotRefreshMs: existing.ssotRefreshMs ?? defaults.DEFAULT_SSOT_REFRESH_MS,

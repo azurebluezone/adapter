@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { registerTools, toolSpecs, type SurfaceDeps } from "../src/zombie/server.ts";
 import { AGENT_CONTROLLERS } from "../src/agents/index.ts";
+import { mcpAllowPatterns, mcpToolAllowed } from "../src/agents/defaults.ts";
 import { ROSTER, agentSystemPrompt } from "../src/roster.ts";
 import { classifyTask, noteContract, startRun, walk } from "../src/agents/route.ts";
 import { classifyIntent } from "../src/zombie/intent.ts";
@@ -26,9 +27,9 @@ function depsFor(root: string): SurfaceDeps {
 test("tool registration survives MCP names that shadow a ZombieCoder tool", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "zc-wiring-"));
   const entries: Array<{ name: string; options?: { namespace?: string } }> = [
-    { name: "append_syllabus", options: { namespace: "missionbarisal" } },
-    { name: "read_ssot", options: { namespace: "missionbarisal" } },
-    { name: "env_get", options: { namespace: "missionbarisal" } },
+    { name: "append_syllabus", options: { namespace: "public-api" } },
+    { name: "read_ssot", options: { namespace: "public-api" } },
+    { name: "env_get", options: { namespace: "public-api" } },
   ];
   const registration = registerTools(
     {
@@ -54,30 +55,33 @@ test("tool registration survives MCP names that shadow a ZombieCoder tool", asyn
       ? `${String(entry.options.namespace).replaceAll(".", "_")}_${entry.name}`
       : entry.name,
   );
-  assert.ok(ids.includes("missionbarisal_append_syllabus"), "the MCP tool keeps its own id");
+  assert.ok(ids.includes("public-api_append_syllabus"), "the MCP tool keeps its own id");
   assert.ok(ids.includes("zombiecoder_append_syllabus"), "the plugin tool must be present too");
   assert.equal(ids.length, 31, "3 MCP tools + 28 ZombieCoder tools");
 
-  // The release-phase tools must be direct calls: a route gate sees the
-  // top-level tool name, and the Code Mode wrapper is denied in respond.
+  // Workflow tools used in phases that deny `execute` must be direct calls:
+  // a route gate sees the top-level tool name, and the Code Mode wrapper is
+  // denied in intake/footprint/contract/respond.
   const own = entries.filter((entry) => entry.options?.namespace === "zombiecoder");
-  for (const name of ["append_syllabus", "context_status"]) {
+  for (const name of [
+    "append_syllabus",
+    "context_status",
+    "goal_contract",
+    "project_onboarding",
+    "read_ssot",
+  ]) {
     const entry = own.find((candidate) => candidate.name === name) as
       | { options?: { codemode?: boolean } }
       | undefined;
     assert.equal(entry?.options?.codemode, false, `${name} must register as a direct tool`);
   }
-  const readSsot = own.find((entry) => entry.name === "read_ssot") as
-    | { options?: { codemode?: boolean } }
-    | undefined;
-  assert.notEqual(readSsot?.options?.codemode, false, "read_ssot must stay inside Code Mode");
 
   const surface = JSON.parse(
     fs.readFileSync(path.join(root, ".zombiecoder", ".state", "tool-surface.json"), "utf8"),
   );
   assert.equal(surface.zombiecoder.length, 28);
   assert.ok(surface.zombiecoder.includes("zombiecoder_append_syllabus"));
-  assert.ok(surface.surface.includes("missionbarisal_append_syllabus"));
+  assert.ok(surface.surface.includes("public-api_append_syllabus"));
 
   await registration.release();
   fs.rmSync(root, { recursive: true, force: true });
@@ -88,8 +92,19 @@ test("respond phase receives the release tools as direct calls, not the Code Mod
   const specs = toolSpecs(depsFor(root));
   assert.deepEqual(
     specs.filter((spec) => spec.direct).map((spec) => spec.name).sort(),
-    ["append_syllabus", "context_status"],
-    "only the release-phase tools may leave Code Mode",
+    [
+      "append_syllabus",
+      "context_status",
+      "goal_contract",
+      "memory_archive",
+      "project_fingerprint",
+      "project_onboarding",
+      "read_ssot",
+      "read_syllabus",
+      "skill_catalog",
+      "tool_result_read",
+    ].sort(),
+    "workflow tools used in phases without execute must leave Code Mode",
   );
   const controller = AGENT_CONTROLLERS.find((entry) => entry.id === "zombiecoder");
   assert.ok(controller, "zombiecoder controller missing");
@@ -153,21 +168,36 @@ test("all nine agents are main-selectable and know the shared context and MCP su
     assert.match(prompt, /`project_investigation`/);
     assert.match(prompt, /`project_fingerprint`/);
     assert.match(prompt, /`memory_archive`/);
-    assert.match(prompt, /image-brand_\*/);
-    assert.match(prompt, /public-api_\*/);
-    assert.match(prompt, /missionbarisal_\*/);
+    assert.match(prompt, /mcpAllow/);
+    assert.doesNotMatch(
+      prompt,
+      /image-brand|public-api|cdp|missionbarisal/i,
+      `${agent.id} hardcodes an MCP server name`,
+    );
   }
 });
 
-test("each controller grants the safe MCP verbs and denies the dangerous ones", () => {
+test("MCP access is environment-owned and empty by default", () => {
   for (const controller of AGENT_CONTROLLERS) {
-    assert.equal(controller.allows("image-brand_image_brand", "investigate"), true, controller.id);
-    assert.equal(controller.allows("public-api_country", "investigate"), true, controller.id);
-    assert.equal(controller.allows("missionbarisal_read_file", "investigate"), true, controller.id);
-    assert.equal(controller.allows("missionbarisal_exec", "investigate"), false, controller.id);
-    assert.equal(controller.allows("missionbarisal_write_file", "work"), false, controller.id);
-    assert.equal(controller.allows("missionbarisal_db_query", "investigate"), false, controller.id);
+    // No implicit wildcard: the plugin ships no MCP server name and grants none.
+    assert.equal(controller.allows("missionbarisal_read_file", "investigate"), false, controller.id);
+    assert.equal(controller.allows("missionbarisal_exec", "work"), false, controller.id);
+    assert.equal(controller.allows("image-brand_image_brand", "investigate"), false, controller.id);
+    assert.equal(controller.allows("public-api_country", "investigate"), false, controller.id);
+    assert.equal(controller.allows("unknown-mcp_exec", "work"), false, controller.id);
   }
+  assert.deepEqual(mcpAllowPatterns([]), []);
+  assert.deepEqual(mcpAllowPatterns(["public-api", "image-brand", "public-api"]), [
+    "public-api_*",
+    "image-brand_*",
+  ]);
+  assert.equal(mcpToolAllowed("public-api_country", ["public-api"]), true);
+  assert.equal(mcpToolAllowed("image-brand_image_fit", ["public-api"]), false);
+  assert.equal(
+    mcpToolAllowed("zombiecoder_append_syllabus", ["zombiecoder"]),
+    false,
+    "the plugin namespace is never an MCP grant",
+  );
 });
 
 test("the compiler route refuses a substantive answer without a PASS contract", () => {

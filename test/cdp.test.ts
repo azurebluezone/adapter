@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ROSTER, agentSystemPrompt } from "../src/roster.ts";
 import { AGENT_CONTROLLERS } from "../src/agents/index.ts";
+import { MCP_PHASES } from "../src/agents/defaults.ts";
 import { SHARED_EXPERTISE } from "../src/agents/shared.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -40,41 +41,32 @@ test("the CDP server exposes the twelve browser tools", () => {
   }
 });
 
-test("the shared MCP map names every CDP tool", () => {
-  for (const name of serverTools("mcp/cdp/server.mjs")) {
-    assert.ok(SHARED_EXPERTISE.includes(name), `cdp_${name} is missing from the shared MCP map`);
-  }
-  assert.match(SHARED_EXPERTISE, /`cdp_\*`: status\/launch\/targets\/navigate/);
+test("the bundled CDP server stays discoverable without a plugin hook", () => {
+  // The plugin never names the server. The bundled server remains the source
+  // of truth, and the prompt teaches the generic environment-owned policy.
+  assert.doesNotMatch(SHARED_EXPERTISE, /cdp/i);
+  assert.match(SHARED_EXPERTISE, /`mcpAllow` names the namespaces/);
 });
 
-test("every roster agent knows CDP and the editor-browser fallback", () => {
+test("every roster agent knows MCP is environment-owned and optional", () => {
   for (const agent of ROSTER) {
     const prompt = agentSystemPrompt(agent);
-    assert.match(
-      prompt,
-      /`cdp_\*`: status\/launch\/targets\/navigate\/dom\/markers\/audit\/screenshot\/console\/network\/act\/eval/,
-      `${agent.id}: CDP tool surface missing`,
-    );
-    assert.match(prompt, /CDP_UNAVAILABLE/, `${agent.id}: fallback code missing`);
-    assert.match(prompt, /editor `browser` tools \(Chromium\)/, `${agent.id}: editor browser fallback missing`);
+    assert.match(prompt, /MCP surfaces \(optional — environment-provided\)/, `${agent.id}: MCP policy missing`);
+    assert.match(prompt, /`mcpAllow`/, `${agent.id}: allowlist missing`);
+    assert.match(prompt, /opencode mcp list/, `${agent.id}: live MCP check missing`);
+    assert.doesNotMatch(prompt, /cdp_|image-brand|public-api/i, `${agent.id}: prompt hardcodes a server`);
     assert.ok(prompt.length < 7000, `${agent.id}: prompt budget exceeded`);
   }
 });
 
-test("CDP is allowed where evidence is gathered and denied elsewhere", () => {
+test("MCP phases are read/work/verify and the profile grants none by default", () => {
+  assert.deepEqual(MCP_PHASES, ["investigate", "work", "verify"]);
   for (const controller of AGENT_CONTROLLERS) {
-    for (const phase of ["investigate", "work", "verify"] as const) {
-      assert.equal(
-        controller.allows("cdp_markers", phase),
-        true,
-        `${controller.id}: cdp_markers denied in ${phase}`,
-      );
-    }
-    for (const phase of ["propose", "contract", "respond"] as const) {
+    for (const phase of ["propose", "contract", "respond", "intake", "footprint"] as const) {
       assert.equal(
         controller.allows("cdp_markers", phase),
         false,
-        `${controller.id}: cdp_markers must stay out of ${phase}`,
+        `${controller.id}: MCP namespace must stay out of ${phase}`,
       );
     }
   }

@@ -141,6 +141,14 @@ function upgradeSyllabus(existing: string, fp: Fingerprint, agentIds: string[]):
       .replace(/^## \d+\. Lessons[^\n]*\n+/, "")
       .replace(/\n---\n\n_— ZombieCoder Syllabus[^\n]*\n?$/, "")
       .trim();
+  } else {
+    // `append_syllabus` can create the file before the watchdog seeds it: a
+    // contract or onboarding lesson on a brand-new project lands first. An
+    // unseeded file is all lesson content, so keep it instead of replacing it
+    // with the placeholder. An older seed without the lessons heading is
+    // recognized by its own headings and is replaced normally.
+    const looksLikeSeed = /^# Syllabus\b/m.test(existing) || /^## 1\. Scope\b/m.test(existing);
+    if (!looksLikeSeed) lessons = existing.trim();
   }
   if (!lessons || lessons === LESSONS_PLACEHOLDER) lessons = LESSONS_PLACEHOLDER;
 

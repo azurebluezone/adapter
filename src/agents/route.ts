@@ -179,6 +179,32 @@ export function walk(run: AgentRun, phases: readonly RoutePhase[], now?: Date): 
   return phases.reduce((current, phase) => advance(current, phase, now), run);
 }
 
+// A read-only run has no work edge: its route is intake → footprint →
+// investigate → propose → respond. That is correct for a question, but a goal
+// contract is an explicit statement that the user wants a deliverable. Opening
+// one promotes the run to substantive and walks it to work, so the approved
+// contract can actually be executed instead of leaving the agent at a dead end
+// that only says "allowed next phase: propose".
+const SUBSTANTIVE_FROM: Partial<Record<RoutePhase, readonly RoutePhase[]>> = {
+  intake: ["footprint", "investigate", "contract", "work"],
+  footprint: ["investigate", "contract", "work"],
+  investigate: ["contract", "work"],
+  propose: ["contract", "work"],
+  contract: ["work"],
+};
+
+function promoteReadonly(run: AgentRun, now?: Date): AgentRun {
+  if (run.taskKind !== "readonly") return run;
+  const path = SUBSTANTIVE_FROM[run.phase] ?? [];
+  let next: AgentRun = {
+    ...run,
+    taskKind: "substantive",
+    routeKey: routeKey(run.agentID, "substantive", run.phase),
+  };
+  for (const phase of path) next = advance(next, phase, now);
+  return next;
+}
+
 export function noteContract(run: AgentRun, contract: ContractSnapshot, now?: Date): AgentRun {
   const at = (now ?? new Date()).toISOString();
   let next: AgentRun = {
@@ -198,6 +224,8 @@ export function noteContract(run: AgentRun, contract: ContractSnapshot, now?: Da
   };
 
   if (contract.status === "open") {
+    // The user approved real work; a read-only classification no longer holds.
+    next = promoteReadonly(next, now);
     if (next.phase === "investigate") next = advance(next, "contract", now);
     if (next.phase === "propose") next = advance(next, "contract", now);
     if (next.phase === "contract") next = advance(next, "work", now);
@@ -205,6 +233,7 @@ export function noteContract(run: AgentRun, contract: ContractSnapshot, now?: Da
   }
 
   if (contract.status === "PASS") {
+    next = promoteReadonly(next, now);
     if (next.phase === "investigate") next = advance(next, "contract", now);
     if (next.phase === "propose") next = advance(next, "contract", now);
     if (next.phase === "contract") next = advance(next, "work", now);
@@ -222,6 +251,7 @@ export function noteContract(run: AgentRun, contract: ContractSnapshot, now?: Da
 
   // FAIL / BLOCKED: the agent stays accountable and returns to work; a new
   // contract open is the only way back to a releasable answer.
+  next = promoteReadonly(next, now);
   if (next.phase === "investigate") next = advance(next, "contract", now);
   if (next.phase === "propose") next = advance(next, "contract", now);
   if (next.phase === "contract") next = advance(next, "work", now);

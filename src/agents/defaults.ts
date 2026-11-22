@@ -9,37 +9,41 @@ import type {
   ToolPolicy,
 } from "./types.ts";
 
-// The mounted missionbarisal aggregator exposes writes, shells, DB access and
-// credential reads next to useful research verbs. Grant the read-only slice by
-// exact name and deny the dangerous verbs explicitly, so the boundary is visible
-// instead of depending on a wildcard that could widen later.
-export const MISSIONBARISAL_READONLY: readonly string[] = [
-  "missionbarisal_read_file",
-  "missionbarisal_read_ssot",
-  "missionbarisal_glob",
-  "missionbarisal_grep",
-  "missionbarisal_list_directory",
-  "missionbarisal_memory_search",
-  "missionbarisal_memory_recent",
-  "missionbarisal_get_memory",
-  "missionbarisal_get_working_dir",
-  "missionbarisal_system_info",
-];
+// No external MCP server is required or assumed. The plugin's own tools,
+// memory, contracts and verification work on a machine with zero MCP servers.
+// A mounted server is reachable only when the environment allowlists its
+// namespace in `mcpAllow`; an unknown server gets no implicit wildcard grant.
+export const DENIED_TOOLS: readonly string[] = [];
 
-export const DENIED_TOOLS: readonly string[] = [
-  "missionbarisal_exec",
-  "missionbarisal_terminal",
-  "missionbarisal_write_file",
-  "missionbarisal_delete_file",
-  "missionbarisal_rename_file",
-  "missionbarisal_set_working_dir",
-  "missionbarisal_remote_mcp_call",
-  "missionbarisal_call_agent",
-  "missionbarisal_agent_mission",
-  "missionbarisal_agent_single",
-  "missionbarisal_db_query",
-  "missionbarisal_env_get",
-];
+// MCP is an environment feature, not a plugin dependency. The install config
+// names the server namespaces the owner added; the plugin never hardcodes one.
+// An empty list means no MCP tool is reachable, and every plugin tool still works.
+export const MCP_PHASES: readonly RoutePhase[] = ["investigate", "work", "verify"];
+
+// The plugin's own tools share the `zombiecoder_` prefix, so that namespace is
+// never an MCP grant. A remote server with the same name must use another id.
+const RESERVED_MCP_NAMESPACE = "zombiecoder";
+
+export function normalizeMcpServer(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function mcpAllowPatterns(allow: readonly unknown[] | undefined): string[] {
+  const names = (allow ?? [])
+    .map(normalizeMcpServer)
+    .filter((name) => name.length > 0 && name !== RESERVED_MCP_NAMESPACE);
+  return [...new Set(names.map((name) => `${name}_*`))];
+}
+
+export function mcpToolAllowed(tool: string, allow: readonly unknown[] | undefined): boolean {
+  const name = String(tool ?? "").trim().toLowerCase();
+  if (!name) return false;
+  return mcpAllowPatterns(allow).some((pattern) => name.startsWith(pattern.slice(0, -1)));
+}
 
 export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> = {
   intake: [
@@ -48,6 +52,9 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "read_syllabus",
     "context_status",
     "agent_modes",
+    // A request can be misclassified as read-only; the contract is the
+    // user-approved escape hatch from intake/footprint to real work.
+    "goal_contract",
   ],
   footprint: [
     "read",
@@ -62,6 +69,7 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "append_syllabus",
     "memory_archive",
     "skill_catalog",
+    "goal_contract",
   ],
   investigate: [
     "read",
@@ -78,6 +86,15 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "syntax_check",
     "goal_contract",
     "http_probe",
+    // Investigation is allowed to ask the user one precise question and to
+    // read the web. Denying these forced the agent to guess or to tunnel
+    // through Code Mode fetch, which is not a rule the user can see.
+    "question",
+    "webfetch",
+    "websearch",
+    // Findings belong in the append-only syllabus while they are fresh; the
+    // footprint phase is too early and the work phase is too late.
+    "append_syllabus",
     "env_get",
     "service_probe",
     "patch_preview",
@@ -89,14 +106,8 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "find_symbols",
     "find_references",
     "diagnostics_for_file",
-    // MCP servers mounted by OpenCode are exposed as `<server>_<tool>`.
-    // Read-only research tools may be used wherever facts are gathered.
-    "image-brand_*",
-    "public-api_*",
-    // Browser evidence: CDP reads the real page; launch/navigate only touch a
-    // disposable browser profile, never the project files.
-    "cdp_*",
-    ...MISSIONBARISAL_READONLY,
+    // MCP namespaces are not listed here: the environment-owned `mcpAllow`
+    // list is merged at runtime, so the plugin ships no server name.
     "project_onboarding",
     "project_fingerprint",
   ],
@@ -108,8 +119,13 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "read_syllabus",
     "context_status",
     "evidence_gate",
+    // A proposal may need one clarification or one source check before the
+    // user approves it; neither changes the project.
+    "question",
+    "webfetch",
+    "websearch",
   ],
-  contract: ["goal_contract", "read_ssot", "read_syllabus", "context_status"],
+  contract: ["goal_contract", "read_ssot", "read_syllabus", "context_status", "question"],
   work: [
     "read",
     "grep",
@@ -128,12 +144,11 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     // A skill discovered mid-task must be loadable here: investigate can list
     // the catalog, but installation and reload belong to the work phase.
     "skill_catalog",
-    // MCP research/branding tools, same namespace shape as the host.
-    "image-brand_*",
-    "public-api_*",
-    // Browser proof belongs in the work phase: DOM, markers, console, network,
-    // click/fill and screenshots of the real page.
-    "cdp_*",
+    // The same non-mutating aids stay available while the contract is being
+    // implemented: a doc lookup or one precise question is not a write.
+    "question",
+    "webfetch",
+    "websearch",
   ],
   verify: [
     "goal_contract",
@@ -142,16 +157,16 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "syntax_check",
     "shell",
     "read",
+    // Verification may need to ask about an ambiguous expected result or read
+    // the official doc it is checking against.
+    "question",
+    "webfetch",
     // Diagnostics belong to verification: after an edit, the same agent must
     // be able to read the real LSP errors it is claiming to have fixed.
     "symbol_overview",
     "find_symbols",
     "find_references",
     "diagnostics_for_file",
-    "image-brand_*",
-    "public-api_*",
-    "cdp_*",
-    ...MISSIONBARISAL_READONLY,
   ],
   respond: ["context_status", "append_syllabus"],
 };

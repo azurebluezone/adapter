@@ -6,7 +6,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { scanProject } from "../src/zombie/scan.ts";
-import { ensureSyllabus, readSyllabus, recordProjectFootprint } from "../src/zombie/syllabus.ts";
+import { appendSyllabus, ensureSyllabus, readSyllabus, recordProjectFootprint } from "../src/zombie/syllabus.ts";
 import { auditFile } from "../src/zombie/paths.ts";
 
 function project(): string {
@@ -80,6 +80,20 @@ test("a fresh project indexes every file and says the footprint is complete", ()
   ensureSyllabus(root, fp, ["manu"]);
   const text = readSyllabus(root) ?? "";
   assert.match(text, /File index \| 4 \/ 4 \(complete\)/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("a lesson appended before the seed survives the first seed upgrade", () => {
+  const root = project();
+  // A contract or onboarding lesson can land before the watchdog seeds the
+  // file; the later upgrade must not replace that content with the placeholder.
+  appendSyllabus(root, "Goal Contract gc-preseed", "- status: open\n- goal: keep me\n");
+  const fp = scanProject(root);
+  ensureSyllabus(root, fp, ["manu"]);
+  const text = readSyllabus(root) ?? "";
+  assert.match(text, /### Goal Contract gc-preseed/);
+  assert.match(text, /- status: open/);
+  assert.match(text, /## 6\. Lessons \(append-only\)/);
   fs.rmSync(root, { recursive: true, force: true });
 });
 

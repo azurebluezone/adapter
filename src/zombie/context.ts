@@ -256,6 +256,36 @@ function onboardingExcerpt(lesson: string): string {
   ].join("\n");
 }
 
+// The SSOT/syllabus excerpts below are role-specific and lesson-focused. The
+// standing rules are the part the agent must actually obey, and they used to
+// live only in the full files — so a fast-path turn could answer without ever
+// seeing them. Keep a compact copy in every pack.
+function sectionBody(text: string, heading: RegExp): string {
+  const match = heading.exec(text);
+  if (!match) return "";
+  const rest = text.slice(match.index + match[0].length);
+  const next = /^## \d+\. /m.exec(rest);
+  return (next ? rest.slice(0, next.index) : rest).trim();
+}
+
+function standingRules(ssotText: string, syllabusText: string): string {
+  const rules = sectionBody(syllabusText, /^## 4\. Standing rules[^\n]*$/m)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^(?:[1-9]|10|11|12)\.\s/.test(line))
+    .slice(0, 6)
+    .map((line) => `- ${line.replace(/^\d+\.\s*/, "")}`);
+  const work = sectionBody(ssotText, /^## 8\. Shared operating rules[^\n]*$/m)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) =>
+      /^- /.test(line) &&
+      /(current user request|Substantive work order|Record verified facts|Evidence:)/.test(line),
+    )
+    .slice(0, 3);
+  return [...rules, ...work].join("\n");
+}
+
 function syllabusExcerpt(text: string, userMessage: string): string {
   // Lessons are the only syllabus content that changes per turn. The seed puts
   // its placeholder and signature above the first lesson, so slicing the raw
@@ -355,6 +385,7 @@ export function buildContextPack(
   const syllabusBody = syllabus.exists
     ? syllabusExcerpt(syllabusText ?? "", userMessage)
     : `Missing: ${syllabusPath}. Run the plugin setup before making claims.`;
+  const rules = standingRules(ssotText ?? "", syllabusText ?? "");
   const ssotExcerptBytes = ssot.exists ? Buffer.byteLength(ssotBody, "utf8") : 0;
   const syllabusExcerptBytes = syllabus.exists ? Buffer.byteLength(syllabusBody, "utf8") : 0;
 
@@ -399,6 +430,7 @@ export function buildContextPack(
     ...(String(userMessage ?? "").trim()
       ? ["### Current user request (source of truth)", clip(userMessage, CONTEXT_LIMITS.request), ""]
       : []),
+    ...(rules ? ["### Standing rules (SSOT + syllabus)", rules, ""] : []),
     ssot.exists
       ? `### SSOT excerpt (${ssotExcerptBytes}B from a ${ssot.bytes}B file, ${ssot.lines} lines)`
       : "### SSOT (missing)",

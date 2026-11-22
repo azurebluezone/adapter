@@ -104,6 +104,51 @@ test("an open result from a duplicate open moves the route to work", () => {
   assert.equal(next?.contract?.id, "gc-dup");
 });
 
+test("an open contract promotes a readonly run to work", () => {
+  const started = startRun({
+    sessionID: "s-readonly",
+    agentID: "zombiecoder",
+    message: "ওয়েব সার্চ করে তিনটি রিপো যাচাই কর",
+  });
+  assert.equal(started.taskKind, "readonly");
+  assert.equal(started.phase, "intake");
+
+  const opened = noteContract(started, {
+    id: "gc-readonly",
+    status: "open",
+    at: new Date().toISOString(),
+    check: "true",
+    expected: "READONLY_OK",
+  });
+  assert.equal(opened.taskKind, "substantive", "an approved contract is real work");
+  assert.equal(opened.phase, "work", "the contract must not stay at readonly/intake");
+  assert.equal(opened.routeKey, "zc/zombiecoder/substantive/work");
+  assert.equal(opened.contract?.id, "gc-readonly");
+});
+
+test("a readonly footprint run can open a contract and reach work", () => {
+  const started = startRun({
+    sessionID: "s-footprint",
+    agentID: "zombiecoder",
+    message: "ওয়েব সার্চ করে তিনটি রিপো যাচাই কর",
+    freshSyllabus: true,
+  });
+  const footprint = walk(started, ["footprint"]);
+  assert.equal(footprint.taskKind, "readonly");
+  assert.equal(footprint.phase, "footprint");
+
+  const opened = noteContract(footprint, {
+    id: "gc-footprint",
+    status: "open",
+    at: new Date().toISOString(),
+    check: "true",
+    expected: "FOOTPRINT_OK",
+  });
+  assert.equal(opened.taskKind, "substantive");
+  assert.equal(opened.phase, "work", "footprint must not strand the approved contract");
+  assert.equal(opened.routeKey, "zc/zombiecoder/substantive/work");
+});
+
 test("a breaker card is recorded as synthetic user text", async () => {
   const storage = memoryStorage();
   const text = "**Circuit breaker:** zombiecoder এই attempt-এ আটকে গেছে";

@@ -33,16 +33,14 @@ test("installer/runtime sources do not duplicate provider defaults or credential
   };
 
   assert.doesNotMatch(contents.find(({ file }) => file === "src/zombie/defaults.ts")?.text ?? "", /127\.0\.0\.1:49374/);
-  // The MCP server identifier is not a provider default or a credential. It is
-  // allowed in the tool policy and the shared prompt that must name the mounted
-  // surface; the provider form (`missionbarisal/...`) must not ship as a default.
-  onlyIn(/missionbarisal/, [
-    "src/agents/defaults.ts",
-    "src/agents/shared.ts",
-  ]);
+  // The plugin is self-dependent: no Mission Barisal hook may ship in runtime
+  // sources. A machine without that server must lose nothing but its tools.
+  // Runtime sources ship no hook. The verification script is allowed to name
+  // the forbidden surface because it checks for its absence.
+  onlyIn(/missionbarisal/i, ["scripts/verify-wiring.mjs"]);
   assert.doesNotMatch(
     contents.find(({ file }) => file === "src/zombie/defaults.ts")?.text ?? "",
-    /missionbarisal/,
+    /missionbarisal/i,
     "src/zombie/defaults.ts still ships the vendor provider id",
   );
   assert.doesNotMatch(contents.find(({ file }) => file === "src/roster.ts")?.text ?? "", /opencode\/big-pickle/);
@@ -56,7 +54,8 @@ test("installer/runtime sources do not duplicate provider defaults or credential
   for (const { file, text } of contents) {
     assert.doesNotMatch(text, /apiKey\s*:\s*["']public["']/, `${file} still hardcodes a fake credential`);
     assert.doesNotMatch(text, /\.archive-2026-10-19/, `${file} still carries a project-specific ignore path`);
-    assert.doesNotMatch(text, /missionbarisal\/undefined/, `${file} can still emit provider/undefined`);
+    if (file === "scripts/verify-wiring.mjs") continue; // names it only to prove absence
+    assert.doesNotMatch(text, /missionbarisal/i, `${file} still references Mission Barisal`);
   }
 });
 

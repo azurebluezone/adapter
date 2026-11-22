@@ -886,6 +886,45 @@ test("response gate rejects weak evidence shapes and keeps real results", () => 
   assert.match(outOfRange.reason, /line out of range/);
 });
 
+test("every context pack carries the SSOT and syllabus standing rules", () => {
+  const root = tempProject();
+  fs.mkdirSync(path.join(root, ".zombiecoder"), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, ".zombiecoder", "SSOT.md"),
+    [
+      "## 1. Project",
+      "fixture",
+      "",
+      "## 8. Shared operating rules",
+      "- The current user request is the task source.",
+      "- Substantive work order: inspect, contract, work.",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    path.join(root, ".zombiecoder", "syllabus.md"),
+    [
+      "## 1. Scope",
+      "fixture",
+      "",
+      "## 4. Standing rules",
+      "1. SSOT first, then logic, then code.",
+      "2. Evidence before confidence.",
+      "",
+      "## 6. Lessons (append-only)",
+      "### seed",
+      "seed lesson",
+      "",
+    ].join("\n"),
+  );
+  const pack = buildContextPack(root, "zombiecoder", [], "fix the investigate route", "ses-rules");
+  assert.match(pack.text, /### Standing rules \(SSOT \+ syllabus\)/);
+  assert.match(pack.text, /SSOT first, then logic, then code/);
+  assert.match(pack.text, /Evidence before confidence/);
+  assert.match(pack.text, /current user request is the task source/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test("absolute, extension-less and OpenCode config-root evidence is accepted when real", () => {
   const root = seedProject();
 

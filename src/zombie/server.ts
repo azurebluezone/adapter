@@ -402,6 +402,8 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
     {
       name: "read_ssot",
       description: "Read the generated Single Source of Truth for this project.",
+      // Phases that deny `execute` (intake/contract) must still read the SSOT.
+      direct: true,
       input: empty,
       run: (_input: any, context?: ToolContextLike) => {
         const projectRoot = rootFor(context);
@@ -414,6 +416,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
     {
       name: "read_syllabus",
       description: "Read the append-only syllabus for this project.",
+      direct: true,
       input: empty,
       run: (_input: any, context?: ToolContextLike) => {
         const projectRoot = rootFor(context);
@@ -457,6 +460,9 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
     },
     {
       name: "goal_contract",
+      // The contract phase denies `execute`; this gate must be a direct tool or
+      // the approved work can never start.
+      direct: true,
       description:
         "Pre-register a task's expected outcome in the append-only syllabus BEFORE writing code, with the user's explicit consent. open returns the live open contract instead of minting a second one in this session, rejects a no-op check or a status-word expected, and runs the check once as a baseline after consent; a baseline that already passes writes no contract, because a check that passes before the work proves nothing. Before open, make sure the check command is valid and use `expected` as a literal distinctive success marker the check emits (for example FEATURE_CHECK_OK), not a prose summary; the check must print it only when all stated requirements pass. open needs the real user input, observable expected output, check command, pass criteria and a match mode (contains|equals|regex|json); it shows a Bengali preview card, then asks through the native permission door. In that dialog Allow once approves this goal, Allow always approves later opens in this project, and Reject writes nothing and returns status=rejected. Only after open returns status=open may the agent write; the route then advances to work. close shows its own preview and asks again, then RUNS the recorded check command in the project root (120s cap) and matches real output against the recorded expected marker; PASS only when exit code is 0 and output matches. On close, provide the returned id; do not provide guessed observed/exitCode because the plugin runs and trusts the real check output. A mismatch, empty output or failed command is FAIL; fix the real behavior under the same expected marker and close the same contract again. Never rewrite a failed expected. After a FAIL, a new contract may reuse the same check only with the same expected; a different expected is rejected as a rewrite. A FAIL result is fed into the same-agent circuit breaker. Without approval the tool writes/runs nothing; hand over instead of self-closing.",
       input: {
@@ -1061,6 +1067,8 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
     {
       name: "project_fingerprint",
       description: "Scan the project live and return its machine-readable fingerprint. No fingerprint file is created.",
+      // The footprint phase denies `execute`; the scan must remain reachable.
+      direct: true,
       input: empty,
       run: (_input: any, context?: ToolContextLike) => scanProject(rootFor(context)),
     },
@@ -1097,6 +1105,8 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
     },
     {
       name: "project_onboarding",
+      // The footprint phase denies `execute`; onboarding is its main action.
+      direct: true,
       description:
         "First-input project audit. Reads the tree, manifests, docs, tests, log files, open TODO/FIXME markers and recent audit failures; checks which stack skills are installed; appends ONE evidence lesson per file tree to the syllabus (idempotent by an onboarding:<hash> marker) and returns the evidence plus the manual checklist. Call it on the first user input of a session, then read the docs/code yourself, compare the user's expectation with the documented scope, append the human judgement with append_syllabus and install missing skills before the first goal_contract. The tool records facts; it cannot judge whether the docs are true.",
       input: empty,
@@ -1127,7 +1137,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
         required: ["request"],
         additionalProperties: false,
       },
-      run: (input: any, context?: ToolContextLike) =>
+      run: async (input: any, context?: ToolContextLike) =>
         buildProjectInvestigation(
           rootFor(context),
           String(input?.request ?? ""),
@@ -1217,6 +1227,9 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
     },
     {
       name: "tool_result_read",
+      // The respond phase denies `execute`; a truncated result must still be
+      // readable before the final answer.
+      direct: true,
       description:
         "Read a full tool result archived by the plugin under .zombiecoder/tool-results/. Use it when a preview was truncated; paths outside that directory are refused.",
       input: {
@@ -1451,6 +1464,8 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
     },
     {
       name: "memory_archive",
+      // The footprint phase denies `execute`; archived context is read-only.
+      direct: true,
       description:
         "Read archived messages for a session. Read memory/index.json first to see every archive; this tool returns the actual rows.",
       input: {
@@ -1591,6 +1606,8 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
     },
     {
       name: "skill_catalog",
+      // The footprint phase denies `execute`; stack-skill discovery starts there.
+      direct: true,
       description:
         "List or install shared runtime skills. The catalog covers Laravel, Node, Next, Python, FastAPI, cPanel, UI/UX, resource optimization, server operations, first-principles and evidence-before-confidence. Installing writes OpenCode's native global skill at <install>/skills/<name>/SKILL.md (name matches the folder, description 1-1024 chars) plus a legacy flat copy, so the skill loads in every working directory. When the user names a skill or domain, call action=install with its id: the file is fetched from the gate/git catalog if missing, written natively, and the skill registry reloads. action=auto detects the current project's stack and installs those ids.",
       input: {

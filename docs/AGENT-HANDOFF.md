@@ -30,7 +30,7 @@
 | Model/provider | `ZOMBIECODER_PROVIDER_URL` খালি থাকলে custom URL probe হয় না; OpenCode catalog-এর সক্রিয় cost-0 model থেকে assignment হয়। `ZOMBIECODER_BASELINE_MODEL` কেবল explicit last-resort override। কোনো নির্দিষ্ট `:8000`/`:8080` model endpoint default নয়। |
 | Goal format | `goal_contract` একই field set ব্যবহার করে: `goal`, `input`, `expected`, `check`, `pass`, `match`; compiler/check parser-এর জন্য field name স্থির রাখুন। |
 | LSP | OpenCode V2.2.5 হলো documented test baseline: `lsp` config + server binary, `npm run lsp:probe` **7/7**, এবং `npm run lsp:diagnostics` real diagnostic দিয়েছে। Generation-time runtime আলাদা করে `doc/identity.json`-এ থাকে; live probe না থাকলে `UNKNOWN`। Target install-এ probe পুনরায় চালাও; desktop editor নেই, managed edit diagnostics `NOT_TESTED` |
-| MCP | দুটি local stdio server: `image-brand` (6 tools: PD/CC0 ছবি + branding + exact-size fit + `web_decorate`), `public-api` (8 tools: Wikipedia feeds, weather, currency, country, QR)। Installer `mcp/` কপি করে `opencode.json`-এ register করে; structural যাচাই `node scripts/audit-install.mjs`, live যাচাই `OPENCODE_CONFIG="$HOME/.opencode/opencode.json" opencode mcp list` বা `/api/mcp`. **কোনো MCP server-এ `patch` tool নেই।** |
+| MCP | প্লাগইন MCP-নিরপেক্ষ: নিজের tools, memory, contract ও verification MCP ছাড়াই চলে। Environment চাইলে `--with-local-mcp` (bundled `image-brand` 6 tools, `public-api` 8 tools, `cdp` 12 tools) বা `--mcp-url` দিয়ে server যোগ করে; installer শুধু তখনই `opencode.json`-এ register করে এবং `zombiecoder/config.json`-এর `mcpAllow`-এ namespace লিখে। প্লাগইন কোনো server name hardcode করে না; `mcpAllow`-এ না থাকলে MCP tool phase-gate-এ deny হয়। Structural যাচাই `node scripts/audit-install.mjs --require-mcp`, live যাচাই `opencode mcp list`. **কোনো MCP server-এ `patch` tool নেই।** |
 | Patch / edit | Multi-file edit = OpenCode-এর native `patch` (`opencode.tool.patch`, UI-তে `apply_patch`; ইনপুট `{ patchText }`)। OpenCode 2.2.5-এ এটি model-dependent: `model.id`-তে `gpt-` থাকলে (`oss`/`gpt-4` নয়) `patch` থাকে, `edit`/`write` বাদ; অন্য model-এ `patch` বাদ, `edit`/`write` থাকে। MCP দিয়ে `patch` যোগ হয় না। এক `patchText`-এ Add/Update/Delete/Move multiple files; সব hunk আগে verify, তারপর file-by-file apply — fully atomic নয়, automatic backup/rollback নেই; fail করলে `Completed before failure: <file>` আসে। `*** Move to:`-এর সঙ্গে non-empty hunk লাগে। `zombiecoder.patch_preview` শুধু single-file exact-string dry-run + apply-এ backup। `.zombiecoder/syllabus.md` target করলে multi-file patch block হয়; `append_syllabus`/`goal_contract` ব্যবহার করুন। |
 | Safe edit | read → exact diff/`patchText` → apply → `git diff` → targeted test → full test। Apply-এর আগে `git status`, irreversible হলে backup। |
 | Install proof | `install.sh` একমাত্র bootstrap/update/proof entrypoint; tmpfs staging, দুই installer pass (`H1 === H2`), source hash fidelity, এক loader, ৯ agent, consent `ask`, dependencies, audit, LSP probe, live `/api/plugin`, live MCP connectivity, space delta; artifact `$ZOMBIECODER_DIR/zombiecoder/install-proof.json`, stdout-এ `PROOF PASS`/`PROOF FAIL` |
@@ -260,8 +260,8 @@ agent-এর প্রতিটি দাবিও স্পষ্ট।
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  c18f1cf6a630d0aab06ce0c3935c9f5bbbe0db5367e56c36062239dbefdee4a3  ║
-║  files 179 · bytes 1646808 · base 9455a23 · dirty                        ║
+║  root  6dd5499d575bc47ecf0456484ad1a9bc4cbc1bfb68ba992454c9a6221be0ced3  ║
+║  files 182 · bytes 1697162 · base 317b399 · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -269,7 +269,7 @@ agent-এর প্রতিটি দাবিও স্পষ্ট।
 
 > SHA-256 over source, scripts, tests, skills, package metadata and license.
 > Detects accidental or unauthorized changes. Not a legal identity signature.
-> Base commit is the code tree before this seal commit. Generated: 2026-11-19T04:37:40.931Z
+> Base commit is the code tree before this seal commit. Generated: 2026-11-21T23:55:48.416Z
 
 </div>
 <!-- INTEGRITY:END -->

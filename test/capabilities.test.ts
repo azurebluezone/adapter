@@ -25,32 +25,41 @@ test("every roster agent prompt carries the proactive skill protocol", () => {
   }
 });
 
-test("every roster agent prompt names the branding and API surfaces", () => {
+test("every roster agent prompt keeps MCP environment-owned", () => {
   for (const agent of ROSTER) {
     const prompt = agentSystemPrompt(agent);
-    assert.match(prompt, /`image-brand_image_brand` \{input, title, canvas:\{width,height\}\}/, `${agent.id}: no exact canvas contract`);
-    assert.match(prompt, /`image-brand_image_fit` \{input, width, height\}/, `${agent.id}: no exact image_fit contract`);
-    assert.match(prompt, /`public-api_\*`: wiki_search, wiki_page, wiki_onthisday, wiki_featured, weather, currency, country, qr \{data, size\}/, `${agent.id}: public-api map missing`);
+    assert.match(prompt, /### MCP surfaces \(optional — environment-provided\)/, `${agent.id}: no MCP policy`);
+    assert.match(prompt, /mcpAllow/, `${agent.id}: does not know the environment allowlist`);
+    assert.match(prompt, /opencode mcp list/, `${agent.id}: no live MCP check`);
+    for (const server of ["image-brand", "public-api", "cdp", "missionbarisal"]) {
+      assert.doesNotMatch(
+        prompt,
+        new RegExp(server, "i"),
+        `${agent.id}: prompt hardcodes the ${server} server`,
+      );
+    }
     assert.match(prompt, /before header\/footer copy or images; never invent/, `${agent.id}: exact-size rule missing`);
   }
 });
 
-test("the capability map covers every mounted MCP tool", () => {
+test("the bundled MCP servers keep their tool contracts discoverable", () => {
+  // The prompt no longer copies tool schemas. The server remains the source of
+  // truth and tools/list is the live proof, so only the server contract is
+  // asserted here.
   const imageTools = serverTools("mcp/image-brand/server.mjs").sort();
   const publicTools = serverTools("mcp/public-api/sources.mjs").sort();
   assert.equal(imageTools.length, 6, "image-brand tool count changed");
   assert.equal(publicTools.length, 8, "public-api tool count changed");
-  for (const name of imageTools) {
-    // Compact map: full name for the two exact-size tools, short verb otherwise.
-    const short = name.replace(/^image_/, "").replace(/^web_/, "");
-    assert.ok(
-      AGENT_CAPABILITIES.includes(`image-brand_${name}`) || AGENT_CAPABILITIES.includes(short),
-      `image-brand_${name} is not mentioned in the capability map`,
-    );
-  }
-  for (const name of publicTools) {
-    assert.ok(AGENT_CAPABILITIES.includes(name), `public-api_${name} is not mentioned in the capability map`);
-  }
+  assert.deepEqual(imageTools, [
+    "image_batch",
+    "image_brand",
+    "image_fetch",
+    "image_fit",
+    "image_search",
+    "web_decorate",
+  ]);
+  assert.ok(publicTools.includes("country"));
+  assert.ok(publicTools.includes("qr"));
 });
 
 test("every agent can install a skill discovered during work", () => {
@@ -60,9 +69,10 @@ test("every agent can install a skill discovered during work", () => {
   }
 });
 
-test("the exact-size rule forbids inventing a size", () => {
+test("the exact-size rule and built-in evidence tools survive without MCP", () => {
   assert.match(AGENT_CAPABILITIES, /read px\/columns\/ratio from the project/);
   assert.match(AGENT_CAPABILITIES, /never invent/);
-  assert.match(AGENT_CAPABILITIES, /canvas:\{width,height\}/);
-  assert.match(AGENT_CAPABILITIES, /qr \{data, size\}/);
+  assert.match(AGENT_CAPABILITIES, /Built-in evidence tools/);
+  assert.match(AGENT_CAPABILITIES, /http_probe/);
+  assert.match(AGENT_CAPABILITIES, /diagnostics_for_file/);
 });

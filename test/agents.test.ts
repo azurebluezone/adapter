@@ -68,19 +68,25 @@ test("each agent owns its tools and footprint policy", () => {
     assert.ok(controller.profile.footprint.required.includes("syllabus"));
     assert.equal(controller.profile.footprint.owner, "halim");
     assert.ok(controller.allows("goal_contract", "investigate"), `${controller.id} must be able to register its goal`);
+    assert.equal(controller.allows("goal_contract", "intake"), true, "a misclassified read-only task needs the contract escape hatch");
+    assert.equal(controller.allows("goal_contract", "footprint"), true, "the footprint phase can open the approved contract");
     assert.ok(controller.allows("read", "investigate"));
     assert.equal(controller.allows("read", "footprint"), true);
     assert.equal(controller.allows("grep", "footprint"), true);
     assert.equal(controller.allows("glob", "footprint"), true);
     assert.equal(controller.allows("shell", "investigate"), true, "read-only shell probes are part of investigation");
     assert.equal(controller.allows("execute", "investigate"), true, "execute is the host alias for shell");
+    assert.equal(controller.allows("question", "investigate"), true, "the agent must be able to ask one precise question");
+    assert.equal(controller.allows("webfetch", "investigate"), true, "web research is read-only investigation");
+    assert.equal(controller.allows("websearch", "investigate"), true, "web search is read-only investigation");
+    assert.equal(controller.allows("append_syllabus", "investigate"), true, "findings belong in the syllabus while fresh");
     assert.equal(controller.allows("edit", "investigate"), false, "write before work must be denied");
     assert.equal(controller.allows("edit", "propose"), false);
     assert.equal(controller.allows("edit", "work"), true);
     assert.equal(controller.allows("task", "work"), false, "delegation is denied in every phase");
-    assert.equal(controller.allows("image-brand_image_brand", "investigate"), true, "MCP namespace must be usable while gathering facts");
-    assert.equal(controller.allows("image-brand_image_brand", "work"), true, "MCP namespace must stay usable during work");
-    assert.equal(controller.allows("public-api_weather", "verify"), true, "public-api namespace must be reviewable in verify");
+    assert.equal(controller.allows("image-brand_image_brand", "investigate"), false, "the plugin ships no MCP server name");
+    assert.equal(controller.allows("image-brand_image_brand", "work"), false, "MCP access comes from mcpAllow at runtime, not the profile");
+    assert.equal(controller.allows("public-api_weather", "verify"), false, "an unlisted MCP namespace stays denied");
     assert.equal(controller.allows("image-brand_image_brand", "intake"), false, "MCP tools must not leak into intake");
   }
   assert.equal(manu.allows("edit", "investigate"), false);
@@ -89,12 +95,14 @@ test("each agent owns its tools and footprint policy", () => {
 
 test("each prompt exposes its phase tools and namespaced plugin tools", () => {
   const nilaPrompt = getAgentController("nila")!.prompt();
-  const manuPrompt = getAgentController("manu")!.prompt();
 
   assert.match(nilaPrompt, /Tool access \(enforced by plugin\)/);
   assert.match(nilaPrompt, /design_sketch: investigate\/propose\/work/);
   assert.match(nilaPrompt, /design_review: investigate\/propose\/work\/verify/);
-  assert.doesNotMatch(manuPrompt, /design_sketch|design_review/);
+  // The shared capability map mentions design_review for every agent, so the
+  // ownership check is the phase allowlist, not a raw prompt substring.
+  assert.equal(getAgentController("manu")!.profile.tools.phases.investigate.includes("design_sketch"), false);
+  assert.equal(getAgentController("manu")!.profile.tools.phases.work.includes("design_review"), false);
   assert.equal(getAgentController("nila")!.allows("zombiecoder_design_sketch", "investigate"), true);
   assert.equal(getAgentController("manu")!.allows("zombiecoder_design_sketch", "investigate"), false);
 });

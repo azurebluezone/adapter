@@ -83,6 +83,8 @@ import { ensureSharedSkills, DEFAULT_SKILL_REPO } from "./zombie/skillCatalog.ts
 import { buildContextPack, resolveAllowedPath } from "./zombie/context.ts";
 import { resolveAgentController, subagentGuard } from "./agents/index.ts";
 import { agentProfileMarker, canonicalTool } from "./agents/base.ts";
+import { MCP_PHASES, mcpAllowPatterns, mcpToolAllowed, normalizeMcpServer } from "./agents/defaults.ts";
+import { protectedRoots, protectedWriteTarget } from "./zombie/protectedRoots.ts";
 import {
   applyToolEvent,
   beginTurn,
@@ -198,6 +200,12 @@ export type ZombieConfig = {
   customProviderApiKey: string;
   baselineModel: string;
   mcpUrl: string;
+  // Environment-owned MCP namespaces the plugin may gate into read/work/verify.
+  // Empty by default: the plugin never assumes a server exists.
+  mcpAllow: string[];
+  // Plugin source root recorded by the installer. The plugin protects it (and
+  // its own install root) from writes made by sessions working elsewhere.
+  sourceRoot: string;
   opencodeApiUrl: string;
   originUrl: string;
   ssotRefreshMs: number;
@@ -229,6 +237,8 @@ export const DEFAULT_CONFIG: ZombieConfig = {
   customProviderApiKey: DEFAULT_CUSTOM_PROVIDER_KEY,
   baselineModel: BASELINE_MODEL,
   mcpUrl: DEFAULT_MCP_URL,
+  mcpAllow: [],
+  sourceRoot: "",
   opencodeApiUrl: DEFAULT_OPENCODE_API_URL,
   originUrl: DEFAULT_ORIGIN_URL,
   ssotRefreshMs: DEFAULT_SSOT_REFRESH_MS,
@@ -492,6 +502,13 @@ function loadConfig(projectRoot: string): ZombieConfig {
   for (const [key, value] of Object.entries(env)) {
     if (value !== undefined) (merged as Record<string, unknown>)[key] = value;
   }
+  // MCP is environment-owned: the allowlist comes from the install config or
+  // ZOMBIECODER_MCP_ALLOW, never from a server name baked into this module.
+  const mcpAllowEnv = envOverride("ZOMBIECODER_MCP_ALLOW");
+  const configuredAllow = mcpAllowEnv !== undefined
+    ? mcpAllowEnv.split(/[,;\s]+/)
+    : Array.isArray(merged.mcpAllow) ? merged.mcpAllow : [];
+  merged.mcpAllow = [...new Set(configuredAllow.map(normalizeMcpServer).filter(Boolean))];
   if (externalUrlPresent) {
     merged.customProviderUrl = externalUrl;
     if (!env.modelStrategy) merged.modelStrategy = externalUrl ? "auto" : "free";
@@ -1398,6 +1415,13 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
             ? Boolean(expectedProfileMarker && systemText.includes(expectedProfileMarker))
             : systemHasPersona;
         const personaText = systemHasCurrentPersona ? "" : persona.text;
+        const sessionRoots = protectedRoots({ installRoot: PLUGIN_PARENT, sourceRoot: config.sourceRoot });
+        const allowedPhaseTools = routeAgent && routeRun
+          ? [
+              ...routeAgent.profile.tools.phases[routeRun.phase],
+              ...(MCP_PHASES.includes(routeRun.phase) ? mcpAllowPatterns(config.mcpAllow) : []),
+            ]
+          : [];
         if (Array.isArray(event?.system) && typeof event.system.push === "function") {
           event.system.push({
             type: "text",
@@ -1405,10 +1429,17 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
               pack.text,
               "",
               ...(personaText ? [personaText, ""] : []),
+              "### Session rules (authoritative — do not re-read the plugin to learn them)",
+              `- Working directory: ${projectRoot}. Writes are allowed only inside it.`,
+              `- Plugin source/install roots are read-only from this session: ${sessionRoots.join(", ") || "none"}. Edit them only from a session whose working directory is inside them.`,
+              "- Substantive work: inspect → goal_contract open → work → close (the recorded check runs) → respond. A write before `status: open` is blocked.",
+              "- Evidence: path, command, exit code or literal marker. Otherwise say UNVERIFIED / NOT_TESTED; never invent a result.",
+              "- MCP is optional and environment-owned: only namespaces in `mcpAllow` are reachable, and only in investigate/work/verify. The plugin's own tools need no MCP server.",
+              "",
               "### Agent contract",
               `Active agent: ${routeAgent?.profile.name ?? agentID} (${agentID})`,
-              ...(routeAgent && routeRun
-                ? [`Allowed tools in ${routeRun.phase}: ${routeAgent.profile.tools.phases[routeRun.phase].join(", ")}`]
+              ...(allowedPhaseTools.length > 0
+                ? [`Allowed tools in ${routeRun!.phase}: ${allowedPhaseTools.join(", ")}`]
                 : []),
               def
                 ? `Decision rule: ${def.rule}`
@@ -2157,7 +2188,11 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
             activeAgentRun.taskKind === "readonly" && activeAgentRun.fastPath && activeAgentRun.phase === "intake"
               ? "investigate"
               : activeAgentRun.phase;
-          if (!controller.allows(tool, policyPhase)) {
+          // MCP namespaces are environment-owned. The plugin does not know a
+          // server name in advance; it only honors the `mcpAllow` list and the
+          // read/work/verify phases. An empty list denies every MCP tool.
+          const mcpAllowed = MCP_PHASES.includes(policyPhase) && mcpToolAllowed(tool, config.mcpAllow);
+          if (!controller.allows(tool, policyPhase) && !mcpAllowed) {
             const nextPhases = legalNext(activeAgentRun.taskKind, policyPhase);
             audit(projectRoot, agentID, {
               kind: "agent.tool_policy.block",
@@ -2189,6 +2224,28 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
         const commandText = String(input.command ?? input.cmd ?? "");
         const shellWrite = analyzeShell(commandText);
         const shellMutates = (tool === "shell" || tool === "bash" || tool === "command" || tool === "execute") && shellWrite.mutates;
+
+        // The plugin is a separate module. A session working in another project
+        // must not edit the plugin source or install root: the agent would be
+        // changing the rules it is being judged by. Read-only inspection stays
+        // allowed; a mutating target gets a hard block, not a permission prompt.
+        const protectedTarget = protectedWriteTarget(targets, shellMutates ? commandText : "", projectRoot, {
+          installRoot: PLUGIN_PARENT,
+          sourceRoot: config.sourceRoot,
+        });
+        if (protectedTarget) {
+          audit(projectRoot, agentID, {
+            kind: "agent.plugin_scope.block",
+            sessionID,
+            tool,
+            target: protectedTarget,
+            roots: protectedRoots({ installRoot: PLUGIN_PARENT, sourceRoot: config.sourceRoot }),
+            reason: "plugin source/install root is read-only from another working directory",
+          });
+          throw new Error(
+            `${protectedTarget}. The plugin is a separate module; edit it only from a session whose working directory is the plugin root, or ask the owner to update it. Read-only inspection is allowed.`,
+          );
+        }
         const ledger =
           targets.find((value) => /(?:^|\/)\.zombiecoder\/(?:syllabus\.md|SSOT\.md)$/i.test(value)) ??
           ledgerTarget(commandText);

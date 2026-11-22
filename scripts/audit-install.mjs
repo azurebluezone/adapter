@@ -6,12 +6,14 @@
  *
  * This reads the real filesystem; it does not trust the installer log.
  *
- *   node scripts/audit-install.mjs [--config <dir>] [--install <dir>]
+ *   node scripts/audit-install.mjs [--config <dir>] [--install <dir>] [--require-mcp]
  *
- *   --config   directory that holds opencode.json (default ~/.config/opencode)
- *   --install  install root with agents/, plugins/, zombiecoder/
- *              (default: the --config directory)
- *   -h, --help show usage and exit 0
+ *   --config       directory that holds opencode.json (default ~/.config/opencode)
+ *   --install      install root with agents/, plugins/, zombiecoder/
+ *                  (default: the --config directory)
+ *   --require-mcp  treat zero registered MCP servers as incomplete. Without this
+ *                  flag MCP stays opt-in and a zero count is not a failure.
+ *   -h, --help     show usage and exit 0
  *
  * Exit codes: 0 complete, 1 incomplete, 2 bad arguments or unreadable config.
  */
@@ -26,6 +28,7 @@ Options:
   --config <dir>   OpenCode config directory (default: ~/.config/opencode)
   --install <dir>  Install root with agents/, plugins/, zombiecoder/
                    (default: the --config directory)
+  --require-mcp    Zero registered MCP servers is incomplete (opt-in by default)
   -h, --help       Show this help and exit
 
 Exit codes: 0 complete, 1 incomplete, 2 bad arguments or unreadable config.`;
@@ -42,9 +45,14 @@ function parseArgs(argv) {
   const options = {
     config: path.join(os.homedir(), ".config", "opencode"),
     install: null,
+    requireMcp: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
+    if (token === "--require-mcp") {
+      options.requireMcp = true;
+      continue;
+    }
     const match = /^--(config|install)(?:=(.*))?$/.exec(token);
     if (!match) {
       console.error(`FAIL unknown argument ${JSON.stringify(token)}`);
@@ -65,7 +73,8 @@ function parseArgs(argv) {
   return options;
 }
 
-const { config: configDir, install: installDir } = parseArgs(process.argv.slice(2));
+const options = parseArgs(process.argv.slice(2));
+const { config: configDir, install: installDir } = options;
 const jsonFile = path.join(configDir, "opencode.json");
 const jsoncFile = path.join(configDir, "opencode.jsonc");
 const configFile = fs.existsSync(jsonFile) ? jsonFile : jsoncFile;
@@ -93,15 +102,22 @@ const lsp = Object.entries(config.lsp ?? {}).map(([name, entry]) => {
 });
 const lspOk = lsp.filter((entry) => entry.ok).length;
 
-const mcp = Object.entries(config.mcp?.servers ?? {}).map(([name, entry]) => {
+// V2 keeps servers under `mcp.servers`; older configs put them directly under
+// `mcp`. Read both so a migrated install is not reported as empty.
+const mcpEntries = new Map(Object.entries(config.mcp?.servers ?? {}));
+for (const [name, entry] of Object.entries(config.mcp ?? {})) {
+  if (name !== "servers") mcpEntries.set(name, entry);
+}
+const mcp = [...mcpEntries].map(([name, entry]) => {
   const command = Array.isArray(entry?.command) ? entry.command : null;
   const target = entry?.url ?? (command ? command[command.length - 1] : null);
   const local = entry?.type === "local";
+  const ok = local ? Boolean(command && command.length > 0 && has(command[command.length - 1])) : Boolean(entry?.url);
   return {
     name,
     type: entry?.type ?? "remote",
     target,
-    ok: !local || (command ? has(command[command.length - 1]) : false),
+    ok,
   };
 });
 
@@ -150,7 +166,10 @@ const problems = [];
 if (agents.length === 0) problems.push("no agents");
 if (lsp.length === 0) problems.push("no lsp servers");
 for (const entry of lsp) if (!entry.ok) problems.push(`lsp.${entry.name} binary missing`);
-for (const server of mcp) if (!server.ok) problems.push(`mcp.${server.name} command missing`);
+if (options.requireMcp && mcp.length === 0) problems.push("no MCP servers configured (--require-mcp)");
+for (const server of mcp) {
+  if (!server.ok) problems.push(`mcp.${server.name} ${server.type === "local" ? "command" : "url"} missing`);
+}
 if (!entrypoint) problems.push("plugin entrypoint missing");
 
 if (problems.length > 0) {
