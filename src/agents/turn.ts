@@ -59,6 +59,17 @@ export function isSyntheticText(text: string, hashes: ReadonlySet<string>): bool
   return hashes.has(hashMessage(normalizeSyntheticText(text)));
 }
 
+// The host also injects internal notices as user-role messages: a failed
+// subagent, the circuit-breaker retry, the synthetic context pack. They are
+// not the user's request; showing one as "তুমি চাইছ" in the intake card is
+// both confusing and wrong.
+const INTERNAL_NOTICE =
+  /^(?:<subagent\b|<conversation-checkpoint\b|<environment\b|\[zombiecoder circuit breaker\]|\[Synthetic context\]|\*\*Circuit breaker:\*\*)/i;
+
+export function isInternalNotice(text: string): boolean {
+  return INTERNAL_NOTICE.test(String(text ?? "").trim());
+}
+
 export type ResolvedUserTurn = {
   text: string;
   count: number;
@@ -80,7 +91,7 @@ export function resolveUserTurn(
     if (String(roleOf(message) ?? "").toLowerCase() !== "user") continue;
     const candidate = textOf(message);
     if (!candidate) continue;
-    if (isSynthetic(candidate)) continue;
+    if (isSynthetic(candidate) || isInternalNotice(candidate)) continue;
     count += 1;
     if (!text) text = candidate;
   }

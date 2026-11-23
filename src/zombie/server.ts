@@ -41,6 +41,12 @@ import {
 } from "./goalContract.ts";
 import { isStandInPath } from "./responseGate.ts";
 import {
+  journeyCloseText,
+  journeyContractText,
+  journeyGuardText,
+  journeyScopeText,
+} from "./journey.ts";
+import {
   JUDGE_DELAY_MS,
   JUDGE_MAX_QUESTIONS,
   buildJudgePrompt,
@@ -636,18 +642,17 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           // before any code is written. Shown as a synthetic session message so
           // it appears in the UI, not only inside a file.
           const preview = [
-            "কাজ শুরুর আগে — একবার মিলিয়ে নাও",
-            "",
-            `তুমি চাইছ: ${goal}`,
-            `আসল ইনপুট: ${realInput}`,
-            `আমি তোমাকে দেব: ${expected}`,
-            ...(investigationSummary ? [`Investigation: ${investigationSummary}`] : []),
-            `যাচাই: \`${check}\` — ${pass}`,
-            `মিলানোর নিয়ম: ${mode}`,
-            "",
-            "খোলার আগে একবার baseline চালাব। ওটা pass করে ফেললে contract খুলব না — আগেই pass করা check কোনো কাজের প্রমাণ নয়।",
-            "permission dialog: Allow once = শুধু এইবার; Allow always = এই প্রজেক্টে পরেরবার আর জিজ্ঞেস করব না; Reject = কিছুই লেখা হবে না।",
-            "ভুল মনে হলে Reject দাও; কোনো ফাইল লেখা হবে না, নতুন করে বলব।",
+            journeyContractText({
+              goal,
+              input: realInput,
+              deliverable,
+              check,
+              expected,
+              pass,
+              mode,
+              scope,
+            }),
+            ...(investigationSummary ? ["", `Investigation: ${investigationSummary}`] : []),
           ].join("\n");
           let uiShown = false;
           if (context?.sessionID && deps.synthetic) {
@@ -872,12 +877,41 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             goal,
             baselineExitCode: baseline.exitCode,
           });
+          // Stage 3: the user sees the scope paths that were checked against
+          // the project boundary, and the guard clock that starts now.
+          let scopeShown = false;
+          if (sessionID && deps.synthetic) {
+            const scopePaths = scope.split(/[,\s]+/).filter(Boolean);
+            const verified = (scopePaths.length > 0 ? scopePaths : ["."]).map((item) => ({
+              path: item,
+              inside: item === "." || resolveAllowedPath(projectRoot, item) !== null,
+            }));
+            try {
+              await deps.synthetic(
+                uiCard({
+                  sessionID,
+                  kind: "journey-scope",
+                  text: journeyScopeText({
+                    contractID: id,
+                    projectRoot,
+                    scope,
+                    verified,
+                    openedAt,
+                  }),
+                }),
+              );
+              scopeShown = true;
+            } catch {
+              scopeShown = false;
+            }
+          }
           return {
             id,
             file: written.file,
             status: "open",
             approved: true,
             uiShown,
+            scopeShown,
             preview,
             baseline: { exitCode: baseline.exitCode, observed: baselineOutput },
           };
@@ -994,17 +1028,16 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           }
           // The user must see what will be executed before the native dialog.
           const closePreview = [
-            "শেষ ধাপ — গোল বন্ধ করার আগে",
-            "",
-            `গোল: ${contract.goal}`,
-            `আইডি: ${id}`,
-            `যাচাই চলবে: \`${contract.check}\``,
-            `প্রত্যাশা: ${contract.expected}`,
-            `মিলানোর নিয়ম: ${mode}`,
-            ...(stored?.openedAt ? [`খোলার সময়: ${stored.openedAt}`] : []),
-            "",
-            "permission dialog: Allow once = চেক চালাও; Allow always চাপলেও close-এর জন্য কিছু সেভ হয় না, পরের close-এ আবার জিজ্ঞেস করব; Reject = চেক চলবে না।",
-            "Reject দিলে contract খোলাই থাকবে, ফল লেখা হবে না।",
+            journeyCloseText({
+              phase: "preview",
+              contractID: id,
+              goal: contract.goal,
+              deliverable: contract.deliverable || contract.goal,
+              check: contract.check,
+              expected: contract.expected,
+              mode,
+            }),
+            ...(stored?.openedAt ? ["", `খোলার সময়: ${stored.openedAt}`] : []),
           ].join("\n");
           let previewShown = false;
           if (sessionID && deps.synthetic) {
@@ -1130,18 +1163,19 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
                 uiCard({
                   sessionID,
                   kind: "goal-contract-result",
-                  text: [
-                    `Goal Contract ${id} — ${status}`,
-                    "",
-                    `চেক: \`${contract.check}\` — exit ${run.exitCode === null ? "none" : run.exitCode}`,
-                    `expected: ${contract.expected}`,
-                    `পেলাম: ${oneLine(output) || "(কোনো output নেই)"}`,
-                    ...(reason ? [`কারণ: ${reason}`] : []),
-                    "",
-                    status === "PASS"
-                      ? "প্রমাণ syllabus-এ লেখা হয়েছে।"
-                      : "এটা PASS নয় — আসল আচরণ ঠিক করো, তারপর একই contract id, check ও expected রেখে আবার close করো। Plugin check-টি নতুন করে চালাবে।",
-                  ].join("\n"),
+                  text: journeyCloseText({
+                    phase: "result",
+                    contractID: id,
+                    goal: contract.goal,
+                    deliverable: contract.deliverable || contract.goal,
+                    check: contract.check,
+                    expected: contract.expected,
+                    mode,
+                    status,
+                    exitCode: run.exitCode,
+                    observed: output,
+                    reason: reason || undefined,
+                  }),
                 }),
               );
               uiShown = true;
@@ -1246,6 +1280,24 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           if (!contract) {
             throw new Error(`contract ${contractID} is not in the syllabus; read it before judging`);
           }
+          // Stage 4: the user sees the guard start before the first question.
+          // One card per contract, not one per prompt call.
+          const guardKey = `journey/ui/guard/${contractID}`;
+          if (!(await deps.storage.get(guardKey))) {
+            await deps.storage.set(guardKey, { at: new Date().toISOString() });
+            await show(
+              String(clock.sessionID ?? sessionID),
+              "journey-guard-start",
+              journeyGuardText({
+                contractID,
+                stage: "start",
+                goal: contract.goal,
+                check: contract.check,
+                expected: contract.expected,
+                maxQuestions: JUDGE_MAX_QUESTIONS,
+              }),
+            );
+          }
           const intent = (await deps.storage.get(`judge/intent/${contractID}`)) as
             | { request?: string }
             | null
@@ -1324,16 +1376,13 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           const shown = await show(
             target,
             "intent-judge-question",
-            [
-              `Intent judge question ${debate.questions.length} of ${JUDGE_MAX_QUESTIONS}`,
-              "",
-              `Contract: ${requested}`,
-              `Worker claim: ${debate.workerClaim}`,
-              "",
-              `Judge: ${question}`,
-              "",
-              "Worker: answer with `intent_judge` action=answer, then continue the judge session.",
-            ].join("\n"),
+            journeyGuardText({
+              contractID: requested,
+              stage: "question",
+              question,
+              questionNumber: debate.questions.length,
+              maxQuestions: JUDGE_MAX_QUESTIONS,
+            }),
           );
           return {
             contractID: requested,
@@ -1366,15 +1415,12 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           const shown = await show(
             target,
             "intent-judge-answer",
-            [
-              `Worker answer ${index + 1}`,
-              "",
-              `Contract: ${requested}`,
-              `Judge: ${debate.questions[index].question}`,
-              `Worker: ${answer}`,
-              "",
-              "The judge reads this answer and records PASS or FAIL.",
-            ].join("\n"),
+            journeyGuardText({
+              contractID: requested,
+              stage: "answer",
+              question: debate.questions[index].question,
+              answer,
+            }),
           );
           return { contractID: requested, answered: index + 1, uiShown: shown };
         }
@@ -1427,11 +1473,13 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
         const shown = await show(
           target,
           "intent-judge-verdict",
-          [
-            `Intent judge verdict: ${status}`,
-            "",
-            debateTranscript(finalDebate),
-          ].join("\n"),
+          journeyGuardText({
+            contractID: requested,
+            stage: "verdict",
+            verdict: status,
+            reason,
+            transcript: debateTranscript(finalDebate),
+          }),
         );
         audit(deps.projectRoot(clock.sessionID), "intent-judge", {
           kind: "intent_judge.verdict",

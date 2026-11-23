@@ -114,6 +114,7 @@ import {
   type JudgeVerdict,
 } from "./zombie/intentJudge.ts";
 import { uiCard } from "./zombie/uiCard.ts";
+import { journeyIntakeText } from "./zombie/journey.ts";
 import {
   addEvidence,
   MAX_EVIDENCE_OUTPUT,
@@ -1492,6 +1493,39 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
               stage: "context",
               error: redact(String(error?.message ?? error)),
             });
+          }
+        }
+
+        // Stage 1 must be visible: the user sees the real syllabus/SSOT sizes,
+        // the focus files, the input sanitizer count and the route before the
+        // model answers. One card per user turn; a tool loop re-enters this
+        // hook with the same turnIndex and must not repeat it.
+        if (
+          sessionID &&
+          sessionID !== "unknown" &&
+          deps.synthetic &&
+          routeRun &&
+          routeRun.taskKind !== "trivial"
+        ) {
+          const journeyKey = `journey/ui/${sessionID}/${userTurnCount}`;
+          if (!(await ctx.storage.get(journeyKey))) {
+            await ctx.storage.set(journeyKey, { at: new Date().toISOString() });
+            try {
+              await deps.synthetic(
+                uiCard({
+                  sessionID,
+                  kind: "journey-intake",
+                  text: journeyIntakeText({
+                    pack,
+                    run: routeRun,
+                    request: userMessage,
+                    sanitized: sanitized.affected.length,
+                  }),
+                }),
+              );
+            } catch {
+              // The audit trail is the durable record; the turn still runs.
+            }
           }
         }
 

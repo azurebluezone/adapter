@@ -1950,8 +1950,12 @@ test("a gate-blocked answer retries the same agent and then opens the breaker", 
   assert.match(fake.prompts[0].text, /circuit breaker/);
   assert.match(fake.prompts[0].text, /তুমি এখনো `manu`/);
   assert.match(fake.prompts[0].text, /Original user request:[\s\S]*Explain the login timeout in src\/auth\.ts/);
-  assert.match(fake.synthetics[0].text, /Circuit breaker/);
-  assert.match(fake.synthetics[0].text, /1\/3/);
+  const breakerCard = fake.synthetics.find(
+    (entry) => entry.metadata?.kind === "circuit-breaker-retry",
+  );
+  assert.ok(breakerCard, "the breaker card is visible after the intake card");
+  assert.match(breakerCard.text, /Circuit breaker/);
+  assert.match(breakerCard.text, /1\/3/);
 
   const second = event("manu", unproven);
   await hook(second);

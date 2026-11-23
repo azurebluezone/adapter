@@ -1,6 +1,6 @@
 {
   "schema": "zombiecoder-integrity/v1",
-  "generated_at": "2026-11-23T00:13:30.535Z",
+  "generated_at": "2026-11-23T00:40:28.366Z",
   "scope": [
     "src",
     "bin",
@@ -12,11 +12,11 @@
     "package.json",
     "LICENSE"
   ],
-  "root_sha256": "1bcaddf0714d15438fd2a83bfd21fb72b9161f1676ff0593a400d2ee420ab823",
-  "file_count": 200,
-  "total_bytes": 1913003,
+  "root_sha256": "f49087158ce0304f7bb6d49560fdca3579b6d183bd8608dbd70bb455ff7a45e2",
+  "file_count": 203,
+  "total_bytes": 1946022,
   "git": {
-    "commit": "1fa359a",
+    "commit": "ce2221a",
     "branch": "main",
     "dirty": true
   },
@@ -302,6 +302,11 @@
       "sha256": "01f88f27e3ae0b42cf786ab05c484680a34baf80dc2f795ba0f21d21efab51fb"
     },
     {
+      "path": "scripts/check-journey-ui.mjs",
+      "bytes": 9704,
+      "sha256": "b8beeba0ae71a68624f2ea8912406221144cc328ddba1d4b51fd86957d7c5b82"
+    },
+    {
       "path": "scripts/check-release.mjs",
       "bytes": 6497,
       "sha256": "9ec29c06bbe9009b62d2452977c091fc407eb091684f06cb11d02e1417f642fc"
@@ -488,8 +493,8 @@
     },
     {
       "path": "src/agents/turn.ts",
-      "bytes": 2848,
-      "sha256": "36ef7e546f9c8131ab2780af0b8c29ace3082b676b13bd885ef7e9b11bcab0ac"
+      "bytes": 3439,
+      "sha256": "94d44fd3ae222e1b5952b4a6e0349ecf35ef540bbf530ec19e3863554a2f4b2d"
     },
     {
       "path": "src/agents/types.ts",
@@ -523,8 +528,8 @@
     },
     {
       "path": "src/plugin.ts",
-      "bytes": 120973,
-      "sha256": "b1f30148fac1564ef897fdb56e5e008041db47410faf992c443723147575b4e8"
+      "bytes": 122265,
+      "sha256": "229763b1d2c0c4b5348e7ea4e404e457ef85d844f7cfdfb0fe2e0046ae43bf3c"
     },
     {
       "path": "src/roster.ts",
@@ -610,6 +615,11 @@
       "path": "src/zombie/io.ts",
       "bytes": 5501,
       "sha256": "ea1e2e86293380c1af37d143ed53fa231d824022a42d95c0c8aebf5542c255fd"
+    },
+    {
+      "path": "src/zombie/journey.ts",
+      "bytes": 11263,
+      "sha256": "ca064b1f5aec79971aff89ee70a95166937b0d88f00e0795dff8726571e655c6"
     },
     {
       "path": "src/zombie/lsp.ts",
@@ -708,8 +718,8 @@
     },
     {
       "path": "src/zombie/server.ts",
-      "bytes": 115101,
-      "sha256": "c7ae278297f8c2afa7c59336fe23d516ad531e244da57455ac0d39e18bc98572"
+      "bytes": 115114,
+      "sha256": "00b1f85b7858e742c866b9762e67cc96cd0829adb486d37e08379b9620be821f"
     },
     {
       "path": "src/zombie/shellGuard.ts",
@@ -867,6 +877,11 @@
       "sha256": "5e07043c9e0b58d59687415b96a80b786f05fa574a080948fefa1ee407b4c801"
     },
     {
+      "path": "test/journey.test.ts",
+      "bytes": 8874,
+      "sha256": "5436e91e657e90df5193004042c26b81db3e0637a1c4d5bab8b9956bd0eb4f85"
+    },
+    {
       "path": "test/lsp.test.ts",
       "bytes": 2276,
       "sha256": "e6808cbdb5df0d78dd645b1b5a0e73ce64029eb2aa0e09516e585e523b673a6a"
@@ -923,8 +938,8 @@
     },
     {
       "path": "test/plugin.test.ts",
-      "bytes": 98840,
-      "sha256": "35ca888e3a1d803f79efb4634db6f2cc6d63506e2a9fd9576a1685963ecbb347"
+      "bytes": 99019,
+      "sha256": "b9425383f87e04d578d2defc406383a2c1e9bb4ef7e6fe17f41fb3d7249fb67b"
     },
     {
       "path": "test/promptBudget.test.ts",
@@ -1008,8 +1023,8 @@
     },
     {
       "path": "test/turn.test.ts",
-      "bytes": 4179,
-      "sha256": "e5e4c1f1bf7530393223a4fbe563d1e3bb9e5f0e68283c47146224d57cf1a513"
+      "bytes": 5282,
+      "sha256": "185c8920a81ee25f45298d030f6ef7bbfafa93b524ae4b336a976714ad28df4c"
     },
     {
       "path": "test/watchdog.test.ts",

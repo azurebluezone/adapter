@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  isInternalNotice,
   isSyntheticText,
   normalizeSyntheticText,
   readSyntheticHashes,
@@ -97,4 +98,25 @@ test("whitespace changes in a synthetic card do not defeat the match", async () 
   const hashes = await readSyntheticHashes(storage, "ses_ws");
   assert.equal(isSyntheticText("  line one   line two  ", hashes), true);
   assert.equal(normalizeSyntheticText(" a\n b "), "a b");
+});
+
+test("host-injected notices never become the user turn", () => {
+  const messages = [
+    { role: "user", text: "Make the agent journey visible" },
+    { role: "assistant", text: "working" },
+    {
+      role: "user",
+      text: '<subagent sessionID="ses_judge" state="error" description="Judge verdict">\nInvalid stream\n</subagent>',
+    },
+    { role: "user", text: "[zombiecoder circuit breaker]\nThe previous attempt stopped" },
+    { role: "user", text: "[Synthetic context]: contract gc-1 is open" },
+    { role: "user", text: "**Circuit breaker:** the same agent retries" },
+    { role: "user", text: "<conversation-checkpoint>\nThe earlier conversation\n</conversation-checkpoint>" },
+    { role: "user", text: "<environment>\nworking directory\n</environment>" },
+  ];
+  const turn = resolveUserTurn(messages, () => false);
+  assert.equal(turn.text, "Make the agent journey visible");
+  assert.equal(turn.count, 1);
+  assert.equal(isInternalNotice('<subagent sessionID="ses_judge">'), true);
+  assert.equal(isInternalNotice("Make the agent journey visible"), false);
 });
