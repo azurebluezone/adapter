@@ -1,6 +1,6 @@
 {
   "schema": "zombiecoder-integrity/v1",
-  "generated_at": "2026-11-22T23:56:42.904Z",
+  "generated_at": "2026-11-23T00:13:30.535Z",
   "scope": [
     "src",
     "bin",
@@ -12,11 +12,11 @@
     "package.json",
     "LICENSE"
   ],
-  "root_sha256": "15b7d12b384df3b1c40b9076639d14b581d45a5b9299413e2f824189540effd3",
-  "file_count": 199,
-  "total_bytes": 1902828,
+  "root_sha256": "1bcaddf0714d15438fd2a83bfd21fb72b9161f1676ff0593a400d2ee420ab823",
+  "file_count": 200,
+  "total_bytes": 1913003,
   "git": {
-    "commit": "5e4bec4",
+    "commit": "1fa359a",
     "branch": "main",
     "dirty": true
   },
@@ -317,6 +317,11 @@
       "sha256": "828e370ddc9c4925a9adfe5b9c4e3a3ea4f770adf079639297ecfd7bd27c703d"
     },
     {
+      "path": "scripts/check-word-control.mjs",
+      "bytes": 8451,
+      "sha256": "19774ced859013a126a9ee4d28b0817d8e4af64bc4cf47a94ff7ff2e94bb287e"
+    },
+    {
       "path": "scripts/configure.mjs",
       "bytes": 14622,
       "sha256": "28f32182db3801507ec223b6d41e8f306ec5924ddd21908736cabbf7ef72de46"
@@ -573,8 +578,8 @@
     },
     {
       "path": "src/zombie/goalContract.ts",
-      "bytes": 15426,
-      "sha256": "9aac649ee42822e7c5e5e3f606f263cfae094ea90ea2821433b9777dae7f8ecb"
+      "bytes": 16169,
+      "sha256": "5207bdd9aae91bd82e2bb49f1f8293ddb50a8e72de1282ed9920866e3be80f92"
     },
     {
       "path": "src/zombie/intent.ts",
@@ -833,8 +838,8 @@
     },
     {
       "path": "test/goalContract.test.ts",
-      "bytes": 7061,
-      "sha256": "40c37c245ab17721c28799aaf59cc2422429510a00c66e6c7563228c13c73cba"
+      "bytes": 8042,
+      "sha256": "e51ad46f29b6e4a4aa715facfe987140eee7d088c212d4a9b069d40e29c2a729"
     },
     {
       "path": "test/identity.test.ts",

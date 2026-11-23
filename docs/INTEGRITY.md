@@ -7,21 +7,21 @@
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  15b7d12b384df3b1c40b9076639d14b581d45a5b9299413e2f824189540effd3  ║
-║  files 199 · bytes 1902828 · base 5e4bec4 · dirty                        ║
+║  root  1bcaddf0714d15438fd2a83bfd21fb72b9161f1676ff0593a400d2ee420ab823  ║
+║  files 200 · bytes 1913003 · base 1fa359a · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
 | Field | Value |
 |---|---|
 | Schema | `zombiecoder-integrity/v1` |
-| Generated (UTC) | `2026-11-22T23:56:42.904Z` |
-| Base commit | `5e4bec4` |
+| Generated (UTC) | `2026-11-23T00:13:30.535Z` |
+| Base commit | `1fa359a` |
 | Branch | `main` |
 | Code tree | `dirty` |
-| Files | 199 |
-| Bytes | 1902828 |
-| Root SHA-256 | `15b7d12b384df3b1c40b9076639d14b581d45a5b9299413e2f824189540effd3` |
+| Files | 200 |
+| Bytes | 1913003 |
+| Root SHA-256 | `1bcaddf0714d15438fd2a83bfd21fb72b9161f1676ff0593a400d2ee420ab823` |
 
 ## Scope
 
@@ -106,6 +106,7 @@ npm run integrity:check
 | `scripts/check-release.mjs` | 6497 | `9ec29c06bbe9009b62d2452977c091fc407eb091684f06cb11d02e1417f642fc` |
 | `scripts/check-skill-library-yaml.mjs` | 9231 | `1a0b4e9381e353e1cca6e2d29fe088712514cd79c6f8b4202d6558082fa8796d` |
 | `scripts/check-ui-surface.mjs` | 17412 | `828e370ddc9c4925a9adfe5b9c4e3a3ea4f770adf079639297ecfd7bd27c703d` |
+| `scripts/check-word-control.mjs` | 8451 | `19774ced859013a126a9ee4d28b0817d8e4af64bc4cf47a94ff7ff2e94bb287e` |
 | `scripts/configure.mjs` | 14622 | `28f32182db3801507ec223b6d41e8f306ec5924ddd21908736cabbf7ef72de46` |
 | `scripts/docs-check.mjs` | 779 | `391e4b5f418b6357a67bba6019b2c2818fb3e86889a4eaba0722dc49802917e7` |
 | `scripts/e2e-install.mjs` | 14359 | `5cd83d49038061c85800dda280db0a646eac8a26d79a1aca02303e9c874e2972` |
@@ -157,7 +158,7 @@ npm run integrity:check
 | `src/zombie/docsConsistency.ts` | 4401 | `c691b4f92f04e6f37606c0ef18823461bcd8fc6f489aeb52047bc4476a60fd27` |
 | `src/zombie/focus.ts` | 13450 | `83b95b0216e699fda9047cad4ce854de8fd9c22182d174fa800f0f6ff411b14b` |
 | `src/zombie/frontmatter.ts` | 10771 | `97a5c91c10c8edf838b7e6d47ad2549874885c0316254c3457434ceff0f07b16` |
-| `src/zombie/goalContract.ts` | 15426 | `9aac649ee42822e7c5e5e3f606f263cfae094ea90ea2821433b9777dae7f8ecb` |
+| `src/zombie/goalContract.ts` | 16169 | `5207bdd9aae91bd82e2bb49f1f8293ddb50a8e72de1282ed9920866e3be80f92` |
 | `src/zombie/intent.ts` | 1358 | `a84a333928237442d0b6b7e558cf59bfb953f8d3d1e2f0247ce58a876f50da2e` |
 | `src/zombie/intentJudge.ts` | 11041 | `e635d9779d3ea205498175a0c16f7a311dc90ae9c62a478f49ab01a6d86799c0` |
 | `src/zombie/intentRules.ts` | 2883 | `ee1d86c65bd18fd68392dc97b1a19f2f0bb572e4a3815d4f24a857513ca4117f` |
@@ -209,7 +210,7 @@ npm run integrity:check
 | `test/focus.test.ts` | 4051 | `47d93d65959c80c0b1ebb99b7cc5445d5dfbef536c9d3bc51bc90937b0e8b3a1` |
 | `test/footprint.test.ts` | 4927 | `a008782083058e2bd1bddcf133c31befdfebe1de73bef037c19ac0636580b73e` |
 | `test/frontmatter.test.ts` | 3204 | `5b20743b544ef7c3be3f77c3d9377f577c31a1f30fadc9462a4ad22760ddadc2` |
-| `test/goalContract.test.ts` | 7061 | `40c37c245ab17721c28799aaf59cc2422429510a00c66e6c7563228c13c73cba` |
+| `test/goalContract.test.ts` | 8042 | `e51ad46f29b6e4a4aa715facfe987140eee7d088c212d4a9b069d40e29c2a729` |
 | `test/identity.test.ts` | 4431 | `7656158eb5b4af30939741bc4a1515095400e10a1da999bb40f2339e821ddaea` |
 | `test/install.test.ts` | 44066 | `b99dcdff1257343038571b63a79a74e19413137386abe5171d77574c0735cd49` |
 | `test/installSpace.test.ts` | 2234 | `8d589c1d8e2423869c788c11435e0fc23be6abc5145d7b66c9fb54cc09671c71` |

@@ -347,6 +347,28 @@ function canon(value: any): any {
   return value;
 }
 
+const WORD_CHAR = "\\p{L}\\p{N}_";
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * A marker is a word, not a substring. `MARKER_2`, `NOT_MARKER` and `MARKERAY`
+ * are different words; punctuation and whitespace around the marker are fine.
+ * This is the word-level guard the contract gate needs: a longer identifier
+ * must never turn into a false PASS.
+ */
+export function containsMarker(observed: string, expected: string): boolean {
+  const want = String(expected ?? "").trim();
+  if (!want) return false;
+  const pattern = new RegExp(
+    `(?:^|[^${WORD_CHAR}])${escapeRegExp(want)}(?![${WORD_CHAR}])`,
+    "u",
+  );
+  return pattern.test(String(observed ?? ""));
+}
+
 /** Compare the real output with the pre-registered expectation. */
 export function matches(observed: string, expected: string, mode: MatchMode): boolean {
   const out = String(observed ?? "");
@@ -371,7 +393,7 @@ export function matches(observed: string, expected: string, mode: MatchMode): bo
     }
     case "contains":
     default:
-      return out.includes(want);
+      return containsMarker(out, want);
   }
 }
 

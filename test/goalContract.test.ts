@@ -60,6 +60,20 @@ test("matchers compare real output, including JSON key order", () => {
   assert.equal(extractJson("no json"), null);
 });
 
+test("contains mode matches a marker as a whole word, never inside a longer word", () => {
+  assert.equal(matches("UI_SURFACE_OK", "UI_SURFACE_OK", "contains"), true);
+  assert.equal(matches("result: UI_SURFACE_OK\n", "UI_SURFACE_OK", "contains"), true);
+  assert.equal(matches("UI_SURFACE_OK.", "UI_SURFACE_OK", "contains"), true);
+  assert.equal(matches("UI_SURFACE_OKAY", "UI_SURFACE_OK", "contains"), false);
+  assert.equal(matches("NOT_UI_SURFACE_OK", "UI_SURFACE_OK", "contains"), false);
+  assert.equal(matches("UI_SURFACE_OK_2", "UI_SURFACE_OK", "contains"), false);
+  assert.equal(matches("hello world", "world", "contains"), true);
+  assert.equal(matches("hello worldwide", "world", "contains"), false);
+  assert.equal(matches("মার্কার", "মার্কার", "contains"), true);
+  assert.equal(matches("মার্কারগুলো", "মার্কার", "contains"), false);
+  assert.equal(matches("anything", "   ", "contains"), false);
+});
+
 test("validateExpected rejects a broken regex or JSON at open", () => {
   assert.match(String(validateExpected("[", "regex")), /valid regex/);
   assert.match(String(validateExpected("{nope", "json")), /valid JSON/);
