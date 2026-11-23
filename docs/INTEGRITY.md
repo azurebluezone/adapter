@@ -7,21 +7,21 @@
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  f49087158ce0304f7bb6d49560fdca3579b6d183bd8608dbd70bb455ff7a45e2  ║
-║  files 203 · bytes 1946022 · base ce2221a · dirty                        ║
+║  root  5d62f8be895ab207777d04f3943f99858a436a39c953e6e887b30901c8f2b84f  ║
+║  files 203 · bytes 1946653 · base e1c1e09 · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
 | Field | Value |
 |---|---|
 | Schema | `zombiecoder-integrity/v1` |
-| Generated (UTC) | `2026-11-23T00:40:28.366Z` |
-| Base commit | `ce2221a` |
+| Generated (UTC) | `2026-11-23T00:42:18.826Z` |
+| Base commit | `e1c1e09` |
 | Branch | `main` |
 | Code tree | `dirty` |
 | Files | 203 |
-| Bytes | 1946022 |
-| Root SHA-256 | `f49087158ce0304f7bb6d49560fdca3579b6d183bd8608dbd70bb455ff7a45e2` |
+| Bytes | 1946653 |
+| Root SHA-256 | `5d62f8be895ab207777d04f3943f99858a436a39c953e6e887b30901c8f2b84f` |
 
 ## Scope
 
@@ -148,7 +148,7 @@ npm run integrity:check
 | `src/generate.ts` | 6956 | `a908cccdca29b6cad134f07873e83bf86ce9b45d107a4d21a27708c581ed9a3c` |
 | `src/identity.ts` | 11767 | `e0a07f913823045857b811ed7cf87e9bc34172cd0fb0662ce75a92691cc49ffd` |
 | `src/install/space.ts` | 3813 | `098fe34dfe34003f1ad66cb1e6aa32f4ef8415bc9d81f198c61776fbd31f4931` |
-| `src/plugin.ts` | 122265 | `229763b1d2c0c4b5348e7ea4e404e457ef85d844f7cfdfb0fe2e0046ae43bf3c` |
+| `src/plugin.ts` | 122848 | `873adbe6a5ffa28f4ddfeea01614e5567030828e1d839b0402ec9ce4db08af53` |
 | `src/roster.ts` | 10496 | `c27d8e5a6e9efd4f75277f7bc960ab1833f2fd3a67e64c12970ff124ff2e5073` |
 | `src/runtime.ts` | 16246 | `948b7c19df008d0961526d10d3f56c3c5a4739b9756e9487aa2fa0768fa41314` |
 | `src/zombie/circuitBreaker.ts` | 8526 | `a786855b8c6146dacc4d366976516883456d1c2644094cc773c70c4c63a0dba7` |
@@ -166,7 +166,7 @@ npm run integrity:check
 | `src/zombie/investigation.ts` | 8389 | `3c623a27de50d78ec47fbeba309c3cd21387e344c68b0fed63a5bf6eb52353e4` |
 | `src/zombie/investigationPackage.ts` | 5179 | `4453bdb4e1388c4d743670dd9d5765c9b3a896eff8f3e4eb86987a4b998a7eab` |
 | `src/zombie/io.ts` | 5501 | `ea1e2e86293380c1af37d143ed53fa231d824022a42d95c0c8aebf5542c255fd` |
-| `src/zombie/journey.ts` | 11263 | `ca064b1f5aec79971aff89ee70a95166937b0d88f00e0795dff8726571e655c6` |
+| `src/zombie/journey.ts` | 11311 | `bdf828b1582e979059bc4e04525645c5428d9b7a750217ab5fc85a1e92b598ba` |
 | `src/zombie/lsp.ts` | 13112 | `4ad4e476d20812de3f93bb8182d535cd3e1ed2764a8e117083daa9511cb25604` |
 | `src/zombie/lspConfig.ts` | 7794 | `afcb29b0335f0d693780057eedb9db4f37310b4dddde1b083d5b972f0bf7f66b` |
 | `src/zombie/mcp.ts` | 5564 | `2222d1adb6307c9767ac7392457acd25cf991c9130559825cc5ab383d6503b8a` |

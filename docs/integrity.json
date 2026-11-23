@@ -1,6 +1,6 @@
 {
   "schema": "zombiecoder-integrity/v1",
-  "generated_at": "2026-11-23T00:40:28.366Z",
+  "generated_at": "2026-11-23T00:42:18.826Z",
   "scope": [
     "src",
     "bin",
@@ -12,11 +12,11 @@
     "package.json",
     "LICENSE"
   ],
-  "root_sha256": "f49087158ce0304f7bb6d49560fdca3579b6d183bd8608dbd70bb455ff7a45e2",
+  "root_sha256": "5d62f8be895ab207777d04f3943f99858a436a39c953e6e887b30901c8f2b84f",
   "file_count": 203,
-  "total_bytes": 1946022,
+  "total_bytes": 1946653,
   "git": {
-    "commit": "ce2221a",
+    "commit": "e1c1e09",
     "branch": "main",
     "dirty": true
   },
@@ -528,8 +528,8 @@
     },
     {
       "path": "src/plugin.ts",
-      "bytes": 122265,
-      "sha256": "229763b1d2c0c4b5348e7ea4e404e457ef85d844f7cfdfb0fe2e0046ae43bf3c"
+      "bytes": 122848,
+      "sha256": "873adbe6a5ffa28f4ddfeea01614e5567030828e1d839b0402ec9ce4db08af53"
     },
     {
       "path": "src/roster.ts",
@@ -618,8 +618,8 @@
     },
     {
       "path": "src/zombie/journey.ts",
-      "bytes": 11263,
-      "sha256": "ca064b1f5aec79971aff89ee70a95166937b0d88f00e0795dff8726571e655c6"
+      "bytes": 11311,
+      "sha256": "bdf828b1582e979059bc4e04525645c5428d9b7a750217ab5fc85a1e92b598ba"
     },
     {
       "path": "src/zombie/lsp.ts",

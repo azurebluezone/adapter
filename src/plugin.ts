@@ -1510,6 +1510,15 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           const journeyKey = `journey/ui/${sessionID}/${userTurnCount}`;
           if (!(await ctx.storage.get(journeyKey))) {
             await ctx.storage.set(journeyKey, { at: new Date().toISOString() });
+            // A turn can arrive with only internal notices (subagent error,
+            // checkpoint, system update). The open contract still names the
+            // work; use its goal rather than showing an empty request.
+            const contractID = routeRun.contract?.id || pack.openContractIDs[0] || "";
+            const contractFields = contractID
+              ? parseContract(readSyllabus(projectRoot) ?? "", contractID)
+              : null;
+            const journeyRequest =
+              userMessage.trim() || contractFields?.goal || contractFields?.input || "";
             try {
               await deps.synthetic(
                 uiCard({
@@ -1518,7 +1527,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
                   text: journeyIntakeText({
                     pack,
                     run: routeRun,
-                    request: userMessage,
+                    request: journeyRequest,
                     sanitized: sanitized.affected.length,
                   }),
                 }),

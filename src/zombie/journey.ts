@@ -57,7 +57,9 @@ export function journeyIntakeText(input: JourneyIntakeInput): string {
     ? [...pack.focus.primary, ...pack.focus.related].map((item) => item.path)
     : [];
   const route = run
-    ? `${run.taskKind} / ${run.phase}${run.complexity ? ` (${run.complexity})` : ""}`
+    ? `${run.taskKind} / ${run.phase}${
+        run.complexity && run.complexity !== "trivial" ? ` (${run.complexity})` : ""
+      }`
     : "এখনো ঠিক হয়নি";
   return [
     "ধাপ ১ — ইনপুট আর কনটেক্সট যাচাই",
