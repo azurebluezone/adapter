@@ -42,6 +42,15 @@ test("every roster agent can call the read-only symbol and LSP tools while inves
   }
 });
 
+test("respond keeps bounded read-only tools available", () => {
+  for (const agent of AGENT_CONTROLLERS) {
+    assert.equal(agent.allows("read", "respond"), true, `${agent.id}: read must be available in respond`);
+    assert.equal(agent.allows("grep", "respond"), true, `${agent.id}: grep must be available in respond`);
+    assert.equal(agent.allows("glob", "respond"), true, `${agent.id}: glob must be available in respond`);
+    assert.equal(agent.allows("edit", "respond"), false, `${agent.id}: edit must stay denied in respond`);
+  }
+});
+
 test("the symbol and LSP tools stay out of the answer-only phase", () => {
   for (const agent of AGENT_CONTROLLERS) {
     for (const tool of READ_ONLY_LSP) {

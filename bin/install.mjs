@@ -24,8 +24,7 @@
 //
 // NO backups, NO .bak files, NO archives: the owner keeps their own. Writes are atomic
 // (temp + rename) and existing files are only replaced when the content actually differs.
-// The only archives are <root>/.backups entries created when a symlink is replaced or a
-// duplicate plugin loader is retired; both are reversible and never touch hand-written files.
+// Legacy generated entries are removed directly; hand-written files are never touched.
 //
 // Usage:
 //   node --experimental-strip-types bin/install.mjs
@@ -782,13 +781,11 @@ function linkSelfContainedGlobal() {
   // plugins symlink makes it discover the same file twice and fail the second with
   // "Duplicate plugin ID". The self-contained root keeps the only plugin entry.
   // `skills` is one root: the stale ~/.config/opencode copy is moved to
-  // .backups and the documented global path points at the install root. Two
+  // The documented global path points at the canonical install root. Two
   // real skill trees made the audit count and the loaded set disagree.
   const items = ["opencode.json", "agents", "skills", "zombiecoder", "node_modules", "package.json"];
   const linked = [];
   const modes = [];
-  const backups = path.join(globalDir, ".backups");
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   for (const item of items) {
     const source = path.join(selfRoot, item);
     if (!fs.existsSync(source)) continue;
@@ -805,8 +802,7 @@ function linkSelfContainedGlobal() {
       continue;
     }
     if (fs.existsSync(link) || current) {
-      ensureDir(backups);
-      fs.renameSync(link, path.join(backups, `${item}-${stamp}`));
+      fs.rmSync(link, { recursive: true, force: true });
     }
     modes.push(linkEntry(source, link));
     linked.push(item);
@@ -836,50 +832,14 @@ function alternateConfigRoot() {
 }
 
 function syncAlternateMcpCopy() {
-  const other = alternateConfigRoot();
-  if (!other) return "skipped (not a default global/home install)";
-  const configFile = path.join(other.root, "opencode.json");
-  if (!fs.existsSync(configFile)) return `skipped (${other.label} has no opencode.json)`;
-  let config;
-  try {
-    config = JSON.parse(fs.readFileSync(configFile, "utf8"));
-  } catch {
-    return `skipped (${other.label} config is not strict JSON)`;
-  }
-  const names = mcpServerNames(config.mcp);
-  if (names.length === 0) return `skipped (${other.label} registers no MCP servers)`;
-  const target = path.join(other.root, "mcp");
-  const localNames = names.filter((name) => {
-    const entry = config.mcp?.servers?.[name];
-    const command = Array.isArray(entry?.command) ? entry.command : [];
-    return (
-      entry?.type === "local" &&
-      command.some(
-        (part) =>
-          typeof part === "string" &&
-          path.resolve(part).startsWith(target + path.sep),
-      )
-    );
-  });
-  if (localNames.length === 0) return `skipped (${other.label} uses no local mcp/ copy)`;
-  const source = path.join(CONFIG_DIR, "mcp");
-  fs.cpSync(source, target, {
-    recursive: true,
-    force: true,
-    filter: (entry) => !entry.split(path.sep).includes("node_modules"),
-  });
-  return `updated ${localNames.length} server copy/copies in ${path.relative(
-    os.homedir(),
-    target,
-  )} (${localNames.join(", ")})`;
+  return "skipped (legacy alternate root not synchronized; canonical install owns MCP)";
 }
 
 // One plugin must load once. A global install and an old --home install both put
 // a loader on OpenCode's plugin path; the second registration fails with
 // "Duplicate plugin ID: zombiecoder". Retire only a generated entry in the other
-// root, with a backup, so a hand-written file is never touched. The rest of the
-// old root stays where it is: this removes the duplicate loader, not the user's
-// config or state.
+// root so a hand-written file is never touched. The rest of the old root stays
+// where it is: this removes the duplicate loader, not the user's config or state.
 function retireLegacyDuplicateEntry() {  const installRoot = path.resolve(CONFIG_DIR);
   const defaultHome = path.resolve(path.join(os.homedir(), ".opencode"));
   const other = GLOBAL_MODE
@@ -904,8 +864,6 @@ function retireLegacyDuplicateEntry() {  const installRoot = path.resolve(CONFIG
     return `kept (not generated: ${other.label})`;
   }
 
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const backup = path.join(other.root, ".backups", `duplicate-plugin-${stamp}`);
   const installPlugins = path.join(installRoot, "plugins");
   const otherPlugins = path.join(other.root, "plugins");
   const isLink = (target) => {
@@ -915,16 +873,8 @@ function retireLegacyDuplicateEntry() {  const installRoot = path.resolve(CONFIG
       return false;
     }
   };
-  const moveToBackup = (source, name) => {
-    ensureDir(backup);
-    const destination = path.join(backup, name);
-    try {
-      fs.renameSync(source, destination);
-    } catch (error) {
-      if (error?.code !== "EXDEV") throw error;
-      fs.cpSync(source, destination, { recursive: true, force: true });
-      fs.rmSync(source, { recursive: true, force: true });
-    }
+  const removeGenerated = (source) => {
+    fs.rmSync(source, { recursive: true, force: true });
   };
 
   let sameFile = false;
@@ -939,7 +889,7 @@ function retireLegacyDuplicateEntry() {  const installRoot = path.resolve(CONFIG
     // the same file under two paths. Make the install root real and copy the graph
     // into it before retiring the old entry.
     const realPlugins = fs.realpathSync(installPlugins);
-    moveToBackup(installPlugins, "plugins.symlink");
+    removeGenerated(installPlugins);
     ensureDir(installPlugins);
     for (const item of ["zombiecoder.ts", "zombiecoder"]) {
       const source = path.join(realPlugins, item);
@@ -948,8 +898,8 @@ function retireLegacyDuplicateEntry() {  const installRoot = path.resolve(CONFIG
     }
   } else if (sameFile && isLink(otherPlugins)) {
     // Only the other root has the symlink; remove that path, keep the real install.
-    moveToBackup(otherPlugins, "plugins.symlink");
-    return `retired duplicate loader (${other.label} plugins symlink) -> ${path.relative(os.homedir(), backup)}`;
+    removeGenerated(otherPlugins);
+    return `retired duplicate loader (${other.label} plugins symlink)`;
   } else if (sameFile) {
     // Same inode without a symlink: moving a hardlink is safe, but a bind mount
     // would remove the only copy. Leave it for a human instead of guessing.
@@ -960,11 +910,11 @@ function retireLegacyDuplicateEntry() {  const installRoot = path.resolve(CONFIG
   for (const item of ["zombiecoder.ts", "zombiecoder"]) {
     const source = path.join(otherPlugins, item);
     if (!fs.existsSync(source)) continue;
-    moveToBackup(source, item);
+    removeGenerated(source);
     moved.push(item);
   }
   if (moved.length === 0) return `kept (nothing to move: ${other.label})`;
-  return `retired ${moved.join(", ")} from ${other.label} -> ${path.relative(os.homedir(), backup)}`;
+  return `retired ${moved.join(", ")} from ${other.label}`;
 }
 
 // OpenAI-compatible gateways disagree about the envelope. A `data` array of ids is
@@ -1509,13 +1459,13 @@ await step("copy MCP servers", () => {
   return `${servers.length} server(s) -> mcp/: ${servers.map((server) => server.name).join(", ")}`;
 });
 
-// The same server name in both config roots means the older copy can answer.
-// Keep the alternate root's generated copy byte-current with this install.
+// Do not synchronize generated or legacy MCP files from alternate roots.
+// The canonical fresh install owns the MCP surface for this working directory.
 if (WITH_LOCAL_MCP) {
-  await step("sync alternate MCP copies", syncAlternateMcpCopy);
+  await step("isolate alternate MCP root", syncAlternateMcpCopy);
 } else {
   report.steps.push({
-    step: "sync alternate MCP copies",
+    step: "isolate alternate MCP root",
     ok: true,
     detail: "skipped (opt-in: --with-local-mcp)",
   });
@@ -2244,7 +2194,7 @@ await step("retire legacy duplicate plugin entry", retireLegacyDuplicateEntry);
 // ---- 11c. stale source files -------------------------------------------------
 // Copy with force overwrites files that still exist in the source, but a file
 // deleted from the source would survive forever. Remove those after the legacy
-// backup step so the exact-source proof stays true without eating the backup.
+// legacy retirement step so stale source graphs cannot survive a clean install.
 await step("prune stale plugin graph", () => {
   // The entrypoint imports ./agents/*.ts as well as ./zombie/*.ts, so both
   // directories are part of the copied graph. Leaving agents/ out of this set

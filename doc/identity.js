@@ -21,10 +21,10 @@ export const IDENTITY = Object.freeze({
 
 export const IDENTITY_MANIFEST = Object.freeze({
   version: "0.1.0",
-  generated_at: "2026-11-22T11:13:30.824Z",
+  generated_at: "2026-11-23T04:22:27.679Z",
   algorithm: "sha256",
   scope: "canonical JSON of this object, checksum field removed",
-  checksum: "0bb58457e63af5863f35f6f7725564b58aaa5a4b466c87d28f7fa452d9e0fb3d",
+  checksum: "e4b564c3fd09702c6b16293459618b8f8a7ae0899c74c86fe3a356996f3c31e4",
 });
 
 export const HEADER = Object.freeze({ name: "X-ZombieCoder-Powered-By", value: "ZombieCoder-by-SahonSrabon" });

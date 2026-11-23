@@ -58,15 +58,6 @@ function sha256(text: string): string {
   return crypto.createHash("sha256").update(text, "utf8").digest("hex");
 }
 
-function backupExisting(file: string, stamp: string): string | null {
-  if (!fs.existsSync(file)) return null;
-  const dir = path.join(ROOT, ".backups", stamp);
-  fs.mkdirSync(dir, { recursive: true });
-  const target = path.join(dir, path.basename(file));
-  fs.copyFileSync(file, target);
-  return path.relative(ROOT, target);
-}
-
 function writeAtomic(file: string, content: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = file + ".zombiecoder-tmp";
@@ -124,15 +115,13 @@ async function main(): Promise<void> {
 
   for (const doc of docs) {
     const file = path.join(OUT, doc.name);
-    const backed = backupExisting(file, stamp);
     const content = doc.body + footer(generatedAt, identity.system_identity.branding);
     writeAtomic(file, content);
     report.push(
       "  " + doc.name.padEnd(30) +
       String(Buffer.byteLength(content, "utf8")).padStart(8) + " B  " +
       String(content.split("\n").length).padStart(5) + " lines  " +
-      "sha256:" + sha256(content).slice(0, 12) +
-      (backed ? "   backup: " + backed : "   backup: (new file)")
+      "sha256:" + sha256(content).slice(0, 12)
     );
   }
 
@@ -143,14 +132,12 @@ async function main(): Promise<void> {
   const payload = identity;
   const withChecksum = payload;
   const identityFile = path.join(OUT, "identity.json");
-  const identityBacked = backupExisting(identityFile, stamp);
   const identityText = JSON.stringify(withChecksum, null, 2) + "\n";
   writeAtomic(identityFile, identityText);
   report.push(
     "  " + "identity.json".padEnd(30) +
     String(Buffer.byteLength(identityText, "utf8")).padStart(8) + " B  " +
-    "checksum:" + withChecksum.system_identity.manifest.checksum.slice(0, 12) +
-    (identityBacked ? "   backup: " + identityBacked : "   backup: (new file)")
+    "checksum:" + withChecksum.system_identity.manifest.checksum.slice(0, 12)
   );
 
   // identity.js is the runtime view of identity.json. Writing only the JSON left

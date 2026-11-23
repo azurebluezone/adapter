@@ -412,13 +412,7 @@ test("installer retires a generated legacy home plugin entry instead of loading 
     const globalEntry = path.join(home, ".config", "opencode", "plugins", "zombiecoder.ts");
     assert.ok(fs.existsSync(globalEntry), "the global entrypoint must exist");
     assert.equal(fs.existsSync(legacyEntry), false, "the legacy entrypoint must not register a second plugin");
-    const backups = fs
-      .readdirSync(path.join(legacyRoot, ".backups"))
-      .filter((name) => name.startsWith("duplicate-plugin-"));
-    assert.equal(backups.length, 1, "the legacy entry must be backed up exactly once");
-    const backup = path.join(legacyRoot, ".backups", backups[0]);
-    assert.ok(fs.existsSync(path.join(backup, "zombiecoder.ts")));
-    assert.ok(fs.existsSync(path.join(backup, "zombiecoder", "marker.txt")));
+    assert.equal(fs.existsSync(path.join(legacyRoot, ".backups")), false, "clean install must not create backup directories");
     assert.match(result.stdout, /retired/i);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -454,14 +448,8 @@ test("installer replaces a symlinked legacy plugin directory with one real canon
     assert.ok(fs.existsSync(path.join(canonicalPlugins, "zombiecoder.ts")));
     assert.ok(fs.existsSync(path.join(canonicalPlugins, "zombiecoder", "plugin.ts")));
     assert.equal(fs.existsSync(path.join(legacyPlugins, "zombiecoder.ts")), false);
-    const backups = fs
-      .readdirSync(path.join(legacyRoot, ".backups"))
-      .filter((name) => name.startsWith("duplicate-plugin-"));
-    assert.equal(backups.length, 1);
-    const backup = path.join(legacyRoot, ".backups", backups[0]);
-    assert.ok(fs.existsSync(path.join(backup, "plugins.symlink")));
-    assert.ok(fs.existsSync(path.join(backup, "zombiecoder.ts")));
-    assert.ok(fs.existsSync(path.join(backup, "zombiecoder", "marker.txt")));
+    assert.equal(fs.existsSync(path.join(legacyRoot, ".backups")), false, "clean install must not create backup directories");
+    assert.equal(fs.existsSync(path.join(legacyPlugins, "zombiecoder.ts")), false);
     assert.match(result.stdout, /retired/i);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

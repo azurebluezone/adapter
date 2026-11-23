@@ -173,7 +173,15 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "diagnostics_for_file",
     "intent_judge",
   ],
-  respond: ["context_status", "append_syllabus"],
+  respond: [
+    "read",
+    "grep",
+    "glob",
+    "read_ssot",
+    "read_syllabus",
+    "context_status",
+    "append_syllabus",
+  ],
 };
 
 export const MUTATING_TOOLS: readonly string[] = [

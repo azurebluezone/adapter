@@ -1,6 +1,6 @@
 {
   "schema": "zombiecoder-integrity/v1",
-  "generated_at": "2026-11-23T03:27:42.716Z",
+  "generated_at": "2026-11-23T04:22:37.848Z",
   "scope": [
     "src",
     "bin",
@@ -12,19 +12,19 @@
     "package.json",
     "LICENSE"
   ],
-  "root_sha256": "4788fa4249949904a530f1d95cfcba9a0279ddb50aea5726338d9a454aec9ed7",
+  "root_sha256": "295b3232bdacab18212d779748e51823bbd16a0284a4756cf897b9c8a6313e5e",
   "file_count": 203,
-  "total_bytes": 1957915,
+  "total_bytes": 1955430,
   "git": {
-    "commit": "4783bd0",
+    "commit": "4b132f5",
     "branch": "main",
     "dirty": true
   },
   "files": [
     {
       "path": "bin/install.mjs",
-      "bytes": 98424,
-      "sha256": "8d998c7867cae1e8827213fdab485f6f7e8e46fe07ff84ac9a7361c164f4aad0"
+      "bytes": 96313,
+      "sha256": "e47ba36799b0b756218c588b38ec4efa0211cde71ad0206839934a0f67783774"
     },
     {
       "path": "bin/quick-install.mjs",
@@ -423,8 +423,8 @@
     },
     {
       "path": "src/agents/defaults.ts",
-      "bytes": 7486,
-      "sha256": "249230180986ea03f842bc6846c18a1fb3a1b7e90002237efd1129e67beb5bfb"
+      "bytes": 7573,
+      "sha256": "2852557ad6b612d1d07a44506e805493fd0697370a188d02fd54483f92648bc3"
     },
     {
       "path": "src/agents/domainSkills.ts",
@@ -483,8 +483,8 @@
     },
     {
       "path": "src/agents/shared.ts",
-      "bytes": 8229,
-      "sha256": "6b487ccd18cffaa4f30e37851b6d6f03c0bf6d74f2955b348bff0eb0d38d9cdc"
+      "bytes": 8372,
+      "sha256": "78b4824adffae1e610df662f16a77ca229f93ca7e93b797447566af45092fbdc"
     },
     {
       "path": "src/agents/tuhin.ts",
@@ -513,8 +513,8 @@
     },
     {
       "path": "src/generate.ts",
-      "bytes": 6956,
-      "sha256": "a908cccdca29b6cad134f07873e83bf86ce9b45d107a4d21a27708c581ed9a3c"
+      "bytes": 6365,
+      "sha256": "cd055ec2c0b40e753499298ef2434a4e1e9e6e470385b368a761a3abdbb6da90"
     },
     {
       "path": "src/identity.ts",
@@ -858,8 +858,8 @@
     },
     {
       "path": "test/install.test.ts",
-      "bytes": 44066,
-      "sha256": "b99dcdff1257343038571b63a79a74e19413137386abe5171d77574c0735cd49"
+      "bytes": 43509,
+      "sha256": "44e108209bb53360637508575cec93e5563d95d3901c2b368608b6b355f8a3f2"
     },
     {
       "path": "test/installSpace.test.ts",
@@ -953,8 +953,8 @@
     },
     {
       "path": "test/regressions.test.ts",
-      "bytes": 3332,
-      "sha256": "ea148ff8c584116dcf5b0e3c39bc34e9517dd2941ff4b2844440254e506e4925"
+      "bytes": 3876,
+      "sha256": "7ce8c653eabb5cd68334e6d2c2368f286349d17bfacaba1a40e6bf8e67588c79"
     },
     {
       "path": "test/repo.test.ts",
