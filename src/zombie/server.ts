@@ -23,7 +23,7 @@ import { keepTransform, type TransformDoor } from "./transform.ts";
 import { buildContextPack, resolveAllowedPath } from "./context.ts";
 import { buildSubagentEnvelope, renderEnvelope } from "./subagentEnvelope.ts";
 import { readArchivedResult } from "./toolArchive.ts";
-import { investigationDigest, validateInvestigation } from "./investigationPackage.ts";
+import { EVIDENCE_LABELS, investigationDigest, validateInvestigation } from "./investigationPackage.ts";
 import { loadRun } from "../agents/runtime.ts";
 import {
   contractStatus,
@@ -52,6 +52,7 @@ import {
   buildJudgePrompt,
   debateTranscript,
   judgeDue,
+  judgeVerdictFromClose,
   type JudgeDebate,
   type JudgeVerdict,
 } from "./intentJudge.ts";
@@ -147,6 +148,34 @@ const obj = (properties: Record<string, unknown>) => ({
   properties,
   additionalProperties: false,
 });
+
+const investigationInput = {
+  type: "object" as const,
+  properties: {
+    version: { type: "number", enum: [1] },
+    task: { type: "string" },
+    project: { type: "string" },
+    findings: {
+      type: "array",
+      items: {
+        ...obj({
+          claim: { type: "string" },
+          evidence: { type: "string" },
+          label: { type: "string", enum: [...EVIDENCE_LABELS] },
+        }),
+        required: ["claim", "evidence", "label"],
+      },
+    },
+    errors: { type: "array", items: { type: "string" } },
+    skills: { type: "array", items: { type: "string" } },
+    constraints: { type: "array", items: { type: "string" } },
+    expected: { type: "string" },
+    uncertainty: { type: "array", items: { type: "string" } },
+    generatedAt: { type: "string" },
+  },
+  required: ["version", "task", "project", "findings", "expected"],
+  additionalProperties: false,
+};
 
 // The installer places the Python verifier at <install-root>/zombiecoder/tools.
 // Source checkouts keep it at <repo-root>/tools. Resolve both shapes instead of
@@ -505,20 +534,23 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
       // the approved work can never start.
       direct: true,
       description:
-        "Pre-register a task's expected outcome in the append-only syllabus BEFORE writing code, with the user's explicit consent. open returns the live open contract instead of minting a second one in this session, rejects a no-op check or a status-word expected, and runs the check once as a baseline after consent; a baseline that already passes writes no contract, because a check that passes before the work proves nothing. Before open, make sure the check command is valid and use `expected` as a literal distinctive success marker the check emits (for example FEATURE_CHECK_OK), not a prose summary; the check must print it only when all stated requirements pass. open needs the real user input, observable expected output, check command, pass criteria and a match mode (contains|equals|regex|json); it shows a Bengali preview card, then asks through the native permission door. In that dialog Allow once approves this goal, Allow always approves later opens in this project, and Reject writes nothing and returns status=rejected. Only after open returns status=open may the agent write; the route then advances to work. close shows its own preview and asks again, then RUNS the recorded check command in the project root (120s cap) and matches real output against the recorded expected marker; PASS only when exit code is 0 and output matches. On close, provide the returned id; do not provide guessed observed/exitCode because the plugin runs and trusts the real check output. A mismatch, empty output or failed command is FAIL; fix the real behavior under the same expected marker and close the same contract again. Never rewrite a failed expected. After a FAIL, a new contract may reuse the same check only with the same expected; a different expected is rejected as a rewrite. A FAIL result is fed into the same-agent circuit breaker. Without approval the tool writes/runs nothing; hand over instead of self-closing.",
+        "Open requires goal, input (short plain text), expected (literal success marker), check and pass. Injected context is the default; `investigation` is optional and should be omitted when SSOT, syllabus, focus and session memory are enough. If included, it must be a version-1 typed package: task, project, findings as {claim,evidence,label} objects, and expected; malformed optional data is ignored and never blocks contract creation. Open previews the goal, asks permission, then runs a baseline; if the check already passes, no contract is written. Only work after status=open and stay within scope. Close needs the returned id; the plugin runs the recorded check (120s cap) and stores real PASS/FAIL evidence. Never claim PASS from prose or rewrite a failed expected.",
       input: {
         type: "object" as const,
         properties: {
           action: { type: "string", enum: ["open", "close"] },
           id: { type: "string", description: "Contract id returned by open; required by close." },
           goal: { type: "string", description: "Required for open: concise outcome derived from the user's request." },
-          input: { type: "string", description: "Required for open: real user input, such as a file path, URL, or exact request." },
+          input: { type: "string", description: "Required for open: concise plain-text real user request or input." },
           deliverable: { type: "string", description: "What the user receives (artifact or behavior). Defaults to the goal." },
           scope: { type: "string", description: "Comma/space-separated path prefixes a mutating tool may touch. Defaults to the focus files or the project root." },
           expected: { type: "string", description: "Literal distinctive success marker emitted by the check only when all requirements pass; do not use a prose summary." },
           check: { type: "string", description: "Runnable command that proves the requirements and prints the expected marker only on success. close runs it." },
           pass: { type: "string", description: "Required for open: observable pass criteria that the check enforces." },
-          investigation: { type: "object", description: "Optional typed investigation package (version 1); validated before the permission door." },
+          investigation: {
+            ...investigationInput,
+            description: "Optional. Omit when injected context is sufficient; otherwise pass the actual version-1 project_investigation evidence package. Findings must be objects, never strings.",
+          },
           match: {
             type: "string",
             enum: ["contains", "equals", "regex", "json"],
@@ -576,15 +608,24 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
           if (outcomeError) throw new Error(outcomeError);
           const checkError = validateCheck(check);
           if (checkError) throw new Error(checkError);
-          let investigationSummary = "";
-          if (input?.investigation !== undefined) {
-            const check = validateInvestigation(input.investigation);
-            if (!check.ok) {
-              throw new Error(`investigation is invalid: ${check.errors.slice(0, 5).join("; ")}`);
-            }
-            investigationSummary = investigationDigest(check.value!);
-          }
           const sessionID = String(context?.sessionID ?? "").trim();
+          let investigationSummary = "";
+          let investigationStatus: "omitted" | "accepted" | "ignored_invalid" =
+            input?.investigation === undefined ? "omitted" : "accepted";
+          if (input?.investigation !== undefined) {
+            const investigationCheck = validateInvestigation(input.investigation);
+            if (!investigationCheck.ok) {
+              investigationStatus = "ignored_invalid";
+              audit(projectRoot, "goal_contract", {
+                kind: "goal_contract.investigation.invalid",
+                status: "ignored",
+                sessionID,
+                errors: investigationCheck.errors.slice(0, 5),
+              });
+            } else {
+              investigationSummary = investigationDigest(investigationCheck.value!);
+            }
+          }
           const currentSyllabus = readSyllabus(projectRoot) ?? "";
           // One open contract per session. A second open is how an agent would
           // otherwise keep a fresh expectation ready for whatever the check prints.
@@ -914,6 +955,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             scopeShown,
             preview,
             baseline: { exitCode: baseline.exitCode, observed: baselineOutput },
+            investigationStatus,
           };
         }
 
@@ -1146,6 +1188,20 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
             legacy: !stored,
             closedAt: new Date().toISOString(),
           });
+          // The close check is the judge. The response gate reads this stored
+          // verdict, so a due contract no longer needs a second agent to re-read
+          // the same paths and re-run the same command.
+          await deps.storage.set(
+            `judge/verdict/${id}`,
+            judgeVerdictFromClose({
+              contractID: id,
+              status,
+              exitCode: run.exitCode,
+              observed: output,
+              expected: contract.expected,
+              reason: reason || undefined,
+            }),
+          );
           if (sessionID) {
             const active = (await deps.storage.get(`goal/active/${sessionID}`)) as { id?: string } | null | undefined;
             // Real OpenCode storage rejects a null value (SQLite NOT NULL); write

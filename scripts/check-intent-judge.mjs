@@ -10,6 +10,7 @@
 //
 // Final line: INTENT_JUDGE_OK
 
+import { readFileSync } from "node:fs";
 import { AGENT_IDS } from "../src/agents/types.ts";
 import { AGENT_CONTROLLERS, getAgentController } from "../src/agents/index.ts";
 import { DOMAIN_SKILLS } from "../src/agents/domainSkills.ts";
@@ -18,16 +19,24 @@ import {
   buildJudgePrompt,
   judgeDue,
   judgeGate,
+  judgeVerdictFromClose,
   mutationInScope,
   parseJudgeVerdict,
 } from "../src/zombie/intentJudge.ts";
 import { formatContractBlock, parseContract } from "../src/zombie/goalContract.ts";
+import { journeyCloseText, journeyScopeText } from "../src/zombie/journey.ts";
 
 const failures = [];
+const closeFailures = [];
 
 function check(name, ok, detail = "") {
   console.log(`${ok ? "ok  " : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
   if (!ok) failures.push(name);
+}
+
+function checkClose(name, ok, detail = "") {
+  console.log(`${ok ? "ok  " : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
+  if (!ok) closeFailures.push(name);
 }
 
 // 1. The tenth agent exists, has a real persona and a domain knowledge base.
@@ -173,9 +182,98 @@ check(
   mutationInScope(".", "edit", "test/plugin.test.ts") === true,
 );
 
-if (failures.length > 0) {
-  console.error(`\nintent-judge check failed: ${failures.join(", ")}`);
+// 8. The close check is the judge. The verdict comes from the real close
+//    result, so a due worker never has to launch a re-verifying subagent.
+const closePass = judgeVerdictFromClose({
+  contractID: "gc-close",
+  status: "PASS",
+  exitCode: 0,
+  observed: "CLEANUP_USER_OK",
+  expected: "CLEANUP_USER_OK",
+});
+checkClose(
+  "a real PASS close becomes a PASS verdict",
+  closePass.status === "PASS" && closePass.source === "close-gate",
+  closePass.status,
+);
+checkClose("the close verdict carries the real exit code", /exit 0/.test(closePass.reason));
+checkClose("the close verdict names the real marker", closePass.reason.includes("CLEANUP_USER_OK"));
+
+const closeFail = judgeVerdictFromClose({
+  contractID: "gc-close",
+  status: "FAIL",
+  exitCode: 1,
+  observed: "some other output",
+  expected: "CLEANUP_USER_OK",
+});
+checkClose("a FAIL close becomes a FAIL verdict", closeFail.status === "FAIL");
+checkClose(
+  "a PASS status with a non-zero exit is still FAIL",
+  judgeVerdictFromClose({
+    contractID: "gc-close",
+    status: "PASS",
+    exitCode: 1,
+    observed: "CLEANUP_USER_OK",
+    expected: "CLEANUP_USER_OK",
+  }).status === "FAIL",
+);
+
+checkClose(
+  "the close verdict releases a due worker",
+  judgeGate({ due: true, verdict: closePass, contractID: "gc-close" }).ok === true,
+);
+const dueNoVerdict = judgeGate({ due: true, verdict: null, contractID: "gc-close" });
+checkClose("a due contract without a verdict is still blocked", dueNoVerdict.ok === false);
+checkClose(
+  "the block reason points at close, not at launching a judge",
+  /close/i.test(dueNoVerdict.reason) && !/launch/i.test(dueNoVerdict.reason),
+  dueNoVerdict.reason,
+);
+
+const serverSource = readFileSync(new URL("../src/zombie/server.ts", import.meta.url), "utf8");
+checkClose(
+  "close writes judge/verdict/<id> from the real result",
+  /goal\/result\/\$\{id\}[\s\S]{0,1200}judge\/verdict\/\$\{id\}/.test(serverSource),
+);
+const pluginSource = readFileSync(new URL("../src/plugin.ts", import.meta.url), "utf8");
+checkClose(
+  "the gate self-heals a legacy PASS from goal/result",
+  /goal\/result\/\$\{contractID\}[\s\S]{0,1600}judgeVerdictFromClose/.test(pluginSource),
+);
+checkClose(
+  "the due card no longer asks for a subagent",
+  !/launch the `intent-judge` subagent/.test(pluginSource),
+);
+
+const scopeText = journeyScopeText({
+  contractID: "gc-close",
+  projectRoot: "/tmp/project",
+  scope: "src",
+  verified: [{ path: "src", inside: true }],
+  openedAt: "2026-11-23T00:00:00.000Z",
+});
+checkClose("the scope card no longer promises a 3-minute guard", !scopeText.includes("৩ মিনিট"));
+checkClose("the scope card says the close check is the verdict", scopeText.includes("close-এ আসল check"));
+
+const previewText = journeyCloseText({
+  phase: "preview",
+  contractID: "gc-close",
+  goal: "goal",
+  deliverable: "deliverable",
+  check: "node check.mjs",
+  expected: "MARKER",
+  mode: "contains",
+});
+checkClose(
+  "the close preview has one clear permission line",
+  previewText.includes("Allow = চেক চালাও") && !previewText.includes("Allow always"),
+);
+
+if (failures.length > 0 || closeFailures.length > 0) {
+  const all = [...failures, ...closeFailures];
+  console.error(`\nintent-judge check failed: ${all.join(", ")}`);
   process.exitCode = 1;
 } else {
   console.log("\nINTENT_JUDGE_OK");
+  console.log("JUDGE_CLOSE_GATE_OK");
 }

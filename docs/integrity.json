@@ -1,6 +1,6 @@
 {
   "schema": "zombiecoder-integrity/v1",
-  "generated_at": "2026-11-23T00:42:18.826Z",
+  "generated_at": "2026-11-23T03:27:42.716Z",
   "scope": [
     "src",
     "bin",
@@ -12,11 +12,11 @@
     "package.json",
     "LICENSE"
   ],
-  "root_sha256": "5d62f8be895ab207777d04f3943f99858a436a39c953e6e887b30901c8f2b84f",
+  "root_sha256": "4788fa4249949904a530f1d95cfcba9a0279ddb50aea5726338d9a454aec9ed7",
   "file_count": 203,
-  "total_bytes": 1946653,
+  "total_bytes": 1957915,
   "git": {
-    "commit": "e1c1e09",
+    "commit": "4783bd0",
     "branch": "main",
     "dirty": true
   },
@@ -298,8 +298,8 @@
     },
     {
       "path": "scripts/check-intent-judge.mjs",
-      "bytes": 7435,
-      "sha256": "01f88f27e3ae0b42cf786ab05c484680a34baf80dc2f795ba0f21d21efab51fb"
+      "bytes": 10972,
+      "sha256": "46bffff6d5040732c4eaeb7f9fddb1b29fbf879612d2ae4e1f7cf92c21e656df"
     },
     {
       "path": "scripts/check-journey-ui.mjs",
@@ -483,8 +483,8 @@
     },
     {
       "path": "src/agents/shared.ts",
-      "bytes": 8057,
-      "sha256": "5aa12f90ab0b9899c83a329828164b887b1b2648546aff259f88fbedc84a842d"
+      "bytes": 8229,
+      "sha256": "6b487ccd18cffaa4f30e37851b6d6f03c0bf6d74f2955b348bff0eb0d38d9cdc"
     },
     {
       "path": "src/agents/tuhin.ts",
@@ -528,8 +528,8 @@
     },
     {
       "path": "src/plugin.ts",
-      "bytes": 122848,
-      "sha256": "873adbe6a5ffa28f4ddfeea01614e5567030828e1d839b0402ec9ce4db08af53"
+      "bytes": 124334,
+      "sha256": "eb52737d5a1eeea089bafc4f328c9d8d59aa08e2a6c542d54d71476ceb6bf709"
     },
     {
       "path": "src/roster.ts",
@@ -593,8 +593,8 @@
     },
     {
       "path": "src/zombie/intentJudge.ts",
-      "bytes": 11041,
-      "sha256": "e635d9779d3ea205498175a0c16f7a311dc90ae9c62a478f49ab01a6d86799c0"
+      "bytes": 13728,
+      "sha256": "d6e6d47449edd5b788187c2886f788d186e72504f33c777be6b61d53d5786892"
     },
     {
       "path": "src/zombie/intentRules.ts",
@@ -718,8 +718,8 @@
     },
     {
       "path": "src/zombie/server.ts",
-      "bytes": 115114,
-      "sha256": "00b1f85b7858e742c866b9762e67cc96cd0829adb486d37e08379b9620be821f"
+      "bytes": 116023,
+      "sha256": "450afd4fb783054b8ab359dfb0feabed181dd8e6d572ae98053aa6c8c0fd3106"
     },
     {
       "path": "src/zombie/shellGuard.ts",
@@ -938,8 +938,8 @@
     },
     {
       "path": "test/plugin.test.ts",
-      "bytes": 99019,
-      "sha256": "b9425383f87e04d578d2defc406383a2c1e9bb4ef7e6fe17f41fb3d7249fb67b"
+      "bytes": 99648,
+      "sha256": "3e1147e0cb343d546105f6111a263ba3336c39f1ebd03b289561c06eae81566a"
     },
     {
       "path": "test/promptBudget.test.ts",
@@ -963,8 +963,8 @@
     },
     {
       "path": "test/roster.test.ts",
-      "bytes": 4444,
-      "sha256": "1a37243b871c1d85ceaf91beadffba6347051344860701fe9268841ba3acd57c"
+      "bytes": 4675,
+      "sha256": "a04ff5706530fe0faf27cd697259ce07893ff0f021abf1bfdc582510c5da3938"
     },
     {
       "path": "test/route.test.ts",
@@ -1018,8 +1018,8 @@
     },
     {
       "path": "test/tools.test.ts",
-      "bytes": 5560,
-      "sha256": "74eee0129d493f99d50af154ebc7ddc12cb897346acaeb9ee5a9e3f982af2c89"
+      "bytes": 7171,
+      "sha256": "1c537b4ec6d6be176432d1eed37b76cc11beab2468a6ad6c77f1f6fb87ea35b1"
     },
     {
       "path": "test/turn.test.ts",

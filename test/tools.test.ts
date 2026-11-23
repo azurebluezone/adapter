@@ -65,6 +65,49 @@ test("reload calls every door and reports a missing door", async () => {
   assert.match(missing.results[0].error, /not available/);
 });
 
+test("goal_contract opens with malformed optional investigation and exposes its typed schema", async () => {
+  const root = tempDir("zc-contract-investigation-");
+  const deps = depsFor(root);
+  deps.assertPermission = async () => undefined;
+  const contract = spec("goal_contract", deps);
+  const investigationSchema = (contract.input.properties as any).investigation as any;
+  assert.deepEqual(investigationSchema.required, ["version", "task", "project", "findings", "expected"]);
+  assert.deepEqual(investigationSchema.properties.findings.items.required, ["claim", "evidence", "label"]);
+  assert.deepEqual(investigationSchema.properties.findings.items.properties.label.enum, [
+    "SOURCE_VERIFIED",
+    "CONFIG_VALIDATED",
+    "LIVE_PROBE_PASSED",
+    "END_TO_END_TESTED",
+    "NOT_TESTED",
+    "UNVERIFIED",
+    "FIXTURE_ONLY",
+    "SELF_AUTHORED_MOCK",
+  ]);
+
+  const result = await contract.run(
+    {
+      action: "open",
+      goal: "Fix the reported startup failure",
+      input: "The current user request and focus files",
+      expected: "STARTUP_FIX_OK",
+      check: 'node -e "process.exit(1)"',
+      pass: "The focused startup check emits STARTUP_FIX_OK and exits 0",
+      investigation: {
+        version: 1,
+        task: "startup failure",
+        project: "fixture",
+        findings: ["startup check currently fails"],
+        expected: "STARTUP_FIX_OK",
+      },
+    },
+    { sessionID: "ses-contract-investigation" },
+  );
+
+  assert.equal(result.status, "open");
+  assert.equal(result.investigationStatus, "ignored_invalid");
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test("http_probe returns status, body hash and redacts sensitive headers", async () => {
   const server = http.createServer((_request, response) => {
     response.writeHead(200, { "content-type": "text/plain", authorization: "Bearer secret" });

@@ -1293,6 +1293,22 @@ test("a primary agent cannot be launched through the subagent tool", async () =>
     tool: "subagent",
     input: { agent: "nila", prompt: envelope },
   });
+  await before({
+    sessionID: "ses_mode",
+    agent: "zombiecoder",
+    tool: "subagent",
+    input: { agent: "nila", query: `${envelope}\nInvestigate src/plugin.ts` },
+  });
+  await assert.rejects(
+    before({
+      sessionID: "ses_mode",
+      agent: "zombiecoder",
+      tool: "subagent",
+      input: { agent: "nila", query: "Investigate src/plugin.ts" },
+    }),
+    /bounded context envelope/,
+    "a query-based launch without the envelope must be refused",
+  );
   await assert.rejects(
     before({ sessionID: "ses_mode", agent: "manu", tool: "subagent", input: { agent: "manu" } }),
     /cannot launch itself/,
@@ -1534,7 +1550,9 @@ test("context hook archives overflow without waiting for session.idle", async ()
   assert.equal(stalePersonaAudit.personaSource, "runtime");
   assert.equal(builtinAudit.persona, "shared", "builtin runner uses the merged persona");
   assert.ok(builtinAudit.personaBytes > 0, "the merged persona must not be empty");
-  assert.ok(builtinAudit.personaBytes < 5000, "shared persona should not carry unrelated domain instructions");
+  // Same measured ceiling as roster.test.ts: the shared governance block grew
+  // by the "injected context first" rule; domain content is still excluded.
+  assert.ok(builtinAudit.personaBytes < 5500, "shared persona should not carry unrelated domain instructions");
   assert.equal(buildAudit.persona, "shared", "build builtin uses the merged persona");
   assert.ok(buildAudit.personaBytes > 0, "build persona metadata must be injected");
   assert.equal(rosterAudit.runnerKind, "free");

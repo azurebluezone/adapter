@@ -22,7 +22,10 @@ test("mergeAgentPersona gives every builtin runner the full shared persona", () 
     assert.ok(persona.text.includes(SHARED_EXECUTION), `${id}: execution doctrine missing`);
     assert.equal(persona.bytes, Buffer.byteLength(persona.text, "utf8"));
     assert.ok(persona.bytes > 0, `${id}: persona must not be empty`);
-    assert.ok(persona.bytes < 5000, `${id}: shared persona should stay project-scoped`);
+    // 5000 was the pre-investigation wording. The shared rules now carry the
+    // "injected context first" rule, which added ~170 bytes of governance text
+    // (not domain instructions), so the measured ceiling moved to 5500.
+    assert.ok(persona.bytes < 5500, `${id}: shared persona should stay project-scoped`);
   }
   assert.equal(mergeAgentPersona("my-custom-agent").kind, "shared");
 });

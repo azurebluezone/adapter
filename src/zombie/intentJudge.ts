@@ -1,14 +1,17 @@
-// Hardcoded intent-judge — the independent check that runs after a goal
-// contract has been open for three minutes.
+// Intent judge — the release gate that reads the real close evidence.
 //
-// The judge is not a second opinion the worker can skip. The trigger, the gate
-// and the prompt are code, not prompt text:
+// The close check already runs the recorded command and stores its real exit
+// code and output. That is the same evidence a separate judge agent would
+// re-read line by line, so the verdict is derived from it instead:
 //
-//   judgeDue   — 180000 ms after the contract opened;
-//   judgeGate  — a due worker answer needs a stored PASS verdict;
-//   buildJudgePrompt — the judge sees the original request and the contract,
-//                      never the worker's summary;
-//   mutationInScope  — a contract's scope bounds every mutating tool call.
+//   judgeVerdictFromClose — PASS only when the close itself passed, exit 0 and
+//                           the expected marker is in the observed output;
+//   judgeDue              — 180000 ms after the contract opened (fallback for a
+//                           contract that is still open, not the normal path);
+//   judgeGate             — a due worker answer needs a stored PASS verdict;
+//   buildJudgePrompt      — optional second opinion for ambiguous intent; it
+//                           sees the original request, never the worker summary;
+//   mutationInScope       — a contract's scope bounds every mutating tool call.
 //
 // A verdict is data (contract id + status + reason + time), so a worker cannot
 // turn a FAIL into a PASS by rephrasing its answer.
@@ -28,6 +31,8 @@ export type JudgeVerdict = {
   at: string;
   /** The agent that produced the verdict. */
   judge?: string;
+  /** `close-gate` is the plugin reading the real close result; `agent` is the optional second opinion. */
+  source?: "close-gate" | "agent";
 };
 
 export type JudgeGateInput = {
@@ -103,10 +108,64 @@ export function judgeDue(
   return current - opened >= JUDGE_DELAY_MS;
 }
 
+export type CloseVerdictInput = {
+  contractID: string;
+  /** Status the close already computed from the real command. */
+  status: JudgeStatus;
+  /** Real exit code from the close run; null when the command never started. */
+  exitCode: number | null;
+  /** Real output the close captured. */
+  observed: string;
+  /** Pre-registered marker the output must contain. */
+  expected: string;
+  /** Close failure reason, when there is one. */
+  reason?: string;
+  at?: string;
+};
+
+function oneLine(value: string, max = 300): string {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+}
+
+/**
+ * The close check is the judge. `goal_contract close` runs the recorded command
+ * and stores its real exit code and output; re-reading the same files in a
+ * second agent would only repeat that run. The close already matched the
+ * expected marker with the contract's own mode (contains/equals/regex/json), so
+ * the verdict trusts that status and the real exit code instead of re-matching
+ * a literal that a regex or JSON contract may not contain.
+ */
+export function judgeVerdictFromClose(input: CloseVerdictInput): JudgeVerdict {
+  const observed = String(input.observed ?? "");
+  const expected = String(input.expected ?? "").trim();
+  const matched = input.status === "PASS" && input.exitCode === 0;
+  const detail = [
+    `exit ${input.exitCode === null ? "none" : input.exitCode}`,
+    `observed ${oneLine(observed) || "(empty)"}`,
+    `expected ${expected || "(none)"}`,
+    input.reason ? `reason ${oneLine(input.reason, 200)}` : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+  return {
+    contractID: input.contractID,
+    status: matched ? "PASS" : "FAIL",
+    reason: matched
+      ? `real close output matched: ${detail}`
+      : `real close output did not match: ${detail}`,
+    at: input.at ?? new Date().toISOString(),
+    judge: "plugin:close-gate",
+    source: "close-gate",
+  };
+}
+
 /**
  * The release rule. A judge turn is released without a verdict (that turn is
- * how the verdict is produced). Before the deadline a worker needs no verdict.
- * After the deadline a worker is released only by a PASS for this contract.
+ * how the optional second opinion is produced). Before the deadline a worker
+ * needs no verdict. After the deadline a worker is released only by a PASS for
+ * this contract. The normal path is the close gate: `goal_contract close`
+ * stores the verdict, so a due worker never has to launch a subagent.
  */
 export function judgeGate(input: JudgeGateInput): JudgeGateResult {
   if (input.judgeTurn) {
@@ -121,7 +180,7 @@ export function judgeGate(input: JudgeGateInput): JudgeGateResult {
       ok: false,
       blocked: true,
       reason:
-        "the goal contract has been open for 3 minutes and no intent-judge verdict exists; launch intent-judge before answering",
+        "the goal contract is still open after 3 minutes and no verdict exists; close it so the real check output becomes the verdict (the close gate records PASS/FAIL, no subagent is needed)",
     };
   }
   if (input.contractID && verdict.contractID && verdict.contractID !== input.contractID) {

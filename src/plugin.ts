@@ -108,6 +108,7 @@ import {
   JUDGE_MAX_QUESTIONS,
   judgeDue,
   judgeGate,
+  judgeVerdictFromClose,
   mutationInScope,
   type JudgeDebate,
   type JudgeRuntimeState,
@@ -2034,10 +2035,36 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
                   | { openedAt?: string }
                   | null
                   | undefined;
-                const verdict = (await ctx.storage.get(`judge/verdict/${contractID}`)) as
+                let verdict = (await ctx.storage.get(`judge/verdict/${contractID}`)) as
                   | JudgeVerdict
                   | null
                   | undefined;
+                // Self-heal a contract that closed PASS before the close gate
+                // existed: its real result is already in storage, so build the
+                // verdict from that result instead of asking for a subagent.
+                if (!verdict && String(routeRun?.contract?.status ?? "").toUpperCase() === "PASS") {
+                  const result = (await ctx.storage.get(`goal/result/${contractID}`)) as
+                    | {
+                        status?: string;
+                        exitCode?: number | null;
+                        observed?: string;
+                        expected?: string;
+                        reason?: string;
+                      }
+                    | null
+                    | undefined;
+                  if (result) {
+                    verdict = judgeVerdictFromClose({
+                      contractID,
+                      status: String(result.status ?? "").toUpperCase() === "PASS" ? "PASS" : "FAIL",
+                      exitCode: typeof result.exitCode === "number" ? result.exitCode : null,
+                      observed: String(result.observed ?? ""),
+                      expected: String(result.expected ?? ""),
+                      reason: result.reason,
+                    });
+                    await ctx.storage.set(`judge/verdict/${contractID}`, verdict);
+                  }
+                }
                 judgeState = {
                   due: judgeDue(clock?.openedAt ?? pending?.openedAt),
                   verdict: verdict ?? null,
@@ -2067,9 +2094,9 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
                         "Intent judge due",
                         "",
                         `Contract: ${judgeState.contractID}`,
-                        "The contract has been open for three minutes. The worker answer is blocked until an independent verdict exists.",
+                        "The contract has been open for three minutes and is not closed. The worker answer is blocked until the real close check runs.",
                         "",
-                        "Next: call `intent_judge` action=prompt, launch the `intent-judge` subagent with that prompt, answer its question, and let it record PASS or FAIL.",
+                        "Next: close the contract with `goal_contract`; the plugin records the verdict from the real exit code and output. No subagent is needed.",
                       ].join("\n"),
                     }),
                   );
@@ -2360,13 +2387,13 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           // A child without the envelope restarts the investigation from zero.
           // Require the rendered block before the host spends a model call.
           const prompts: string[] = [];
-          const directPrompt = input.prompt ?? input.message;
+          const directPrompt = input.prompt ?? input.message ?? input.query ?? input.text;
           if (typeof directPrompt === "string" && directPrompt.trim()) prompts.push(directPrompt);
           for (const group of [input.tasks, input.agents, input.subagents]) {
             if (!Array.isArray(group)) continue;
             for (const item of group) {
               if (!item || typeof item !== "object") continue;
-              const value = (item as any).prompt ?? (item as any).message;
+              const value = (item as any).prompt ?? (item as any).message ?? (item as any).query ?? (item as any).text;
               if (typeof value === "string" && value.trim()) prompts.push(value);
             }
           }
