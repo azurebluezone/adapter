@@ -11,6 +11,7 @@
 // Final line: JOURNEY_UI_OK
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { buildContextPack } from "../src/zombie/context.ts";
 import {
@@ -38,13 +39,27 @@ function noEmoji(text) {
 }
 
 const root = process.cwd();
+// A clean checkout has no .zombiecoder/ (it is per-project state and ignored),
+// so the intake card would correctly show "not seeded" and this check would
+// fail for the wrong reason. Build the card from a tiny fixture with a real
+// SSOT and syllabus, while still reading the source files from the repository.
+const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zc-journey-"));
+fs.mkdirSync(path.join(fixtureRoot, ".zombiecoder"), { recursive: true });
+fs.writeFileSync(
+  path.join(fixtureRoot, ".zombiecoder", "SSOT.md"),
+  "# SSOT\n\n- Journey UI check fixture\n",
+);
+fs.writeFileSync(
+  path.join(fixtureRoot, ".zombiecoder", "syllabus.md"),
+  "# Syllabus\n\n- Intake card context fixture\n",
+);
 const pack = buildContextPack(
-  root,
+  fixtureRoot,
   "zombiecoder",
   [],
   "Make the agent journey visible in the UI",
   "ses_journey",
-  root,
+  fixtureRoot,
 );
 const run = {
   version: 1,
@@ -264,6 +279,8 @@ check(
   "server emits the close cards",
   server.includes("journeyCloseText") && server.includes('kind: "goal-contract-result"'),
 );
+
+fs.rmSync(fixtureRoot, { recursive: true, force: true });
 
 if (failures.length > 0) {
   console.log(`\nJOURNEY_UI_FAILED ${failures.length}: ${failures.join(" | ")}`);

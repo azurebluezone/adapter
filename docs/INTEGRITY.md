@@ -7,21 +7,21 @@
 
 ```text
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  root  2e3f1e9e084bd7b1588939e0bad19f278a33f17fd0d26bbdd2a88ef8fb41eed7  ║
-║  files 205 · bytes 1985116 · base 3fe0c1b · dirty                        ║
+║  root  89329be5db003d9fd849a03504796c8cee8319bcaba1e08024af0923567f7b1a  ║
+║  files 205 · bytes 1985931 · base 0b40202 · dirty                        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
 | Field | Value |
 |---|---|
 | Schema | `zombiecoder-integrity/v1` |
-| Generated (UTC) | `2026-11-25T12:45:15.429Z` |
-| Base commit | `3fe0c1b` |
+| Generated (UTC) | `2026-11-25T12:53:34.545Z` |
+| Base commit | `0b40202` |
 | Branch | `main` |
 | Code tree | `dirty` |
 | Files | 205 |
-| Bytes | 1985116 |
-| Root SHA-256 | `2e3f1e9e084bd7b1588939e0bad19f278a33f17fd0d26bbdd2a88ef8fb41eed7` |
+| Bytes | 1985931 |
+| Root SHA-256 | `89329be5db003d9fd849a03504796c8cee8319bcaba1e08024af0923567f7b1a` |
 
 ## Scope
 
@@ -103,7 +103,7 @@ npm run integrity:check
 | `scripts/check-install-assets.mjs` | 6538 | `2ebbd9ec3122f9ca50ef1501bb8c878b686ed970445ef02f46aadff2d0f445f0` |
 | `scripts/check-install-surface.mjs` | 10926 | `2590fe99130c047fdae52265772fbcee5153dc20788df2e23e60d608edac9d1f` |
 | `scripts/check-intent-judge.mjs` | 10972 | `46bffff6d5040732c4eaeb7f9fddb1b29fbf879612d2ae4e1f7cf92c21e656df` |
-| `scripts/check-journey-ui.mjs` | 9704 | `b8beeba0ae71a68624f2ea8912406221144cc328ddba1d4b51fd86957d7c5b82` |
+| `scripts/check-journey-ui.mjs` | 10519 | `b7dbf6537f02aaa3ff6658ef3d0d4ca7b7c129c03e8f957f7308e940063c5866` |
 | `scripts/check-release.mjs` | 6497 | `9ec29c06bbe9009b62d2452977c091fc407eb091684f06cb11d02e1417f642fc` |
 | `scripts/check-skill-library-yaml.mjs` | 10759 | `9f381d6eb1909629eff70d925239291b34391731b35d853ecf4c3426766ac357` |
 | `scripts/check-ui-surface.mjs` | 17412 | `828e370ddc9c4925a9adfe5b9c4e3a3ea4f770adf079639297ecfd7bd27c703d` |
