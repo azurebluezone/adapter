@@ -27,6 +27,20 @@ export const TASK_KINDS = ["trivial", "readonly", "substantive"] as const;
 
 export type TaskKind = (typeof TASK_KINDS)[number];
 
+export const DOMAIN_KINDS = [
+  "architecture",
+  "debug",
+  "security",
+  "performance",
+  "documentation",
+  "ui",
+  "models",
+  "quality",
+  "general",
+] as const;
+
+export type DomainKind = (typeof DOMAIN_KINDS)[number];
+
 export const ROUTE_PHASES = [
   "intake",
   "footprint",
@@ -111,6 +125,10 @@ export type AgentRun = {
   sessionID: string;
   agentID: AgentID;
   taskKind: TaskKind;
+  /** Deterministic domain owner for bounded specialist assignment. */
+  domain?: DomainKind;
+  domainOwner?: AgentID;
+  minimumProcess?: readonly string[];
   /** Five-level process weight; absent on runs stored before the classifier. */
   complexity?: TaskComplexity;
   /** Read-only small/medium turn that may answer without the full walk. */

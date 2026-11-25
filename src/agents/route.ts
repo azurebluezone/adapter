@@ -6,6 +6,7 @@
 import { createHash } from "node:crypto";
 import { classifyIntentKind, stripQuotedText } from "../zombie/intentRules.ts";
 import { classifyComplexity, isTrivialMessage } from "../zombie/taskClass.ts";
+import { routeDomain } from "./domainRouting.ts";
 import type {
   AgentID,
   AgentRun,
@@ -110,6 +111,7 @@ export function startRun(input: {
     writeIntent: hasWriteIntent(input.message),
     fileCount: input.focus?.length ?? 0,
   });
+  const domain = routeDomain(input.message);
   // The first user turn is the "show me this project" turn. Do not let a short
   // question take the read-only fast path before the footprint/investigation
   // walk; the reported failure was a greeting-sized input that produced zero
@@ -120,6 +122,9 @@ export function startRun(input: {
     sessionID: input.sessionID,
     agentID: input.agentID,
     taskKind: kind,
+    domain: domain.domain,
+    domainOwner: domain.owner,
+    minimumProcess: [...domain.minimum],
     complexity: complexity.level,
     fastPath: complexity.fastPath && !firstTurn,
     phase: "intake",

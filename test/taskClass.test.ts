@@ -55,6 +55,22 @@ test("read-only fast path answers without the footprint walk, writes do not", ()
   assert.match(releaseCheck(write.run).reason, /contract/i);
 });
 
+test("domain routing assigns a bounded owner and minimum process", () => {
+  const cases = [
+    ["Node API slow fix", "performance", "rashed"],
+    ["CSS button align", "ui", "nila"],
+    ["database migration", "architecture", "manu"],
+    ["security issue", "security", "brishti"],
+    ["README docs mismatch", "documentation", "halim"],
+  ] as const;
+  for (const [message, domain, owner] of cases) {
+    const turn = beginTurn({ sessionID: `ses_domain_${owner}`, agentID: "zombiecoder", message });
+    assert.equal(turn.run.domain, domain, `${message} domain`);
+    assert.equal(turn.run.domainOwner, owner, `${message} owner`);
+    assert.ok((turn.run.minimumProcess?.length ?? 0) >= 3, `${message} must name a minimum process`);
+  }
+});
+
 test("a trivial turn is still classified trivial and releasable", () => {
   const turn = beginTurn({ sessionID: "ses_class_hi", agentID: "zombiecoder", message: "hello" });
   assert.equal(turn.run.complexity, "trivial");

@@ -1603,6 +1603,8 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
                 ? [
                     `Agent route: \`${routeRun.routeKey}\` — task ${routeRun.taskKind}, phase ${routeRun.phase}` +
                       `, class ${routeRun.complexity ?? "unclassified"}${routeRun.fastPath ? " (fast path)" : ""}. ` +
+                      `Domain: ${routeRun.domain ?? "general"}; bounded owner/specialist: ${routeRun.domainOwner ?? agentID}. ` +
+                      `Minimum process: ${(routeRun.minimumProcess ?? []).join(" → ") || "read the project evidence, find the smallest check, verify"}. ` +
                       "A substantive answer is releasable only after goal_contract PASS; do not claim completion before that.",
                     ...(routeRun.freshSyllabus && routeRun.phase === "footprint"
                       ? [
@@ -1638,6 +1640,9 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           contextPackBytes: pack.bytes,
           routeKey: routeRun?.routeKey,
           taskKind: routeRun?.taskKind,
+          domain: routeRun?.domain ?? "general",
+          domainOwner: routeRun?.domainOwner ?? agentID,
+          minimumProcess: routeRun?.minimumProcess ?? [],
           ssotBytes: pack.ssot.bytes,
           syllabusBytes: pack.syllabus.bytes,
           ssotExcerptBytes: pack.ssotExcerptBytes,

@@ -1,6 +1,6 @@
 {
   "schema": "zombiecoder-integrity/v1",
-  "generated_at": "2026-11-25T12:53:34.545Z",
+  "generated_at": "2026-11-25T15:10:01.412Z",
   "scope": [
     "src",
     "bin",
@@ -12,11 +12,11 @@
     "package.json",
     "LICENSE"
   ],
-  "root_sha256": "89329be5db003d9fd849a03504796c8cee8319bcaba1e08024af0923567f7b1a",
-  "file_count": 205,
-  "total_bytes": 1985931,
+  "root_sha256": "e86134d3b98da05815d45269c370a472402ee9d1eeb2bbf4d10cda893dc55d16",
+  "file_count": 206,
+  "total_bytes": 1991920,
   "git": {
-    "commit": "0b40202",
+    "commit": "f1ea8fd",
     "branch": "main",
     "dirty": true
   },
@@ -427,6 +427,11 @@
       "sha256": "bf2678d1e0182c8bdecc84d8df7fc50a7d11321b840652afef98a507949a4871"
     },
     {
+      "path": "src/agents/domainRouting.ts",
+      "bytes": 4216,
+      "sha256": "6da1fa01acdfbbb4bf0faffa8bd6d1bcebb12b900d5a762d95a90e2c13aeb652"
+    },
+    {
       "path": "src/agents/domainSkills.ts",
       "bytes": 3004,
       "sha256": "b0e2a6ecb0dfda46a33bd32816dee0f01c5082453580ede3dd751da2a244c80a"
@@ -473,8 +478,8 @@
     },
     {
       "path": "src/agents/route.ts",
-      "bytes": 13681,
-      "sha256": "f7904cf1f13249db1ad5231b63669d3209b7e009852e36cdc8402a6fa6496bf6"
+      "bytes": 13875,
+      "sha256": "f54e33eb63435df2e0f679b33f4c5322f9a65c430e5292b60083f14115676199"
     },
     {
       "path": "src/agents/runtime.ts",
@@ -498,8 +503,8 @@
     },
     {
       "path": "src/agents/types.ts",
-      "bytes": 3545,
-      "sha256": "40ebebcb3ae49993cc9f4dfb3cbb2ce5f3855861458a6e03d0ffab98357a063a"
+      "bytes": 3927,
+      "sha256": "cee8e4d443274a47855e1ecd90ddd85ee982b776528cbc29f5450d839d492569"
     },
     {
       "path": "src/agents/zombiecoder.ts",
@@ -528,8 +533,8 @@
     },
     {
       "path": "src/plugin.ts",
-      "bytes": 125868,
-      "sha256": "d95b4877fd654dfabbfc896a77c625ef3a326bc2ccc113b6379376e616f264a5"
+      "bytes": 126320,
+      "sha256": "31deaf6a2f95db879df2538aab557e24f32f3e0bfad8a39c18a81187084883e8"
     },
     {
       "path": "src/roster.ts",
@@ -1018,8 +1023,8 @@
     },
     {
       "path": "test/taskClass.test.ts",
-      "bytes": 2864,
-      "sha256": "3d2d38ace16aa785344bbad2871793eaa655ca5bcbc5667db2b0fd4bc4232f57"
+      "bytes": 3609,
+      "sha256": "39029dc4d076a9c565cc39a4035d0f9e579df09d59ceabdef96a8d60dd21ab40"
     },
     {
       "path": "test/toolArchive.test.ts",
