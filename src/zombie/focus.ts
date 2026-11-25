@@ -112,7 +112,7 @@ export function extractTerms(message: string): string[] {
   const text = stripInvisible(String(message ?? ""));
   const found = new Set<string>();
   const add = (value: string) => {
-    const v = value.trim().replace(/^[`'"(\[]+|[`'")\].,:;!?]+$/g, "");
+    const v = value.trim().replace(/^[`'"(\[]+|[`'")\].,:;!?-]+$/g, "");
     if (v.length < 3 || v.length > 80) return;
     if (STOPWORDS.has(normalize(v))) return;
     found.add(v);
@@ -120,9 +120,15 @@ export function extractTerms(message: string): string[] {
   // Quoted names win: "resources/views/admin/users/index.blade.php"
   for (const m of text.matchAll(/[`"']([^`"'\n]{3,80})[`"']/g)) add(m[1]);
   // Paths and dotted filenames (multi-dot, e.g. index.blade.php)
-  for (const m of text.matchAll(/(?:[A-Za-z0-9_.@-]+\/)+[A-Za-z0-9_.@-]+|(?:[A-Za-z0-9_-]+\.)+[A-Za-z0-9]{1,8}\b/g)) add(m[0]);
+  // Blank a matched path before the identifier pass: "/home/u/Music/mp3" must
+  // not become the term "Music" and pull an unrelated music module into focus.
+  let withoutPaths = text;
+  for (const m of text.matchAll(/(?:[A-Za-z0-9_.@-]+\/)+[A-Za-z0-9_.@-]+|(?:[A-Za-z0-9_-]+\.)+[A-Za-z0-9]{1,8}\b/g)) {
+    add(m[0]);
+    withoutPaths = withoutPaths.replace(m[0], " ");
+  }
   // Identifiers: snake_case, camelCase, PascalCase, dotted calls
-  for (const m of text.matchAll(/\b[A-Za-z_][A-Za-z0-9_]{2,}(?:\.[A-Za-z_][A-Za-z0-9_]*)?\b/g)) {
+  for (const m of withoutPaths.matchAll(/\b[A-Za-z_][A-Za-z0-9_]{2,}(?:\.[A-Za-z_][A-Za-z0-9_]*)?\b/g)) {
     const v = m[0];
     if (/^[a-z]{1,3}$/.test(v)) continue;
     add(v);
@@ -161,7 +167,10 @@ export function relatedTo(file: string, files: string[]): Array<{ path: string; 
   // "users" and "User" in UserController are the same slice in Laravel; compare
   // after dropping a trailing plural and non-letters.
   const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/s$/, "");
-  const slugs = [stem, dirLeaf, ...normalize(file).split("/")]
+  // Only the file stem and its immediate directory name identify the slice.
+  // Including every path segment made the top-level folder ("possible") match
+  // every file in the tree and pulled unrelated controllers into focus.
+  const slugs = [stem, dirLeaf]
     .map(slug)
     .filter((value) => value.length >= 4);
   const wantsView = isView(file);
@@ -170,10 +179,8 @@ export function relatedTo(file: string, files: string[]): Array<{ path: string; 
 
   for (const candidate of files) {
     if (candidate === file) continue;
-    const low = normalize(candidate);
     const cSlug = slug(stemOf(candidate));
-    const cLowSlug = slug(low);
-    const shared = slugs.find((value) => cSlug === value || cLowSlug.includes(value));
+    const shared = slugs.find((value) => cSlug === value || cSlug.includes(value));
     const sameDir = dirOf(file) === dirOf(candidate) && dirOf(file).length > 0;
 
     let score = 0;

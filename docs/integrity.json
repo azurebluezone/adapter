@@ -1,6 +1,6 @@
 {
   "schema": "zombiecoder-integrity/v1",
-  "generated_at": "2026-11-23T04:22:37.848Z",
+  "generated_at": "2026-11-25T11:38:51.567Z",
   "scope": [
     "src",
     "bin",
@@ -12,11 +12,11 @@
     "package.json",
     "LICENSE"
   ],
-  "root_sha256": "295b3232bdacab18212d779748e51823bbd16a0284a4756cf897b9c8a6313e5e",
-  "file_count": 203,
-  "total_bytes": 1955430,
+  "root_sha256": "f90fc4b551af73f7eb0b2144d2c71eb47c8128ad8feccf0b979c217487659aba",
+  "file_count": 204,
+  "total_bytes": 1964571,
   "git": {
-    "commit": "4b132f5",
+    "commit": "481e932",
     "branch": "main",
     "dirty": true
   },
@@ -253,8 +253,8 @@
     },
     {
       "path": "package.json",
-      "bytes": 2837,
-      "sha256": "753c5deb4269632c41dce182a12f9665d0d930ad47fa9ce8e782a9e8dda5de4c"
+      "bytes": 3402,
+      "sha256": "851a6df7768e1355f34acae9c1a45817c34ae56be59bdb055109d3a9eef7753f"
     },
     {
       "path": "scripts/agent-model-sync-probe.mjs",
@@ -263,8 +263,8 @@
     },
     {
       "path": "scripts/agents-check.mjs",
-      "bytes": 6824,
-      "sha256": "7c7e3de346ce15046d788783b3b0a2425969d80f082a1dc30e3f1a442094d430"
+      "bytes": 6922,
+      "sha256": "15860e03a508e6d034da4451f4fbf0fe219990ab56cd7f59435a20cd705f97a9"
     },
     {
       "path": "scripts/allow-always-check.mjs",
@@ -293,8 +293,8 @@
     },
     {
       "path": "scripts/check-install-surface.mjs",
-      "bytes": 10333,
-      "sha256": "ec5d2f207e32d8b84b3480ada03691b3dbb59fa15fb12874059ed3b071f8e444"
+      "bytes": 10926,
+      "sha256": "2590fe99130c047fdae52265772fbcee5153dc20788df2e23e60d608edac9d1f"
     },
     {
       "path": "scripts/check-intent-judge.mjs",
@@ -313,8 +313,8 @@
     },
     {
       "path": "scripts/check-skill-library-yaml.mjs",
-      "bytes": 9231,
-      "sha256": "1a0b4e9381e353e1cca6e2d29fe088712514cd79c6f8b4202d6558082fa8796d"
+      "bytes": 10759,
+      "sha256": "9f381d6eb1909629eff70d925239291b34391731b35d853ecf4c3426766ac357"
     },
     {
       "path": "scripts/check-ui-surface.mjs",
@@ -403,8 +403,8 @@
     },
     {
       "path": "scripts/verify-wiring.mjs",
-      "bytes": 31338,
-      "sha256": "0d61c619a3e798f88226ed6e77b13eb11ef628a877d2422879a48b3f34f7901f"
+      "bytes": 32588,
+      "sha256": "5139198f9e0c064bc0271c743ebeeaffbc73947a300c8bfcb0b96207a408a134"
     },
     {
       "path": "src/agents.ts",
@@ -528,8 +528,8 @@
     },
     {
       "path": "src/plugin.ts",
-      "bytes": 124334,
-      "sha256": "eb52737d5a1eeea089bafc4f328c9d8d59aa08e2a6c542d54d71476ceb6bf709"
+      "bytes": 124593,
+      "sha256": "e22e5189cce9ebaa9c6dd8d4955851b63e8b814730f8e5ec5969bda235e6bbc8"
     },
     {
       "path": "src/roster.ts",
@@ -573,8 +573,8 @@
     },
     {
       "path": "src/zombie/focus.ts",
-      "bytes": 13450,
-      "sha256": "83b95b0216e699fda9047cad4ce854de8fd9c22182d174fa800f0f6ff411b14b"
+      "bytes": 13832,
+      "sha256": "8e7f00381fc27fb4e182e098d41488848a28b237b830df16321b7695f690d288"
     },
     {
       "path": "src/zombie/frontmatter.ts",
@@ -593,13 +593,13 @@
     },
     {
       "path": "src/zombie/intentJudge.ts",
-      "bytes": 13728,
-      "sha256": "d6e6d47449edd5b788187c2886f788d186e72504f33c777be6b61d53d5786892"
+      "bytes": 14659,
+      "sha256": "05352858033ce1530d8bc0bc9a3532d6c3ef46c0eeb65274c4bc7d1d88957ece"
     },
     {
       "path": "src/zombie/intentRules.ts",
-      "bytes": 2883,
-      "sha256": "ee1d86c65bd18fd68392dc97b1a19f2f0bb572e4a3815d4f24a857513ca4117f"
+      "bytes": 3183,
+      "sha256": "48fc812c23ffea6b7a759cff375606bd0a2dd9b2d5ccaa0bd3b3e5a49efecf58"
     },
     {
       "path": "src/zombie/investigation.ts",
@@ -618,8 +618,8 @@
     },
     {
       "path": "src/zombie/journey.ts",
-      "bytes": 11311,
-      "sha256": "bdf828b1582e979059bc4e04525645c5428d9b7a750217ab5fc85a1e92b598ba"
+      "bytes": 11203,
+      "sha256": "e52ecdc9ecc5708d243f436fac35ddefb5796d0ecec5fe2a50a6c5d88e280c88"
     },
     {
       "path": "src/zombie/lsp.ts",
@@ -728,8 +728,8 @@
     },
     {
       "path": "src/zombie/skillCard.ts",
-      "bytes": 9793,
-      "sha256": "ed52a02535c3daf5023cdebc1c46ea1572ae3907643375b3337f8eb5fe22b44b"
+      "bytes": 10623,
+      "sha256": "feebc903d5ea1c22d2b7c236cc3fc3b575b6998ecf743309609a4d7d4604cfad"
     },
     {
       "path": "src/zombie/skillCatalog.ts",
@@ -833,8 +833,8 @@
     },
     {
       "path": "test/focus.test.ts",
-      "bytes": 4051,
-      "sha256": "47d93d65959c80c0b1ebb99b7cc5445d5dfbef536c9d3bc51bc90937b0e8b3a1"
+      "bytes": 4637,
+      "sha256": "55320f192a465405af667a4295381f80a3c5c835e0f79208d0e7dd9a4c3e30ce"
     },
     {
       "path": "test/footprint.test.ts",
@@ -867,6 +867,11 @@
       "sha256": "8d589c1d8e2423869c788c11435e0fc23be6abc5145d7b66c9fb54cc09671c71"
     },
     {
+      "path": "test/intentJudge.test.ts",
+      "bytes": 1164,
+      "sha256": "12a9af8d63f39ae5384e76fc4253779309ee99d0dc92c37ebd3c2de9c85aec97"
+    },
+    {
       "path": "test/investigation.test.ts",
       "bytes": 2983,
       "sha256": "5c21563ea63fd1a876e1f215d738b5741a687a7e71378b64d069a1b59bc863ab"
@@ -878,8 +883,8 @@
     },
     {
       "path": "test/journey.test.ts",
-      "bytes": 8874,
-      "sha256": "5436e91e657e90df5193004042c26b81db3e0637a1c4d5bab8b9956bd0eb4f85"
+      "bytes": 8894,
+      "sha256": "a1e85370c91acd12ea218ad6b74686648529518d647f0d2328dfe805997aeca0"
     },
     {
       "path": "test/lsp.test.ts",
@@ -993,8 +998,8 @@
     },
     {
       "path": "test/skillLibrary.test.ts",
-      "bytes": 10222,
-      "sha256": "1873304cee20ebd49aa613d1f47f45ade41f4c8a5c61ed68946868743f5ea6b2"
+      "bytes": 10965,
+      "sha256": "2955f5c38890af0f2c1f1b0c0c2c76bf2ae41c8c15c09060d2d062842b06afb9"
     },
     {
       "path": "test/subagentEnvelope.test.ts",

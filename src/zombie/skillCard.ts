@@ -143,6 +143,26 @@ function sectionMap(sectionsList: { title: string; lines: string[] }[]): string 
   return titles.length ? `Sections: ${titles.join(" | ")}` : "";
 }
 
+/**
+ * Some upstream skills are prose-only: a single H1 and paragraphs, no numbered
+ * steps or section list. Returning an empty body there produced a card that
+ * named a skill but gave the model nothing to do. Keep the first useful prose
+ * lines as the fallback so every routed card stays actionable.
+ */
+function firstProse(sectionsList: { title: string; lines: string[] }[], limit = 2): string {
+  const picked: string[] = [];
+  for (const section of sectionsList) {
+    for (const raw of section.lines) {
+      const line = stripMarker(raw);
+      if (!line || line.startsWith("```") || /^#{1,4}\s/.test(raw)) continue;
+      if (line.length < 20) continue;
+      picked.push(line.slice(0, 200));
+      if (picked.length >= limit) return picked.join(" ");
+    }
+  }
+  return picked.join(" ");
+}
+
 function buildBody(steps: string[], verify: string[], fallback: string): string {
   const parts: string[] = [];
   if (steps.length > 0) {
@@ -170,7 +190,7 @@ export function skillCard(input: SkillCardInput, options: { maxChars?: number } 
   const sectionsList = sections(String(input.body ?? ""));
   const steps = firstSteps(sectionsList, 4);
   const verify = pickLines(sectionsList, /verif|test|check/i, 2);
-  const fallback = sectionMap(sectionsList);
+  const fallback = sectionMap(sectionsList) || firstProse(sectionsList);
 
   let whenLimit = 140;
   let when = oneLine(input.description, whenLimit);

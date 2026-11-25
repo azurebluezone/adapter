@@ -29,19 +29,34 @@ const CONFIG_CANDIDATES = [
 ].filter(Boolean);
 const CONFIG_FILE = CONFIG_CANDIDATES.find((file) => fs.existsSync(file)) ?? CONFIG_CANDIDATES[0];
 const CONFIG_REAL = fs.existsSync(CONFIG_FILE) ? fs.realpathSync(CONFIG_FILE) : CONFIG_FILE;
-const CONFIG_DIR = path.dirname(CONFIG_REAL);
+// The config file is often a symlink (~/.config/opencode/opencode.json ->
+// ~/.opencode/opencode.json). The plugin loader and plugin graph can live next
+// to either the symlink or its target, so search both instead of picking one.
+const CONFIG_DIR = path.dirname(CONFIG_FILE);
+const CONFIG_DIRS = [
+  ...new Set([CONFIG_DIR, path.dirname(CONFIG_REAL)]),
+];
 const INSTALL = [
-  path.join(CONFIG_DIR, "plugins", "zombiecoder"),
-  path.join(CONFIG_DIR, "zombiecoder"),
-].find((dir) => fs.existsSync(path.join(dir, "plugin.ts"))) ?? path.join(CONFIG_DIR, "plugins", "zombiecoder");
-const AGENT_DIRS = [...new Set([path.join(CONFIG_DIR, "agents"), path.join(HOME, ".opencode", "agents")])];
+  ...CONFIG_DIRS.flatMap((dir) => [
+    path.join(dir, "plugins", "zombiecoder"),
+    path.join(dir, "zombiecoder"),
+  ]),
+  path.join(HOME, ".config", "opencode", "plugins", "zombiecoder"),
+  path.join(HOME, ".config", "opencode", "zombiecoder"),
+  path.join(HOME, ".opencode", "plugins", "zombiecoder"),
+  path.join(HOME, ".opencode", "zombiecoder"),
+].find((dir) => fs.existsSync(path.join(dir, "plugin.ts"))) ?? path.join(CONFIG_DIRS[0], "plugins", "zombiecoder");
+const AGENT_DIRS = [...new Set([...CONFIG_DIRS.map((dir) => path.join(dir, "agents")), path.join(HOME, ".opencode", "agents")])];
 const PROJECT = process.env.ZOMBIECODER_PROJECT
   ? path.resolve(process.env.ZOMBIECODER_PROJECT)
   : fs.existsSync(path.join(REPO, ".zombiecoder"))
     ? REPO
     : process.cwd();
 const SURFACE_FILE = path.join(PROJECT, ".zombiecoder", ".state", "tool-surface.json");
-const ZOMBIE_CONFIG = path.join(CONFIG_DIR, "zombiecoder", "config.json");
+const ZOMBIE_CONFIG =
+  [...CONFIG_DIRS, ...CONFIG_DIRS.map((dir) => path.dirname(dir))]
+    .map((dir) => path.join(dir, "zombiecoder", "config.json"))
+    .find((file) => fs.existsSync(file)) ?? path.join(CONFIG_DIR, "zombiecoder", "config.json");
 
 const failures = [];
 const notes = [];
@@ -223,12 +238,12 @@ function checkCollision() {
     return;
   }
   const data = JSON.parse(result.stdout.trim().split("\n").pop());
-  must(data.registered.length === 28, `collision probe registered ${data.registered.length}, expected 28`);
+  must(data.registered.length === 29, `collision probe registered ${data.registered.length}, expected 29`);
   for (const name of ["append_syllabus", "read_ssot", "env_get"]) {
     must(data.registered.includes(`zombiecoder_${name}`), `collision dropped zombiecoder_${name}`);
     must(data.ids.includes(`public-api_${name}`), `MCP ${name} lost from the surface`);
   }
-  must(data.surface.zombiecoder.length === 28, `tool-surface zombiecoder=${data.surface.zombiecoder.length}`);
+  must(data.surface.zombiecoder.length === 29, `tool-surface zombiecoder=${data.surface.zombiecoder.length}`);
   must(data.surface.surface.includes("public-api_append_syllabus"), "tool-surface lost the MCP id");
   const codemode = new Map(data.codemode);
   for (const name of ["append_syllabus", "context_status", "goal_contract", "project_onboarding", "read_ssot"]) {
@@ -273,10 +288,11 @@ function checkConfig() {
   const config = readJson(CONFIG_REAL);
   const agents = config.agents ?? config.agent ?? {};
   const ids = Object.keys(agents);
-  must(ids.length === 9, `config has ${ids.length} agents, expected 9`);
+  must(ids.length === 10, `config has ${ids.length} agents, expected 10`);
   must(config.default_agent === "zombiecoder", `default_agent is ${config.default_agent}`);
   for (const [id, agent] of Object.entries(agents)) {
-    must(agent.mode === "all", `config agent ${id} mode=${agent.mode}`);
+    const expected = id === "intent-judge" ? "subagent" : "all";
+    must(agent.mode === expected, `config agent ${id} mode=${agent.mode}, expected ${expected}`);
   }
 
   const lsp = Object.entries(config.lsp ?? {});
@@ -302,18 +318,20 @@ function checkConfig() {
   if (fs.existsSync(ZOMBIE_CONFIG)) {
     const zombie = readJson(ZOMBIE_CONFIG);
     must(Array.isArray(zombie.mcpAllow), "zombiecoder config has no mcpAllow array");
-    for (const name of ["image-brand", "public-api"]) {
-      must(
-        Array.isArray(zombie.mcpAllow) && zombie.mcpAllow.includes(name),
-        `mcpAllow does not include ${name}`,
-      );
+    // The allowlist is user/environment-owned. Empty is valid and means MCP
+    // access is off; every entry that does exist must name a registered server.
+    for (const name of zombie.mcpAllow ?? []) {
+      must(servers.has(name), `mcpAllow names unknown MCP server ${name}`);
+    }
+    if (Array.isArray(zombie.mcpAllow) && zombie.mcpAllow.length === 0) {
+      notes.push("mcpAllow is empty: MCP access stays off until the user opts in");
     }
     must(
       typeof zombie.sourceRoot === "string" && zombie.sourceRoot.length > 0,
       "zombiecoder config has no sourceRoot; the plugin cannot protect its source tree",
     );
   }
-  pass(`config: 10 agents, ${lsp.length}/7 LSP binaries, ${servers.size} MCP servers, mcpAllow + sourceRoot set`);
+  pass(`config: 10 agents, ${lsp.length}/7 LSP binaries, ${servers.size} MCP servers, mcpAllow array + sourceRoot set`);
 }
 
 function checkLsp() {
@@ -429,7 +447,8 @@ function checkAgents() {
   for (const id of Object.keys(config.agents ?? {})) {
     const file = path.join(agentDir, `${id}.md`);
     const text = fs.readFileSync(file, "utf8");
-    must(/^mode:\s*all\s*$/m.test(text), `${file} is not mode: all`);
+    const mode = id === "intent-judge" ? "subagent" : "all";
+    must(new RegExp(`^mode:\\s*${mode}\\s*$`, "m").test(text), `${file} is not mode: ${mode}`);
     must(text.includes(`zombiecoder-agent-profile:${id}:`), `${file} has no persona marker`);
     for (const needle of [
       "### Context you are given",
@@ -443,13 +462,11 @@ function checkAgents() {
     }
     must(!/image-brand|public-api|cdp|missionbarisal/i.test(text), `${file} hardcodes an MCP server name`);
   }
-  for (const name of servers) {
-    must(
-      Array.isArray(zombie.mcpAllow) && zombie.mcpAllow.includes(name),
-      `registered MCP server ${name} is not in mcpAllow`,
-    );
+  must(Array.isArray(zombie.mcpAllow), "zombiecoder config has no mcpAllow array");
+  for (const name of zombie.mcpAllow ?? []) {
+    must(servers.includes(name), `mcpAllow names unknown MCP server ${name}`);
   }
-  pass(`agents: 9 markdown files mode all, rules + mcpAllow present, no hardcoded MCP server name`);
+  pass(`agents: 10 markdown files with role modes, rules + mcpAllow present, no hardcoded MCP server name`);
 }
 
 function checkSurface() {

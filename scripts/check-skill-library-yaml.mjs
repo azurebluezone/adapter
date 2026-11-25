@@ -161,6 +161,42 @@ async function main() {
   check("YAML card stays compact", card.length <= 650, `${card.length} chars`);
   check("YAML card carries the trust note", /reference only/i.test(String(parsed.values.trust ?? "")));
   check("YAML card does not use EML headers", !/^SKILL: /m.test(card));
+
+  // Incremental, card-by-card proof over the whole routed library: one broken
+  // upstream body must not ship a YAML card that names a skill but says nothing.
+  const invalidCards = [];
+  for (const row of library.skills) {
+    const everyCard = skillCard(
+      {
+        slug: row.slug,
+        name: row.name,
+        description: row.description,
+        source: row.source,
+        license: row.license,
+        contentHash: row.content_hash,
+        score: row.score ?? 1,
+        matchedTerms: row.matchedTerms ?? [],
+        body: row.body,
+      },
+      { maxChars: 650 },
+    );
+    const everyParsed = parseSkillCard(everyCard);
+    if (everyParsed.warnings.length || !everyParsed.body) {
+      invalidCards.push(`${row.slug}: empty-or-warning`);
+      continue;
+    }
+    if (everyCard.length > 650) invalidCards.push(`${row.slug}: ${everyCard.length} chars`);
+    if (String(everyParsed.values.card) !== SKILL_CARD_VERSION) invalidCards.push(`${row.slug}: card version`);
+    if (String(everyParsed.values.skill) !== row.slug) invalidCards.push(`${row.slug}: slug drift`);
+    if (!/reference only/i.test(String(everyParsed.values.trust ?? ""))) invalidCards.push(`${row.slug}: trust missing`);
+    if (/^SKILL: /m.test(everyCard)) invalidCards.push(`${row.slug}: EML header`);
+  }
+  check(
+    "every routed skill builds a non-empty, compact YAML card",
+    invalidCards.length === 0,
+    `${library.skills.length} cards${invalidCards.length ? `; failures=${invalidCards.slice(0, 5).join(", ")}` : ""}`,
+  );
+
   if (card) console.log(`\n--- card ---\n${card.trim()}\n------------\n`);
 
   const section = skillLiteSection(bengaliText, { dir: CACHE, budget: 700, limit: 2 });

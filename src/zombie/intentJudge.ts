@@ -362,7 +362,13 @@ function normalizePath(value: string): string {
 /** Split a contract scope into normalized path prefixes. `.` means no bound. */
 export function parseScope(scope: string): string[] {
   return String(scope ?? "")
-    .split(/[\s,;]+/)
+    .split(/[;,]/)
+    .flatMap((chunk) => {
+      const trimmed = chunk.trim();
+      // A path may contain spaces ("/home/u/Default Project"). Keep it whole;
+      // only a chunk without a leading slash is split into separate entries.
+      return trimmed.startsWith("/") && /\s/.test(trimmed) ? [trimmed] : trimmed.split(/\s+/);
+    })
     .map((entry) => normalizePath(entry))
     .filter((entry) => entry.length > 0 && entry !== ".");
 }
@@ -373,11 +379,24 @@ export function parseScope(scope: string): string[] {
  * an empty scope keeps the old behavior (no extra bound), while a shell write
  * with no resolvable target is out of scope once a bound exists.
  */
-export function mutationInScope(scope: string, tool: string, target: string): boolean {
+export function mutationInScope(scope: string, tool: string, target: string, base = ""): boolean {
   if (!MUTATING_TOOL_NAMES.has(canonicalName(tool))) return true;
   const entries = parseScope(scope);
   if (entries.length === 0) return true;
-  const normalized = normalizePath(target);
+  const basePath = normalizePath(base);
+  // A write tool names a project-relative file while a contract often stores an
+  // absolute scope. Anchor both sides on the project root before comparing.
+  const anchored = (value: string) => {
+    const normalized = normalizePath(value);
+    if (!normalized || !basePath) return normalized;
+    if (normalized === basePath || normalized.startsWith(`${basePath}/`)) return normalized;
+    if (String(value).trim().startsWith("/")) return normalized;
+    return normalizePath(`${basePath}/${normalized}`);
+  };
+  const normalized = anchored(target);
   if (!normalized) return false;
-  return entries.some((entry) => normalized === entry || normalized.startsWith(`${entry}/`));
+  return entries.some((entry) => {
+    const bound = anchored(entry);
+    return normalized === bound || normalized.startsWith(`${bound}/`);
+  });
 }

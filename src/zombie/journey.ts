@@ -53,9 +53,8 @@ export type JourneyIntakeInput = {
 /** Stage 1: the context the agent actually loaded and validated. */
 export function journeyIntakeText(input: JourneyIntakeInput): string {
   const { pack, run, request, sanitized } = input;
-  const focus = pack.focus
-    ? [...pack.focus.primary, ...pack.focus.related].map((item) => item.path)
-    : [];
+  const primary = pack.focus?.primary.map((item) => item.path) ?? [];
+  const related = pack.focus?.related.map((item) => item.path) ?? [];
   const route = run
     ? `${run.taskKind} / ${run.phase}${
         run.complexity && run.complexity !== "trivial" ? ` (${run.complexity})` : ""
@@ -64,11 +63,11 @@ export function journeyIntakeText(input: JourneyIntakeInput): string {
   return [
     "ধাপ ১ — ইনপুট আর কনটেক্সট যাচাই",
     "",
-    `তুমি চাইছ: ${oneLine(request, 220) || "(খালি)"}`,
+    `তুমি চাইছ: ${oneLine(request, 90) || "(খালি)"}`,
     fileLine("Syllabus", pack.syllabus),
     fileLine("SSOT", pack.ssot),
-    focus.length > 0
-      ? `Focus: ${focus.length}টি ফাইল — ${focus.join(", ")}`
+    primary.length > 0
+      ? `Focus: ${primary.length} primary, ${related.length} related${primary[0] ? ` — ${primary[0]}` : ""}`
       : "Focus: এই টার্নে নির্দিষ্ট ফাইল পাওয়া যায়নি",
     `Memory: ${pack.memory.recent} recent, ${pack.memory.archives} archive`,
     `ইনপুট যাচাই: ${sanitized}টি message পরিষ্কার, বাকি অপরিবর্তিত`,
@@ -136,9 +135,7 @@ export function journeyScopeText(input: JourneyScopeInput): string {
     "যাচাই হয়েছে:",
     ...(lines.length > 0 ? lines : ["- কোনো path দেওয়া হয়নি"]),
     "",
-    input.openedAt
-      ? `গার্ড: ${input.openedAt} থেকে ৩ মিনিট পর জবাবদিহি চাইবে; প্রশ্ন এলে উত্তর দেব, তারপর PASS/FAIL।`
-      : "গার্ড: প্রশ্ন এলে উত্তর দেব, তারপর PASS/FAIL।",
+    "গার্ড: আলাদা সময়সীমার অপেক্ষা নেই — close-এ আসল check-ই রায় দেবে; PASS/FAIL ওখানেই রেকর্ড হবে।",
   ].join("\n");
 }
 
@@ -236,7 +233,7 @@ export function journeyCloseText(input: JourneyCloseInput): string {
       "PASS হলে: ফল syllabus-এ লেখা হবে, contract বন্ধ হবে।",
       "FAIL হলে: contract খোলা থাকবে, আমি আসল আচরণ ঠিক করব।",
       "",
-      "permission dialog: Allow once = চেক চালাও; Allow always চাপলেও close-এর জন্য কিছু সেভ হয় না, পরের close-এ আবার জিজ্ঞেস করব; Reject = চেক চলবে না।",
+      "permission dialog: Allow once (Allow = চেক চালাও); Reject = চেক চলবে না; কিছুই সেভ হয় না, পরের close-এ আবার জিজ্ঞেস করব।",
       "Reject দিলে contract খোলাই থাকবে, ফল লেখা হবে না।",
     ].join("\n");
   }

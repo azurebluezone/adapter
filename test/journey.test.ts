@@ -77,7 +77,7 @@ test("intake card shows the real context sizes, validation and route", () => {
   assert.match(text, /ধাপ ১/);
   assert.match(text, /Syllabus: 90 লাইন, 5678 বাইট/);
   assert.match(text, /SSOT: 40 লাইন, 1234 বাইট/);
-  assert.match(text, /Focus: 2টি ফাইল/);
+  assert.match(text, /Focus: 1 primary, 1 related — src\/plugin\.ts/);
   assert.match(text, /ইনপুট যাচাই: 2টি message পরিষ্কার/);
   assert.match(text, /Route: substantive \/ intake \(complex\)/);
   assert.match(text, /খোলা contract: gc-test/);

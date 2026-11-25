@@ -2488,9 +2488,13 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           | null
           | undefined;
         const contractScope = String(activeContract?.scope ?? "");
-        if (contractScope && (MUTATING_TOOLS.has(tool) || shellMutates)) {
+        // Read-only shell commands (ls, grep, ffprobe, node -e) have no write
+        // target; keep them usable while a contract is open. Only a real write
+        // is bounded by the contract scope.
+        const hasWriteTarget = fileTarget.length > 0 || shellMutates;
+        if (contractScope && hasWriteTarget) {
           const scopeTarget = fileTarget || shellWrite.targets[0] || "";
-          if (!mutationInScope(contractScope, tool, scopeTarget)) {
+          if (!mutationInScope(contractScope, tool, scopeTarget, projectRoot)) {
             audit(projectRoot, agentID, {
               kind: "intent_judge.scope.block",
               sessionID,

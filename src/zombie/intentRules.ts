@@ -9,10 +9,10 @@
 export type IntentKind = "conversation" | "inspect" | "change" | "verify";
 
 export const CHANGE_INTENT =
-  /\b(?:build|create|make|add|implement|fix|refactor|rewrite|write|delete|remove|update|change|install|reinstall|uninstall|deploy|migrate|generate|patch|edit|convert|rename|scaffold|wire|rewire|connect|mount|enable|disable|apply|sync|prune|replace|clean|start)\b|(?:বানাও|বানাতে|তৈরি|লিখে|লিখো|লিখ|ঠিক\s*কর|ঠিক\s*করে|ফিলাপ|যোগ\s*কর|যুক্ত\s*কর|বদল|বদলে|মুছে|মুছ|ইনস্টল|রিইনস্টল|কানেক্ট|চালু\s*কর|বন্ধ\s*কর|আপডেট|শুরু\s*কর|প্রতিস্থাপন|সিঙ্ক|মাইগ্রেট|ডিপ্লয়|সংযোজন|পরিবর্তন|বাদ\s*দি|করে\s*দে(?:ও|বো|ব|ন|ছে|বে|লো|লাম)?(?![\u0980-\u09FF])|টেস্ট\s*কর)/i;
+  /\b(?:build|create|make|add|implement|fix|solve|repair|boost|harden|improve|refactor|rewrite|write|delete|remove|update|change|install|reinstall|uninstall|deploy|migrate|generate|patch|edit|convert|rename|scaffold|wire|rewire|connect|mount|enable|disable|apply|sync|prune|replace|clean|start)\b|(?:সমাধান|ফিক্স|বুস্ট|উন্নত|শক্তিশাল|বানাও|বানাতে|তৈরি|লিখে|লিখো|লিখ|ঠিক\s*কর|ঠিক\s*করে|ফিলাপ|যোগ\s*কর|যুক্ত\s*কর|বদল|বদলে|মুছে|মুছ|ইনস্টল|রিইনস্টল|কানেক্ট|চালু\s*কর|বন্ধ\s*কর|আপডেট|শুরু\s*কর|প্রতিস্থাপন|সিঙ্ক|মাইগ্রেট|ডিপ্লয়|সংযোজন|পরিবর্তন|বাদ\s*দি|করে\s*দে(?:ও|বো|ব|ন|ছে|বে|লো|লাম)?(?![\u0980-\u09FF])|টেস্ট\s*কর)/i;
 
 export const VERIFY_INTENT =
-  /\b(?:test|compile|typecheck|lint|verify|validate)\b|(?:টেস্ট|কম্পাইল|যাচাই|পরীক্ষা)/i;
+  /\b(?:test|compile|typecheck|lint|verify|validate)\b|(?:টেস্ট\s*(?:চালা|চালাও|চালিয়ে|চালাব)|পরীক্ষা\s*(?:চালা|চালাও)|রান\s*টেস্ট|টেস্ট|কম্পাইল|যাচাই|পরীক্ষা)/i;
 
 export const READ_INTENT =
   /\b(?:check|inspect|audit|analy[sz]e|review|explain|find|search|read|show|trace|diagnose|run|compare)\b|(?:চেক|দেখ|বিশ্লেষণ|পর্যালোচনা|খুঁজ|বুঝিয়ে|বলো|কী|কেন|কোথায়|কেমন|যাচাই|পরীক্ষা)/i;

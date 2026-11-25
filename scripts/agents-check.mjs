@@ -61,17 +61,16 @@ check("route key is agent/task/phase and illegal edges throw", () => {
   assert.equal(run.routeKey, "zc/manu/substantive/intake");
   assert.throws(() => manu.advance(run, "respond"), /illegal route step/);
   assert.throws(() => manu.advance(run, "verify"), /illegal route step/);
-  const proposed = manu.walk(run, ["footprint", "investigate", "propose"]);
-  assert.equal(proposed.routeKey, "zc/manu/substantive/propose");
-  assert.equal(manu.release(proposed).ok, true, "proposal is allowed before consent");
-  assert.throws(() => manu.advance(proposed, "respond"), /illegal route step/);
+  const investigated = manu.walk(run, ["footprint", "investigate"]);
+  assert.equal(investigated.routeKey, "zc/manu/substantive/investigate");
+  assert.throws(() => manu.advance(investigated, "propose"), /illegal route step/);
+  assert.equal(manu.release(investigated).ok, false, "investigation needs a contract before release");
 });
 
 check("substantive release requires goal_contract PASS", () => {
   let run = manu.walk(manu.start({ sessionID: "check", message: "fix login" }), [
     "footprint",
     "investigate",
-    "propose",
   ]);
   run = manu.noteContract(run, { id: "gc_check", status: "open", at: run.updatedAt });
   assert.equal(run.phase, "work");
@@ -85,7 +84,6 @@ check("a FAIL never releases", () => {
   let run = manu.walk(manu.start({ sessionID: "check", message: "fix login" }), [
     "footprint",
     "investigate",
-    "propose",
   ]);
   run = manu.noteContract(run, { id: "gc_fail", status: "open", at: run.updatedAt });
   run = manu.noteContract(run, { id: "gc_fail", status: "FAIL", at: run.updatedAt });
@@ -117,17 +115,16 @@ check("fresh syllabus waits for onboarding, then advances", () => {
   assert.equal(next.phase, "investigate");
 });
 
-check("consent continues the proposal into contract", () => {
+check("an opened contract advances to work without a consent turn", () => {
   const first = beginTurn({ sessionID: "check", agentID: "manu", message: "Implement src/agents" });
-  const proposed = manu.advance(first.run, "propose");
-  const consent = beginTurn({
-    sessionID: "check",
-    agentID: "manu",
-    message: "হ্যাঁ",
-    previous: proposed,
+  assert.equal(first.run.phase, "investigate");
+  const working = manu.noteContract(first.run, {
+    id: "gc_consent",
+    status: "open",
+    at: first.run.updatedAt,
   });
-  assert.equal(consent.consent, true);
-  assert.equal(consent.run.phase, "contract");
+  assert.equal(working.phase, "work");
+  assert.equal(manu.release(working).ok, false);
 });
 
 check("a fresh syllabus blocks read-only work too", () => {
@@ -152,7 +149,8 @@ check("goal_contract hook shapes parse", () => {
   assert.equal(contractFromEvent({ result: { output: { id: "gc", status: "open" } } })?.status, "open");
   assert.equal(contractFromEvent({ result: { output: { id: "gc", status: "PASS" } } })?.status, "PASS");
   assert.equal(contractFromEvent({ output: { id: "gc", status: "FAIL" } })?.status, "FAIL");
-  assert.equal(contractFromEvent({ result: { status: "rejected" } }), null);
+  assert.equal(contractFromEvent({ result: { status: "rejected" } })?.status, "REJECTED");
+  assert.equal(contractFromEvent({ result: { status: "unavailable" } })?.status, "REJECTED");
 });
 
 check("unknown runner has no controller", () => {
@@ -164,4 +162,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`\nZC_AGENTS_OK agents=9 model=agnostic route=manu`);
+console.log(`\nZC_AGENTS_OK agents=10 model=agnostic route=manu`);

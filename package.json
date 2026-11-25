@@ -42,7 +42,9 @@
     "mcp:cdp:live": "node mcp/cdp/e2e-live.mjs",
     "mcp:test": "node --test mcp/image-brand/test/*.test.mjs mcp/public-api/test/*.test.mjs mcp/cdp/test/*.test.mjs",
     "mcp:live": "node mcp/image-brand/e2e-live.mjs && node mcp/public-api/selfcheck.mjs && node mcp/cdp/selfcheck.mjs && node mcp/cdp/e2e-live.mjs",
-    "check": "npm run typecheck && npm run docs:check && npm test && npm run identity:check && npm run integrity:check"
+    "check:repo": "node --experimental-strip-types scripts/agents-check.mjs && node --experimental-strip-types scripts/modes-check.mjs && node --experimental-strip-types scripts/check-claim-gate.mjs && node --experimental-strip-types scripts/check-intent-judge.mjs && node --experimental-strip-types scripts/check-journey-ui.mjs && node --experimental-strip-types scripts/check-ui-surface.mjs",
+    "check:live": "node --experimental-strip-types scripts/check-install-surface.mjs && node --experimental-strip-types scripts/verify-wiring.mjs",
+    "check": "npm run typecheck && npm run docs:check && npm run check:repo && npm test && npm run identity:check && npm run integrity:check"
   },
   "engines": {
     "node": ">=22.6.0"

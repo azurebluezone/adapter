@@ -55,6 +55,12 @@ test("zero-width characters do not break term matching", () => {
   assert.ok(terms.some((term) => term.toLowerCase().includes("usercontroller")));
 });
 
+test("a path outside the project does not leak its folder into focus terms", () => {
+  const terms = extractTerms('open "/home/u/Music/mp3" and fix src/plugin.ts');
+  assert.ok(terms.includes("src/plugin.ts"), JSON.stringify(terms));
+  assert.ok(!terms.some((term) => term.toLowerCase() === "music"), JSON.stringify(terms));
+});
+
 test("view wording pulls in the whole slice, not the whole repo", () => {
   const files = LARAVEL;
   const plan = resolveFocus(files, "admin users index.blade.php view-এ ডেটা দেখাচ্ছে না");
@@ -89,6 +95,11 @@ test("extension hints follow the wording", () => {
 test("relatedTo links a model to its migration", () => {
   const related = relatedTo("app/Models/User.php", LARAVEL).map((hit) => hit.path);
   assert.ok(related.includes("database/migrations/2024_01_01_create_users_table.php"), JSON.stringify(related));
+});
+
+test("a top-level folder slug does not link unrelated files", () => {
+  const related = relatedTo("possible/main.ts", ["possible/sub/other.ts"]).map((hit) => hit.path);
+  assert.ok(!related.includes("possible/sub/other.ts"), JSON.stringify(related));
 });
 
 test("listProjectFiles walks real files and ignores node_modules", () => {

@@ -183,6 +183,23 @@ test("YAML card round-trips fields, lists and a block-scalar body", () => {
   assert.equal(cardMatches(card, "playwright-fix", "abc123def4567890"), false);
 });
 
+test("prose-only skill body still produces a non-empty card", () => {
+  const card = skillCard({
+    slug: "rea-tool-design",
+    description: "Audit REA investigation tools and contracts",
+    source: "morluto/rea",
+    license: "MIT",
+    contentHash: "abc123def4567890",
+    score: 9,
+    body: "# REA tool design\n\nUse the tool-design guide for tool boundaries and contract semantics.\nInspect the current contract before changing a tool.\n",
+  });
+  const parsed = parseSkillCard(card);
+  assert.deepEqual(parsed.warnings, []);
+  assert.ok(parsed.body.length > 0, "prose fallback must not leave body empty");
+  assert.match(parsed.body, /Use the tool-design guide/);
+  assert.ok(card.length <= 650, `card is ${card.length} chars`);
+});
+
 test("invalid YAML becomes a warning instead of a throw", () => {
   const duplicate = parseSkillCard("skill: a\nskill: b\n\nbody: nope\n");
   assert.ok(duplicate.warnings.length > 0);
