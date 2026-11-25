@@ -1562,7 +1562,7 @@ export function toolSpecs(deps: SurfaceDeps): ToolSpec[] {
         const roadmap = roadmapSummary(projectRoot);
         const syllabus = readSyllabus(projectRoot) ?? "";
         const markers = [...syllabus.matchAll(/`(fp:[^`]+)`/g)];
-        const marker = markers.at(-1)?.[1] ?? `fp:${fp.totalFiles}/${fp.totalBytes}`;
+        const marker = markers.at(-1)?.[1] ?? `fp:${fp.totalFiles}`;
         const sessionID = String(context?.sessionID ?? "").trim();
         let uiShown = false;
         if (sessionID && deps.synthetic) {

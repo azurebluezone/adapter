@@ -132,6 +132,26 @@ test("onboarding lesson is appended once per file tree and refreshed when the tr
   );
 });
 
+test("a capped index still finds tests and logs beyond the path cap", () => {
+  const root = tempProject();
+  write(root, "a.ts", "export const a = 1;\n");
+  write(root, "b.ts", "export const b = 2;\n");
+  write(root, "c.ts", "export const c = 3;\n");
+  write(root, "tests/Feature/GameGateTest.php", "<?php // real test file\n");
+  write(root, "storage/logs/laravel.log", "ERROR: database refused\n");
+  const fp = scanProject(root, { maxIndexedFiles: 2 });
+  assert.equal(fp.indexTruncated, true);
+  assert.equal(fp.files.includes("tests/Feature/GameGateTest.php"), false, "the main index really stopped early");
+  assert.ok(fp.evidenceFiles.includes("tests/Feature/GameGateTest.php"));
+  assert.ok(fp.evidenceFiles.includes("storage/logs/laravel.log"));
+
+  const evidence = collectOnboardingEvidence(root, fp);
+  assert.ok(evidence.tests.includes("tests/Feature/GameGateTest.php"));
+  assert.ok(evidence.logs.some((entry) => entry.file === "storage/logs/laravel.log"));
+  assert.equal(evidence.gaps.some((gap) => /No test files/.test(gap)), false);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test("a project with no docs or tests says so instead of inventing purpose", () => {
   const root = tempProject();
   write(root, "main.py", "print('hello')\n");

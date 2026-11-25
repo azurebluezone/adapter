@@ -7,7 +7,7 @@
 import { appendJsonl, docWithSignature, readJsonl, readText, sha256, writeAtomic } from "./io.ts";
 import { auditFile, syllabusFile } from "./paths.ts";
 import { ROADMAP_MIN_FILES, recordRoadmap } from "./roadmap.ts";
-import type { Fingerprint } from "./scan.ts";
+import { fingerprintFiles, type Fingerprint } from "./scan.ts";
 import { LEGACY_AGENT_IDS } from "../roster.ts";
 
 export type SyllabusResult = {
@@ -236,7 +236,9 @@ export type FootprintRecord = {
  * the cheap footprint health that every setup and watchdog pass can afford.
  */
 export function footprintProblems(fp: Fingerprint): string[] {
-  const files = fp.files;
+  // Counts are never capped, and a capped index must not hide tests/docs/CI
+  // behind a false "none detected" problem line.
+  const files = fingerprintFiles(fp);
   const has = (pattern: RegExp): boolean => files.some((file) => pattern.test(file));
   const problems: string[] = [];
   if (Object.keys(fp.manifests).length === 0) {
@@ -259,6 +261,9 @@ export function footprintProblems(fp: Fingerprint): string[] {
   }
   if (fp.indexTruncated) {
     problems.push(`File index truncated: ${fp.indexedFiles}/${fp.totalFiles}; use project_fingerprint for the rest.`);
+  }
+  if (fp.evidenceTruncated) {
+    problems.push("Evidence path list truncated at 512; use project_fingerprint/project_investigation for the rest.");
   }
   return problems;
 }
@@ -293,7 +298,11 @@ export function recordProjectFootprint(projectRoot: string, fp: Fingerprint): Fo
   // The problems digest is part of the marker: fixing a missing test/README
   // changes the lesson even when the file count and byte count stay the same.
   const problemDigest = sha256(problems.join("\n")).slice(0, 8);
-  const marker = `fp:${fp.totalFiles}/${fp.totalBytes}/${fp.languages.slice(0, 3).map((l) => l.name).join("+") || "unknown"}/${problemDigest}`;
+  // Do not put totalBytes in the marker: a log heartbeat or a report rewrite
+  // changes the byte count every scan, and the same tree would append a new
+  // footprint forever. File count + languages + the problem digest still changes
+  // when a real file is added or a gap is fixed.
+  const marker = `fp:${fp.totalFiles}/${fp.languages.slice(0, 3).map((l) => l.name).join("+") || "unknown"}/${problemDigest}`;
   const existing = readText(file) ?? "";
   const result = {
     appended: false,

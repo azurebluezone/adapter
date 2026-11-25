@@ -12,6 +12,7 @@ import {
   readSyntheticHashes,
   rememberSynthetic,
   resolveUserTurn,
+  withoutSyntheticMessages,
 } from "../src/agents/turn.ts";
 import { hashMessage } from "../src/agents/route.ts";
 
@@ -43,6 +44,23 @@ test("a synthetic card is recorded and skipped when resolving the real user turn
   const turn = resolveUserTurn(messages, (text) => isSyntheticText(text, hashes));
   assert.equal(turn.text, real);
   assert.equal(turn.count, 1);
+});
+
+test("synthetic cards are removed from the model request, not just skipped", async () => {
+  const storage = memoryStorage();
+  const real = "Fix the namespaced goal_contract tool";
+  const card = "ধাপ ১ — ইনপুট আর কনটেক্সট যাচাই\n\nতুমি চাইছ: " + real;
+  await rememberSynthetic(storage, "ses_turn", card);
+  const hashes = await readSyntheticHashes(storage, "ses_turn");
+  const messages = [
+    { role: "user", text: real },
+    { role: "assistant", text: "working" },
+    { role: "user", text: card },
+  ];
+  const stripped = withoutSyntheticMessages(messages, (text) => isSyntheticText(text, hashes));
+  assert.equal(stripped.removed, 1);
+  assert.equal(stripped.messages.length, 2);
+  assert.equal(stripped.messages.at(-1)?.role, "assistant");
 });
 
 test("the route keeps the same turn when a synthetic card arrives", async () => {

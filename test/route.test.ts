@@ -7,7 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { applyToolEvent, beginTurn } from "../src/agents/runtime.ts";
-import { classifyTask, noteContract, startRun, walk } from "../src/agents/route.ts";
+import { classifyTask, noteContract, releaseCheck, startRun, walk } from "../src/agents/route.ts";
 import { isSyntheticText, readSyntheticHashes, rememberSynthetic } from "../src/agents/turn.ts";
 
 function memoryStorage() {
@@ -124,6 +124,35 @@ test("an open contract promotes a readonly run to work", () => {
   assert.equal(opened.phase, "work", "the contract must not stay at readonly/intake");
   assert.equal(opened.routeKey, "zc/zombiecoder/substantive/work");
   assert.equal(opened.contract?.id, "gc-readonly");
+});
+
+test("the first readonly turn cannot answer without project evidence", () => {
+  const turn = beginTurn({
+    sessionID: "s-first",
+    agentID: "zombiecoder",
+    message: "বিসমাল্লাহ",
+    freshSyllabus: false,
+    turnIndex: 1,
+  });
+  assert.equal(turn.run.taskKind, "readonly");
+  assert.equal(turn.run.fastPath, false, "the first turn must not take the answer-only fast path");
+  assert.equal(turn.run.phase, "investigate");
+  assert.equal(releaseCheck(turn.run).ok, false);
+  assert.match(releaseCheck(turn.run).reason, /first turn has no project evidence/);
+
+  const readOnly = applyToolEvent(turn.run, {
+    tool: "read",
+    event: { status: "completed", result: { output: { ok: true } } },
+  });
+  assert.equal(readOnly?.phase, "investigate");
+  assert.equal(releaseCheck(readOnly).ok, false, "a single read is not the investigation release");
+
+  const investigated = applyToolEvent(turn.run, {
+    tool: "project_investigation",
+    event: { status: "completed", result: { output: { ok: true } } },
+  });
+  assert.equal(investigated?.phase, "propose");
+  assert.equal(releaseCheck(investigated).ok, true);
 });
 
 test("a readonly footprint run can open a contract and reach work", () => {

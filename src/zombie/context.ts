@@ -451,6 +451,7 @@ export function buildContextPack(
     try {
       skillLite = skillLiteSection(userMessage, {
         installRoot,
+        projectRoot,
         budget: CONTEXT_LIMITS.skillLite,
         limit: 2,
       });

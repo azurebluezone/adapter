@@ -11,7 +11,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { readJsonl, redact, sha256 } from "./io.ts";
 import { auditFile, syllabusFile } from "./paths.ts";
-import type { Fingerprint } from "./scan.ts";
+import { fingerprintFiles, type Fingerprint } from "./scan.ts";
 import { detectProjectSkills, listSkillCatalog } from "./skillCatalog.ts";
 import { appendSyllabus, readSyllabus } from "./syllabus.ts";
 
@@ -191,7 +191,9 @@ function logScan(root: string, files: string[]): LogFinding[] {
 }
 
 export function onboardingMarker(fp: Fingerprint): string {
-  const digest = sha256((fp.files ?? []).join("\n")).slice(0, 12);
+  // Include the evidence side index: a test or log beyond the main index cap
+  // must still refresh the onboarding lesson when it appears or changes.
+  const digest = sha256(fingerprintFiles(fp).join("\n")).slice(0, 12);
   return `onboarding:${digest}`;
 }
 
@@ -201,7 +203,10 @@ export function collectOnboardingEvidence(
   options: { installRoot?: string } = {},
 ): OnboardingEvidence {
   const root = path.resolve(projectRoot);
-  const files = Array.isArray(fp.files) ? fp.files : [];
+  // The main index can stop at 2,000 paths; the scan's evidence side index keeps
+  // the tests/logs/docs that sort after that cap. Never turn truncation into a
+  // false "none found".
+  const files = fingerprintFiles(fp);
   const docs = files.filter((file) => DOC_PATTERN.test(file)).sort().slice(0, MAX_DOCS);
   const tests = files.filter((file) => TEST_PATTERN.test(file)).sort().slice(0, MAX_TESTS);
   const logs = logScan(root, files);
@@ -236,6 +241,9 @@ export function collectOnboardingEvidence(
     gaps.push(`Git working tree has ${git.changes} uncommitted change(s); the running code may differ from HEAD.`);
   }
   if (missing.length > 0) gaps.push(`Skills for this stack are not installed: ${missing.join(", ")}.`);
+  if (fp.evidenceTruncated) {
+    gaps.push("Evidence path list hit its 512-path cap; use project_fingerprint/project_investigation for the rest.");
+  }
 
   const unverified = [
     "Whether the docs match the running behaviour; the agent must read both.",

@@ -125,8 +125,12 @@ skill: "database-designer"
 | `route` | `query`, `limit` (1–5) | expanded query, scored matches, YAML cards |
 | `get` | `id`, `mode: card\|full` | one YAML card, or the full body capped at 12,000 chars |
 
-The database is downloaded explicitly (`sync`) or by the installer; it is never
-fetched from the context hook.
+The database is downloaded only by an explicit `sync` (the installer seeds the
+native `skills/<name>/SKILL.md` files, not the 256-skill database); it is never
+fetched from the context hook. When the database is absent, or routes zero
+matches for a short Bengali input, the context pack falls back to the installed
+native skill selected by the detected stack (for example `laravel`) and tells
+the agent to load it with `skill(name="...")` before running its baseline.
 
 ## 6. Trust boundary
 

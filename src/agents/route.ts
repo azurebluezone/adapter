@@ -110,13 +110,18 @@ export function startRun(input: {
     writeIntent: hasWriteIntent(input.message),
     fileCount: input.focus?.length ?? 0,
   });
+  // The first user turn is the "show me this project" turn. Do not let a short
+  // question take the read-only fast path before the footprint/investigation
+  // walk; the reported failure was a greeting-sized input that produced zero
+  // tool calls and two generic answers.
+  const firstTurn = input.turnIndex === 1;
   const run: AgentRun = {
     version: 1,
     sessionID: input.sessionID,
     agentID: input.agentID,
     taskKind: kind,
     complexity: complexity.level,
-    fastPath: complexity.fastPath,
+    fastPath: complexity.fastPath && !firstTurn,
     phase: "intake",
     routeKey: routeKey(input.agentID, kind, "intake"),
     messageHash: hashMessage(input.message),
@@ -265,7 +270,15 @@ export function noteOnboarding(run: AgentRun, ok: boolean, now?: Date): AgentRun
   // An attached open contract still needs write tools; onboarding is the last
   // gate, not a detour back to read-only.
   if (next.contract?.status === "open") next = walk(next, ["contract", "work"], now);
-  return next;
+  const at = (now ?? new Date()).toISOString();
+  return freezeRun({
+    ...next,
+    steps: [
+      ...next.steps,
+      { at, phase: next.phase, kind: "evidence", tool: "project_onboarding", ok: true },
+    ].slice(-40),
+    updatedAt: at,
+  });
 }
 
 export function noteAnswer(run: AgentRun, hasToolCalls: boolean, now?: Date): AgentRun {
@@ -277,6 +290,25 @@ export function noteAnswer(run: AgentRun, hasToolCalls: boolean, now?: Date): Ag
   }
   if (run.taskKind === "readonly" && run.phase === "investigate") return advance(run, "propose", now);
   return run;
+}
+
+const EVIDENCE_TOOLS = new Set([
+  "read",
+  "grep",
+  "glob",
+  "project_fingerprint",
+  "project_investigation",
+  "project_onboarding",
+  "skill",
+  "skill_catalog",
+  "websearch",
+  "webfetch",
+]);
+
+function hasProjectEvidence(run: AgentRun): boolean {
+  return run.steps.some(
+    (entry) => entry.kind === "evidence" || (entry.tool ? EVIDENCE_TOOLS.has(entry.tool) : false),
+  );
 }
 
 export function releaseCheck(run: AgentRun | null): ReleaseCheck {
@@ -298,6 +330,13 @@ export function releaseCheck(run: AgentRun | null): ReleaseCheck {
     // still cannot write, and a substantive request never takes this path.
     if (run.fastPath && run.phase === "intake") {
       return { ...base, ok: true, reason: "fast path: small read-only turn, no contract needed" };
+    }
+    if (run.turnIndex === 1 && !hasProjectEvidence(run)) {
+      return {
+        ...base,
+        ok: false,
+        reason: "first turn has no project evidence; call project_investigation (fingerprint/read alone are inputs, not the release) before answering",
+      };
     }
     if (run.phase === "propose" || run.phase === "respond") {
       return { ...base, ok: true, reason: "read-only turn: investigation only, no write claimed" };

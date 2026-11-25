@@ -274,6 +274,30 @@ export function applyToolEvent(
     const contract = contractFromEvent(input.event);
     return contract ? noteContract(run, contract, input.now) : record("goal_contract.unparsed");
   }
+  // Investigation evidence is a real step: a read-only first turn must prove
+  // it looked before it answers. The response gate reads these steps.
+  if (tool === "project_investigation" && run.taskKind === "readonly" && run.phase === "investigate") {
+    const advanced = advance(run, "propose", input.now);
+    return Object.freeze({
+      ...advanced,
+      steps: [...advanced.steps, { at, phase: advanced.phase, kind: "evidence", tool, ok: true }].slice(-40),
+    });
+  }
+  if (
+    [
+      "read",
+      "grep",
+      "glob",
+      "project_fingerprint",
+      "project_investigation",
+      "skill",
+      "skill_catalog",
+      "websearch",
+      "webfetch",
+    ].includes(tool)
+  ) {
+    return record("evidence");
+  }
   if (["edit", "write", "patch", "multiedit", "apply_patch", "shell", "bash", "command"].includes(tool)) {
     return record("tool");
   }

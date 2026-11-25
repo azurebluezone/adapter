@@ -27,6 +27,7 @@ import * as path from "node:path";
 import { createHash } from "node:crypto";
 import { ensureDir, writeAtomic } from "./io.ts";
 import { cardMatches, skillCard } from "./skillCard.ts";
+import { nativeSkillLiteSection } from "./nativeSkills.ts";
 
 export const DEFAULT_SKILL_DB_REPO =
   "https://github.com/azurebluezone/zombiecoder-agent-skills";
@@ -582,6 +583,8 @@ export type SkillLiteSection = {
 export type SkillLiteOptions = {
   dir?: string;
   installRoot?: string;
+  /** Project root used to detect the stack when the YAML database is absent. */
+  projectRoot?: string;
   /** Total character budget for the cards in the context pack. */
   budget?: number;
   limit?: number;
@@ -590,16 +593,41 @@ export type SkillLiteOptions = {
 
 /**
  * Route one user message and return up to two compact YAML cards. Never throws:
- * a missing or broken database returns `available: false` and the pack stays
- * exactly as it was.
+ * a missing database falls back to the installed native stack skill; if that
+ * also has no match, it returns `available: false` and the pack stays exactly
+ * as it was.
  */
 export function skillLiteSection(text: string, options: SkillLiteOptions = {}): SkillLiteSection {
   const dir = path.resolve(options.dir ?? skillDbDir(options.installRoot ?? process.cwd()));
   const request = String(text ?? "").trim();
   if (!request) return { available: false, dir, matches: [], text: "", bytes: 0, reason: "empty request" };
   const library = loadSkillLibrary(dir);
+  const native = () =>
+    nativeSkillLiteSection({
+      text: request,
+      installRoot: options.installRoot ?? "",
+      projectRoot: options.projectRoot ?? "",
+      budget: options.budget,
+      limit: options.limit,
+    });
+  const nativeWithReason = (reason: string) => {
+    const section = native();
+    return section ? { ...section, reason } : null;
+  };
   if (!library) {
-    return { available: false, dir, matches: [], text: "", bytes: 0, reason: "skill database not downloaded" };
+    // A missing 256-skill database must not mean "no skill": the installer's
+    // native SKILL.md files are still on disk and the stack already names the
+    // one this project needs.
+    return (
+      nativeWithReason("skill database not downloaded; routed from installed native skills and project stack") ?? {
+        available: false,
+        dir,
+        matches: [],
+        text: "",
+        bytes: 0,
+        reason: "skill database not downloaded",
+      }
+    );
   }
   const limit = Math.min(Math.max(Number(options.limit) || 2, 1), 2);
   const budget = Math.max(Number(options.budget) || 700, 200);
@@ -607,7 +635,20 @@ export function skillLiteSection(text: string, options: SkillLiteOptions = {}): 
     limit,
     minScore: options.minScore ?? 3.0,
   });
-  if (matches.length === 0) return { available: true, dir, matches: [], text: "", bytes: 0 };
+  if (matches.length === 0) {
+    // The DB can be present and still route zero matches for a short Bengali
+    // input (the reported "বিসমাল্লাহ" case). Fall back to the installed stack
+    // skill instead of sending an empty Skill-lite section.
+    return (
+      nativeWithReason("skill database has no match for this request; routed from installed native skills and project stack") ?? {
+        available: true,
+        dir,
+        matches: [],
+        text: "",
+        bytes: 0,
+      }
+    );
+  }
   // Greedy: the best skill gets a full card; a second card is added only when it
   // still fits the budget. A thin second card is worse than one useful card.
   const cards: string[] = [];

@@ -98,6 +98,7 @@ import {
   readSyntheticHashes,
   rememberSynthetic,
   resolveUserTurn,
+  withoutSyntheticMessages,
 } from "./agents/turn.ts";
 import type { AgentRun, ReleaseCheck } from "./agents/types.ts";
 import type { GateOptions } from "./zombie/responseGate.ts";
@@ -1363,7 +1364,7 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
         // message list, so archive the overflow here. Idempotent by message id.
         const sourceMessages = Array.isArray(event?.messages) ? event.messages : [];
         const sanitized = sanitizeUserMessages(sourceMessages);
-        const messages = sanitized.messages;
+        let messages = sanitized.messages;
         if (Array.isArray(event?.messages) && sanitized.affected.length) {
           event.messages = messages;
           audit(projectRoot, agentID, {
@@ -1400,6 +1401,21 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
           messages,
           (text) => isSyntheticText(text, syntheticHashes),
         );
+        // A card is UI, not a user utterance. Strip the ones the plugin itself
+        // sent from the model request so the provider cannot turn the journey
+        // intake into a second model turn (the duplicate-answer defect).
+        const visible = withoutSyntheticMessages(messages, (text) =>
+          isSyntheticText(text, syntheticHashes),
+        );
+        if (visible.removed > 0) {
+          messages = visible.messages;
+          if (Array.isArray(event?.messages)) event.messages = messages;
+          audit(projectRoot, agentID, {
+            kind: "input.synthetic",
+            sessionID,
+            removed: visible.removed,
+          });
+        }
         // The judge needs the request that opened the contract, not the latest
         // tool-loop message. Freeze the current user turn here; goal_contract
         // open copies it into the contract's intent snapshot.
@@ -1592,6 +1608,14 @@ export async function setup(rawCtx: unknown): Promise<() => Promise<void>> {
                       ? [
                           "Fresh syllabus: run `project_onboarding` before investigating. Halim owns the full footprint " +
                             "(current state, server logs, purpose, docs); write it into syllabus.md, never a separate file.",
+                        ]
+                      : []),
+                    ...(routeRun.turnIndex === 1 && routeRun.taskKind !== "trivial"
+                      ? [
+                          "First turn enforcement: run `project_investigation` before answering; " +
+                            "`project_fingerprint` and `read` are inputs, not the release. " +
+                            "If the pack routed a native skill, load it with `skill` and run its baseline. " +
+                            "An answer before the investigation phase is blocked by the response gate.",
                         ]
                       : []),
                   ]

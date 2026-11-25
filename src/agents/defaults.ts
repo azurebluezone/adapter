@@ -69,6 +69,9 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "append_syllabus",
     "memory_archive",
     "skill_catalog",
+    // Native skills are reference material, not a write; the first turn must be
+    // able to load the stack skill the context pack routed to it.
+    "skill",
     "goal_contract",
   ],
   investigate: [
@@ -100,6 +103,7 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "patch_preview",
     "memory_archive",
     "skill_catalog",
+    "skill",
     // Read-only symbol/LSP queries gather facts; without them the registered
     // tools are denied in every phase and the agent cannot diagnose code.
     "symbol_overview",
@@ -122,6 +126,8 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "read_syllabus",
     "context_status",
     "evidence_gate",
+    "skill",
+    "skill_catalog",
     // A proposal may need one clarification or one source check before the
     // user approves it; neither changes the project.
     "question",
@@ -147,6 +153,7 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     // A skill discovered mid-task must be loadable here: investigate can list
     // the catalog, but installation and reload belong to the work phase.
     "skill_catalog",
+    "skill",
     // The same non-mutating aids stay available while the contract is being
     // implemented: a doc lookup or one precise question is not a write.
     "question",
@@ -161,6 +168,8 @@ export const BASE_PHASE_TOOLS: Readonly<Record<RoutePhase, readonly string[]>> =
     "syntax_check",
     "shell",
     "read",
+    "skill",
+    "skill_catalog",
     // Verification may need to ask about an ambiguous expected result or read
     // the official doc it is checking against.
     "question",

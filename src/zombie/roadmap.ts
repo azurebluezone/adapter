@@ -10,7 +10,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { readText, sha256, writeAtomic } from "./io.ts";
 import { zombieRoot } from "./paths.ts";
-import type { Fingerprint } from "./scan.ts";
+import { fingerprintFiles, type Fingerprint } from "./scan.ts";
 
 /** A project below this size does not need a separate roadmap file. */
 export const ROADMAP_MIN_FILES = 120;
@@ -120,12 +120,15 @@ export function buildRoadmap(fp: Fingerprint): Roadmap {
   }
 
   const counts = countByTop(fp.files);
+  // Verification doors must be read from the evidence side index too; a test
+  // directory after the 2,000-path cap is still a real test directory.
+  const evidence = fingerprintFiles(fp);
   const manifests = manifestNames(fp);
   const entries = entryFiles(fp.files);
-  const tests = hasFile(fp.files, /(?:^|\/)(?:test|tests|__tests__)\/|\.(?:test|spec)\.[a-z0-9]+$/i);
-  const docs = hasFile(fp.files, /^docs?\//i) || hasFile(fp.files, /^README(?:\.[a-z0-9]+)?$/i);
-  const checkScripts = hasFile(fp.files, /^scripts\/check[-.]/i);
-  const ci = hasFile(fp.files, /^\.github\/workflows\//i);
+  const tests = hasFile(evidence, /(?:^|\/)(?:test|tests|__tests__)\/|\.(?:test|spec)\.[a-z0-9]+$/i);
+  const docs = hasFile(evidence, /^docs?\//i) || hasFile(evidence, /^README(?:\.[a-z0-9]+)?$/i);
+  const checkScripts = hasFile(evidence, /^scripts\/check[-.]/i);
+  const ci = hasFile(evidence, /^\.github\/workflows\//i);
   const sourceAreas = [...counts.entries()]
     .filter(([name]) => name !== "test" && name !== "tests" && name !== "docs" && name !== "doc")
     .sort((a, b) => b[1] - a[1]);

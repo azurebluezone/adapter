@@ -76,6 +76,24 @@ export type ResolvedUserTurn = {
 };
 
 /**
+ * Remove plugin-generated cards from the model request. The UI has already
+ * rendered them; leaving them in the transcript makes the provider deliver a
+ * second user turn ("the user sent it again") and the model answers twice.
+ * The caller must archive/resolve the turn before stripping.
+ */
+export function withoutSyntheticMessages(
+  messages: ReadonlyArray<any>,
+  isSynthetic: (text: string) => boolean,
+): { messages: any[]; removed: number } {
+  const kept = messages.filter((message) => {
+    if (String(roleOf(message) ?? "").toLowerCase() !== "user") return true;
+    const text = textOf(message);
+    return !text || !isSynthetic(text);
+  });
+  return { messages: kept, removed: messages.length - kept.length };
+}
+
+/**
  * Walk the hook payload backwards and return the last real user message plus
  * the number of real user turns. Plugin-generated synthetic cards are skipped
  * by the caller's predicate, so a preview/result card cannot start a new turn.

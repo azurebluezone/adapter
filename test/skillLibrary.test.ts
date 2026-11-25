@@ -282,6 +282,51 @@ test("skill-lite section respects the budget and degrades without a database", (
   }
 });
 
+test("missing skill DB falls back to the installed native stack skill", () => {
+  const project = tempDir("zombiecoder-laravel-project-");
+  const install = tempDir("zombiecoder-native-install-");
+  const empty = tempDir("zombiecoder-skill-empty-");
+  try {
+    write(path.join(project, "composer.json"), "{}\n");
+    write(path.join(project, "artisan"), "#!/usr/bin/env php\n");
+    write(
+      path.join(install, "skills", "laravel", "SKILL.md"),
+      [
+        "---",
+        'name: laravel',
+        'description: "Work on Laravel apps: routes, controllers, Eloquent, migrations, queues and Blade. Use for 500 errors, N+1 queries, auth and deployment."',
+        "---",
+        "",
+        "# Laravel",
+        "",
+        "## Baseline",
+        "",
+        "1. Run php -v",
+        "2. Run php artisan route:list",
+        "3. Run php artisan test",
+        "",
+      ].join("\n"),
+    );
+    const section = skillLiteSection("বিসমাল্লাহ", {
+      dir: empty,
+      installRoot: install,
+      projectRoot: project,
+      budget: 700,
+      limit: 2,
+    });
+    assert.equal(section.available, true);
+    assert.equal(section.matches[0]?.slug, "laravel");
+    assert.match(section.text, /skill: "laravel"/);
+    assert.match(section.text, /skill\(name="laravel"\)/);
+    assert.match(section.text, /body: \|/);
+    assert.ok(section.bytes <= 700, `section is ${section.bytes} bytes`);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+    fs.rmSync(install, { recursive: true, force: true });
+    fs.rmSync(empty, { recursive: true, force: true });
+  }
+});
+
 test("sync with download disabled reports missing files instead of throwing", async () => {
   const dir = tempDir("zombiecoder-skill-sync-");
   try {

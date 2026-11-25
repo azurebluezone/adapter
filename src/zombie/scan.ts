@@ -69,6 +69,14 @@ export type Fingerprint = {
   tree: string[];
   /** Relative file paths, capped so a huge repo cannot bloat the SSOT. */
   files: string[];
+  /**
+   * Evidence-bearing paths (tests, logs, docs) collected even when the main
+   * index is capped. The walk visits every file, so a test directory that sorts
+   * after the index cap must not disappear from the onboarding evidence.
+   */
+  evidenceFiles: string[];
+  /** True when more evidence paths matched than the auxiliary list can hold. */
+  evidenceTruncated: boolean;
   /** How many files the bounded index actually holds (`files.length`). */
   indexedFiles: number;
   /** True when the tree has more files than the bounded index can name. */
@@ -165,6 +173,20 @@ export type ScanOptions = {
 
 export const DEFAULT_MAX_INDEXED_FILES = 2000;
 
+/**
+ * Paths that carry onboarding evidence: tests, docs, and logs. They are kept in
+ * a small side index so `fp.indexTruncated` cannot turn a real test/log into
+ * "none found"; the main file index keeps its own 2,000-path budget.
+ */
+const EVIDENCE_PATH =
+  /^(?:README(?:\.[a-z0-9]+)?|(?:docs?)\/.*\.md|(?:test|tests|__tests__)\/.*|.*\.(?:test|spec)\.[a-z0-9]+|(?:.*\/)?logs?\/.*\.log|[^/]+\.log)$/i;
+const MAX_EVIDENCE_FILES = 512;
+
+/** The bounded index plus the evidence side index, deduplicated. */
+export function fingerprintFiles(fp: Fingerprint): string[] {
+  return [...new Set([...(fp.files ?? []), ...(fp.evidenceFiles ?? [])])];
+}
+
 export function languageOf(file: string): string {
   const ext = path.extname(file).toLowerCase();
   if (LANG_BY_EXT[ext]) return LANG_BY_EXT[ext];
@@ -183,6 +205,8 @@ export function scanProject(root: string, options: ScanOptions = {}): Fingerprin
   const dirs: string[] = [];
   const tree: string[] = [];
   const filePaths: string[] = [];
+  const evidenceFiles: string[] = [];
+  let evidenceTruncated = false;
   const markers: string[] = [];
   let files = 0;
   let bytes = 0;
@@ -213,6 +237,12 @@ export function scanProject(root: string, options: ScanOptions = {}): Fingerprin
         }
         files += 1;
         if (filePaths.length < maxIndexedFiles) filePaths.push(relPath);
+        // The walk sees every file even after the main index is full; keep the
+        // evidence paths that onboarding and roadmap facts depend on.
+        if (EVIDENCE_PATH.test(relPath)) {
+          if (evidenceFiles.length < MAX_EVIDENCE_FILES) evidenceFiles.push(relPath);
+          else evidenceTruncated = true;
+        }
         let size = 0;
         try {
           size = fs.statSync(full).size;
@@ -309,6 +339,8 @@ export function scanProject(root: string, options: ScanOptions = {}): Fingerprin
     manifests,
     tree: tree.slice(0, 200),
     files: filePaths,
+    evidenceFiles,
+    evidenceTruncated,
     indexedFiles: filePaths.length,
     indexTruncated: filePaths.length < files,
     ignored: [...ignore],

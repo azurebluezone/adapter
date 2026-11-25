@@ -52,12 +52,31 @@ test("a changed tree produces a new marker", () => {
   const root = project();
   const before = scanProject(root);
   ensureSyllabus(root, before, ["manu"]);
-  recordProjectFootprint(root, before);
+  const first = recordProjectFootprint(root, before);
   fs.writeFileSync(path.join(root, "src", "extra.ts"), "export const y = 2;\n", "utf8");
   const after = scanProject(root);
   const record = recordProjectFootprint(root, after);
   assert.equal(record.appended, true);
-  assert.notEqual(record.marker, `fp:${before.totalFiles}/${before.totalBytes}/${before.languages.slice(0, 3).map((l) => l.name).join("+")}`);
+  assert.notEqual(record.marker, first.marker);
+  assert.match(record.marker, new RegExp(`^fp:${after.totalFiles}/`));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("a growing log changes bytes but not the footprint marker", () => {
+  const root = project();
+  fs.mkdirSync(path.join(root, "logs"), { recursive: true });
+  fs.writeFileSync(path.join(root, "logs", "server.log"), "boot\n", "utf8");
+  const before = scanProject(root);
+  const first = recordProjectFootprint(root, before);
+  assert.equal(first.appended, true);
+
+  fs.appendFileSync(path.join(root, "logs", "server.log"), "heartbeat ".repeat(200), "utf8");
+  const after = scanProject(root);
+  assert.notEqual(after.totalBytes, before.totalBytes, "the byte count really moved");
+  const second = recordProjectFootprint(root, after);
+  assert.equal(second.appended, false, "same tree shape must not append a second footprint");
+  const count = (readSyllabus(root) ?? "").split("Project footprint (auto)").length - 1;
+  assert.equal(count, 1);
   fs.rmSync(root, { recursive: true, force: true });
 });
 
